@@ -2,31 +2,47 @@ import { create } from 'zustand';
 
 import { supabase } from '@/lib/supabase';
 import {
-  CACHE_KEYS,
+  cacheKey,
   getCached,
   isCacheValid,
   removeCached,
   setCached,
-  storage,
+  touchLastFetched,
 } from '@/lib/mmkv';
-import type { Book, BookInsert, BookUpdate } from '@/types/database';
+import type { Book, BookFilters, BookInsert, BookUpdate } from '@/types/database';
 
-// ---------------------------------------------------------------------------
+// ============================================================
 // オフラインキューの型
-// ---------------------------------------------------------------------------
+// ============================================================
 
-type OfflineOperationType = 'create' | 'update' | 'delete';
+type QueueOpType = 'create' | 'update' | 'delete';
 
-interface OfflineOperation {
-  id: string;
-  type: OfflineOperationType;
-  payload: BookInsert | (BookUpdate & { id: string }) | { id: string };
+interface QueueOpCreate {
+  opId: string;
+  type: 'create';
+  optimisticId: string;
+  payload: BookInsert;
+  timestamp: number;
+}
+interface QueueOpUpdate {
+  opId: string;
+  type: 'update';
+  bookId: string;
+  payload: BookUpdate;
+  timestamp: number;
+}
+interface QueueOpDelete {
+  opId: string;
+  type: 'delete';
+  bookId: string;
   timestamp: number;
 }
 
-// ---------------------------------------------------------------------------
-// Storeの状態と操作の型
-// ---------------------------------------------------------------------------
+type OfflineOperation = QueueOpCreate | QueueOpUpdate | QueueOpDelete;
+
+// ============================================================
+// Store の型定義
+// ============================================================
 
 interface BookState {
   /** ローカルキャッシュ上のbook一覧 */
@@ -35,57 +51,165 @@ interface BookState {
   loading: boolean;
   /** エラーメッセージ */
   error: string | null;
-  /** オフラインキュー */
+  /** オフラインキュー（MMKV永続化済み） */
   offlineQueue: OfflineOperation[];
+  /** 認証ユーザーID（キャッシュキーに使用） */
+  currentUserId: string | null;
 
+  // ------------------------------------------------------------------
   // CRUD
+  // ------------------------------------------------------------------
+  /** books一覧を取得（キャッシュ有効時はキャッシュを返す） */
   fetchBooks: (userId: string, forceRefresh?: boolean) => Promise<void>;
+  /** IDで1件取得（ローカルキャッシュから同期的に返す） */
   getBookById: (id: string) => Book | undefined;
+  /** フィルタリングされたbook一覧を返す（ローカルキャッシュから） */
+  filterBooks: (filters: BookFilters) => Book[];
+  /** 新規登録 */
   createBook: (data: BookInsert) => Promise<Book | null>;
+  /** 更新 */
   updateBook: (id: string, data: BookUpdate) => Promise<Book | null>;
+  /** 削除 */
   deleteBook: (id: string) => Promise<boolean>;
 
+  // ------------------------------------------------------------------
   // オフラインキュー
+  // ------------------------------------------------------------------
+  /** オンライン復帰時にキューを順次処理する */
   flushOfflineQueue: () => Promise<void>;
+
+  // ------------------------------------------------------------------
+  // ユーティリティ
+  // ------------------------------------------------------------------
   clearError: () => void;
+  /** キャッシュとstateをリセット（ログアウト時に呼ぶ） */
+  reset: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// ヘルパー: オフラインキューをMMKVに永続化
-// ---------------------------------------------------------------------------
+// ============================================================
+// ユーティリティ関数
+// ============================================================
 
-function loadQueue(): OfflineOperation[] {
-  return getCached<OfflineOperation[]>(CACHE_KEYS.OFFLINE_QUEUE) ?? [];
+/** ブラウザ/RNの crypto.randomUUID で UUID v4 を生成 */
+function uuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // フォールバック（旧環境）
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
-function saveQueue(queue: OfflineOperation[]): void {
-  setCached(CACHE_KEYS.OFFLINE_QUEUE, queue);
+function loadQueue(userId: string): OfflineOperation[] {
+  return getCached<OfflineOperation[]>(cacheKey.offlineQueue(userId)) ?? [];
 }
 
-function isOnline(): boolean {
-  // React Native のNetInfoを使わず、Supabaseへの到達性で判断する簡易実装
-  // 実運用では @react-native-community/netinfo を推奨
-  return true;
+function saveQueue(userId: string, queue: OfflineOperation[]): void {
+  setCached(cacheKey.offlineQueue(userId), queue);
 }
 
-// ---------------------------------------------------------------------------
+/**
+ * 同一 bookId への重複 update をマージし、後続の操作に応じてキューを圧縮する。
+ *
+ * 圧縮ルール:
+ * - create → update(同optimisticId): create の payload にマージ
+ * - create → delete(同optimisticId): 両方を除去（まだ未送信なので何もしない）
+ * - update → update(同bookId):       後のupdateにマージ（古いものを除去）
+ * - update → delete(同bookId):       updateを除去（削除が優先）
+ */
+function mergeIntoQueue(
+  queue: OfflineOperation[],
+  newOp: OfflineOperation,
+): OfflineOperation[] {
+  if (newOp.type === 'create') {
+    return [...queue, newOp];
+  }
+
+  if (newOp.type === 'update') {
+    const createIdx = queue.findIndex(
+      (op) => op.type === 'create' && op.optimisticId === newOp.bookId,
+    );
+    if (createIdx !== -1) {
+      // まだ未送信の create があるので payload にマージして create を更新
+      const createOp = queue[createIdx] as QueueOpCreate;
+      const merged: QueueOpCreate = {
+        ...createOp,
+        payload: { ...createOp.payload, ...newOp.payload },
+        timestamp: newOp.timestamp,
+      };
+      return [...queue.slice(0, createIdx), merged, ...queue.slice(createIdx + 1)];
+    }
+
+    // 既存 update(同bookId) があれば後のものにマージして古いを除去
+    const existingUpdateIdx = queue.findLastIndex(
+      (op) => op.type === 'update' && op.bookId === newOp.bookId,
+    );
+    if (existingUpdateIdx !== -1) {
+      const existingOp = queue[existingUpdateIdx] as QueueOpUpdate;
+      const merged: QueueOpUpdate = {
+        ...existingOp,
+        payload: { ...existingOp.payload, ...newOp.payload },
+        timestamp: newOp.timestamp,
+      };
+      return [
+        ...queue.filter((_, i) => i !== existingUpdateIdx),
+        merged,
+      ];
+    }
+
+    return [...queue, newOp];
+  }
+
+  if (newOp.type === 'delete') {
+    const createIdx = queue.findIndex(
+      (op) => op.type === 'create' && op.optimisticId === newOp.bookId,
+    );
+    if (createIdx !== -1) {
+      // 未送信の create があるので create + それ以降の update を全部除去
+      return queue.filter(
+        (op) =>
+          !(op.type === 'create' && op.optimisticId === newOp.bookId) &&
+          !(op.type === 'update' && op.bookId === newOp.bookId),
+      );
+    }
+
+    // 既存の update(同bookId) をすべて除去して delete を追加
+    return [
+      ...queue.filter((op) => !(op.type === 'update' && op.bookId === newOp.bookId)),
+      newOp,
+    ];
+  }
+
+  return [...queue, newOp];
+}
+
+// ============================================================
 // Zustand Store
-// ---------------------------------------------------------------------------
+// ============================================================
+
+const INITIAL_STATE = {
+  books: [] as Book[],
+  loading: false,
+  error: null as string | null,
+  offlineQueue: [] as OfflineOperation[],
+  currentUserId: null as string | null,
+};
 
 export const useBookStore = create<BookState>((set, get) => ({
-  books: [],
-  loading: false,
-  error: null,
-  offlineQueue: loadQueue(),
+  ...INITIAL_STATE,
 
-  // -----------------------------------------------------------------------
-  // fetchBooks: キャッシュが有効ならキャッシュを返し、無効ならSupabaseから取得
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // fetchBooks
+  // ----------------------------------------------------------------
   fetchBooks: async (userId: string, forceRefresh = false) => {
-    if (!forceRefresh && isCacheValid(CACHE_KEYS.BOOKS_LAST_FETCHED)) {
-      const cached = getCached<Book[]>(CACHE_KEYS.BOOKS);
+    set({ currentUserId: userId });
+
+    if (!forceRefresh && isCacheValid(cacheKey.booksLastFetched(userId))) {
+      const cached = getCached<Book[]>(cacheKey.books(userId));
       if (cached) {
-        set({ books: cached });
+        set({ books: cached, offlineQueue: loadQueue(userId) });
         return;
       }
     }
@@ -95,40 +219,61 @@ export const useBookStore = create<BookState>((set, get) => ({
       const { data, error } = await supabase
         .from('books')
         .select('*')
-        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw new Error(error.message);
 
       const books = (data as Book[]) ?? [];
       set({ books });
-      setCached(CACHE_KEYS.BOOKS, books);
-      storage.set(CACHE_KEYS.BOOKS_LAST_FETCHED, Date.now());
+      setCached(cacheKey.books(userId), books);
+      touchLastFetched(cacheKey.booksLastFetched(userId));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'fetchBooks failed';
-      set({ error: message });
+      set({ error: err instanceof Error ? err.message : 'fetchBooks failed' });
     } finally {
       set({ loading: false });
     }
   },
 
-  // -----------------------------------------------------------------------
-  // getBookById: ローカルキャッシュから1件取得
-  // -----------------------------------------------------------------------
-  getBookById: (id: string) => {
-    return get().books.find((b) => b.id === id);
+  // ----------------------------------------------------------------
+  // getBookById
+  // ----------------------------------------------------------------
+  getBookById: (id: string) => get().books.find((b) => b.id === id),
+
+  // ----------------------------------------------------------------
+  // filterBooks
+  // ----------------------------------------------------------------
+  filterBooks: ({ status, tags, query }: BookFilters) => {
+    let result = get().books;
+
+    if (status) {
+      result = result.filter((b) => b.reading_status === status);
+    }
+    if (tags && tags.length > 0) {
+      result = result.filter((b) => tags.every((t) => b.tags.includes(t)));
+    }
+    if (query) {
+      const q = query.toLowerCase();
+      result = result.filter(
+        (b) =>
+          b.title.toLowerCase().includes(q) ||
+          (b.author?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    return result;
   },
 
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   // createBook
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   createBook: async (data: BookInsert) => {
+    const userId = get().currentUserId ?? data.user_id;
     set({ loading: true, error: null });
 
-    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticId = uuid();
+    const now = new Date().toISOString();
     const optimisticBook: Book = {
       id: optimisticId,
-      user_id: data.user_id,
+      user_id: userId,
       isbn: data.isbn ?? null,
       title: data.title,
       author: data.author ?? null,
@@ -141,45 +286,49 @@ export const useBookStore = create<BookState>((set, get) => ({
       rating: data.rating ?? null,
       memo: data.memo ?? null,
       tags: data.tags ?? [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
     };
 
-    // オプティミスティック更新
-    set((state) => ({ books: [optimisticBook, ...state.books] }));
+    // オプティミスティック追加
+    set((s) => ({ books: [optimisticBook, ...s.books] }));
 
-    if (!isOnline()) {
-      // オフラインキューに積む
-      const op: OfflineOperation = {
-        id: optimisticId,
+    // ネットワーク確認
+    const online = await checkOnline();
+    if (!online) {
+      const op: QueueOpCreate = {
+        opId: uuid(),
         type: 'create',
+        optimisticId,
         payload: data,
         timestamp: Date.now(),
       };
-      const queue = [...get().offlineQueue, op];
-      set({ offlineQueue: queue, loading: false });
-      saveQueue(queue);
+      const newQueue = mergeIntoQueue(get().offlineQueue, op);
+      set({ offlineQueue: newQueue, loading: false });
+      saveQueue(userId, newQueue);
       return optimisticBook;
     }
 
     try {
-      const { data: created, error } = await supabase.from('books').insert(data).select().single();
+      const { data: created, error } = await supabase
+        .from('books')
+        .insert(data)
+        .select()
+        .single();
 
       if (error) throw new Error(error.message);
 
       const newBook = created as Book;
-      // オプティミスティックIDを本物のIDに置換
-      set((state) => ({
-        books: state.books.map((b) => (b.id === optimisticId ? newBook : b)),
+      // optimisticIdを本物のIDに差し替え
+      set((s) => ({
+        books: s.books.map((b) => (b.id === optimisticId ? newBook : b)),
       }));
-      // キャッシュ更新
-      const updatedBooks = get().books;
-      setCached(CACHE_KEYS.BOOKS, updatedBooks);
+      flushBooksCache(userId, get().books);
       return newBook;
     } catch (err) {
       // ロールバック
-      set((state) => ({
-        books: state.books.filter((b) => b.id !== optimisticId),
+      set((s) => ({
+        books: s.books.filter((b) => b.id !== optimisticId),
         error: err instanceof Error ? err.message : 'createBook failed',
       }));
       return null;
@@ -188,44 +337,41 @@ export const useBookStore = create<BookState>((set, get) => ({
     }
   },
 
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   // updateBook
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   updateBook: async (id: string, data: BookUpdate) => {
-    set({ loading: true, error: null });
-
+    const userId = get().currentUserId;
     const prev = get().books.find((b) => b.id === id);
     if (!prev) {
-      set({ loading: false, error: 'Book not found' });
+      set({ error: 'Book not found' });
       return null;
     }
 
-    const updated: Book = {
-      ...prev,
-      ...data,
-      updated_at: new Date().toISOString(),
-    };
+    set({ loading: true, error: null });
 
-    // オプティミスティック更新
-    set((state) => ({ books: state.books.map((b) => (b.id === id ? updated : b)) }));
+    const optimistic: Book = { ...prev, ...data, updated_at: new Date().toISOString() };
+    set((s) => ({ books: s.books.map((b) => (b.id === id ? optimistic : b)) }));
 
-    if (!isOnline()) {
-      const op: OfflineOperation = {
-        id,
+    const online = await checkOnline();
+    if (!online) {
+      const op: QueueOpUpdate = {
+        opId: uuid(),
         type: 'update',
-        payload: { ...data, id },
+        bookId: id,
+        payload: data,
         timestamp: Date.now(),
       };
-      const queue = [...get().offlineQueue, op];
-      set({ offlineQueue: queue, loading: false });
-      saveQueue(queue);
-      return updated;
+      const newQueue = mergeIntoQueue(get().offlineQueue, op);
+      set({ offlineQueue: newQueue, loading: false });
+      if (userId) saveQueue(userId, newQueue);
+      return optimistic;
     }
 
     try {
       const { data: result, error } = await supabase
         .from('books')
-        .update({ ...data, updated_at: new Date().toISOString() })
+        .update(data)
         .eq('id', id)
         .select()
         .single();
@@ -233,15 +379,13 @@ export const useBookStore = create<BookState>((set, get) => ({
       if (error) throw new Error(error.message);
 
       const serverBook = result as Book;
-      set((state) => ({
-        books: state.books.map((b) => (b.id === id ? serverBook : b)),
-      }));
-      setCached(CACHE_KEYS.BOOKS, get().books);
+      set((s) => ({ books: s.books.map((b) => (b.id === id ? serverBook : b)) }));
+      if (userId) flushBooksCache(userId, get().books);
       return serverBook;
     } catch (err) {
       // ロールバック
-      set((state) => ({
-        books: state.books.map((b) => (b.id === id ? prev : b)),
+      set((s) => ({
+        books: s.books.map((b) => (b.id === id ? prev : b)),
         error: err instanceof Error ? err.message : 'updateBook failed',
       }));
       return null;
@@ -250,40 +394,41 @@ export const useBookStore = create<BookState>((set, get) => ({
     }
   },
 
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   // deleteBook
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   deleteBook: async (id: string) => {
+    const userId = get().currentUserId;
+    const snapshot = get().books;
     set({ loading: true, error: null });
 
-    const prev = get().books;
     // オプティミスティック削除
-    set((state) => ({ books: state.books.filter((b) => b.id !== id) }));
+    set((s) => ({ books: s.books.filter((b) => b.id !== id) }));
 
-    if (!isOnline()) {
-      const op: OfflineOperation = {
-        id,
+    const online = await checkOnline();
+    if (!online) {
+      const op: QueueOpDelete = {
+        opId: uuid(),
         type: 'delete',
-        payload: { id },
+        bookId: id,
         timestamp: Date.now(),
       };
-      const queue = [...get().offlineQueue, op];
-      set({ offlineQueue: queue, loading: false });
-      saveQueue(queue);
+      const newQueue = mergeIntoQueue(get().offlineQueue, op);
+      set({ offlineQueue: newQueue, loading: false });
+      if (userId) saveQueue(userId, newQueue);
       return true;
     }
 
     try {
       const { error } = await supabase.from('books').delete().eq('id', id);
-
       if (error) throw new Error(error.message);
 
-      setCached(CACHE_KEYS.BOOKS, get().books);
+      if (userId) flushBooksCache(userId, get().books);
       return true;
     } catch (err) {
       // ロールバック
       set({
-        books: prev,
+        books: snapshot,
         error: err instanceof Error ? err.message : 'deleteBook failed',
       });
       return false;
@@ -292,10 +437,11 @@ export const useBookStore = create<BookState>((set, get) => ({
     }
   },
 
-  // -----------------------------------------------------------------------
-  // flushOfflineQueue: オンライン復帰時にキューを順次処理
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // flushOfflineQueue
+  // ----------------------------------------------------------------
   flushOfflineQueue: async () => {
+    const userId = get().currentUserId;
     const queue = get().offlineQueue;
     if (queue.length === 0) return;
 
@@ -304,29 +450,65 @@ export const useBookStore = create<BookState>((set, get) => ({
     for (const op of queue) {
       try {
         if (op.type === 'create') {
-          await supabase.from('books').insert(op.payload as BookInsert);
+          await supabase.from('books').insert(op.payload);
         } else if (op.type === 'update') {
-          const { id, ...updateData } = op.payload as BookUpdate & { id: string };
-          await supabase.from('books').update(updateData).eq('id', id);
+          await supabase.from('books').update(op.payload).eq('id', op.bookId);
         } else if (op.type === 'delete') {
-          const { id } = op.payload as { id: string };
-          await supabase.from('books').delete().eq('id', id);
+          await supabase.from('books').delete().eq('id', op.bookId);
         }
       } catch {
-        // 失敗したオペレーションはキューに残す
         remaining.push(op);
       }
     }
 
     set({ offlineQueue: remaining });
-    saveQueue(remaining);
-
-    // キュー処理後にキャッシュを無効化して再取得を促す
-    removeCached(CACHE_KEYS.BOOKS_LAST_FETCHED);
+    if (userId) {
+      saveQueue(userId, remaining);
+      // キャッシュを無効化して次回fetchで最新を取得
+      removeCached(cacheKey.booksLastFetched(userId));
+    }
   },
 
-  // -----------------------------------------------------------------------
-  // clearError
-  // -----------------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // clearError / reset
+  // ----------------------------------------------------------------
   clearError: () => set({ error: null }),
+
+  reset: () => {
+    const userId = get().currentUserId;
+    if (userId) {
+      removeCached(cacheKey.books(userId));
+      removeCached(cacheKey.booksLastFetched(userId));
+      removeCached(cacheKey.offlineQueue(userId));
+    }
+    set(INITIAL_STATE);
+  },
 }));
+
+// ============================================================
+// モジュールプライベートヘルパー
+// ============================================================
+
+/** キャッシュにbooksリストを書き戻す */
+function flushBooksCache(userId: string, books: Book[]): void {
+  setCached(cacheKey.books(userId), books);
+  touchLastFetched(cacheKey.booksLastFetched(userId));
+}
+
+/**
+ * ネットワーク疎通確認。
+ * 実運用では @react-native-community/netinfo の NetInfo.fetch() に置き換えること。
+ *
+ * @example
+ * import NetInfo from '@react-native-community/netinfo';
+ * const state = await NetInfo.fetch();
+ * return state.isConnected ?? false;
+ */
+async function checkOnline(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('books').select('id').limit(0);
+    return error === null;
+  } catch {
+    return false;
+  }
+}

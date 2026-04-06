@@ -38,9 +38,7 @@ export function BookBlock({ book, columnWidth, isNew = false }: Props) {
   const bgColor = pickColor(book.id);
 
   const handlePress = useCallback(() => {
-    // 詳細画面へ遷移 (expo-router)
-    // router.push({ pathname: '/book/[id]', params: { id: book.id } });
-    console.log('navigate to book detail:', book.id);
+    router.push({ pathname: '/book/[id]', params: { id: book.id } });
   }, [book.id, router]);
 
   const isVisible = blockHeight >= 20;

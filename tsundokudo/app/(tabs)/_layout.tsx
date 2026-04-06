@@ -28,6 +28,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="tower"
+        options={{
+          title: '積読タワー',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🗼" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="scan"
         options={{
           title: '追加',

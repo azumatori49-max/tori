@@ -239,7 +239,7 @@ export default function ShelfScreen() {
         </View>
       ) : viewMode === 'shelf' ? (
         /* ─── 棚ビュー ────────────────────────────────────────── */
-        <FlashList<Book[]>
+        <FlashList
           ref={shelfListRef}
           data={shelfRows}
           renderItem={renderShelfRow}
@@ -248,12 +248,10 @@ export default function ShelfScreen() {
           ListHeaderComponent={ListHeader}
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           showsVerticalScrollIndicator={false}
-          // FlashList v2: estimatedItemSize は廃止。固定高さの hint のみ
-          getItemType={() => 'shelf-row'}
         />
       ) : (
         /* ─── グリッドビュー ──────────────────────────────────── */
-        <FlashList<Book>
+        <FlashList
           ref={gridListRef}
           data={filteredBooks}
           renderItem={renderGridItem}
@@ -267,14 +265,6 @@ export default function ShelfScreen() {
           }}
           ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
           showsVerticalScrollIndicator={false}
-          getItemType={() => 'grid-item'}
-          // numColumns 使用時にアイテム間の水平 gap を付与するため
-          // CellRendererComponent に paddingRight をつける
-          overrideItemLayout={(layout, _item, index) => {
-            // 行の最後以外に右マージンを設定（numColumns 使用時）
-            const col = index % GRID_COLUMNS;
-            layout.span = col === GRID_COLUMNS - 1 ? 1 : 1;
-          }}
         />
       )}
 

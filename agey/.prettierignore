@@ -1,0 +1,8 @@
+node_modules
+.expo
+dist
+build
+pnpm-lock.yaml
+ios
+android
+assets/models

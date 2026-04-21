@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "エイジー",
+    "slug": "agey",
+    "scheme": "agey",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "年齢推定のため顔映像を使用します。映像は端末内のみで処理され、保存・送信は行いません。",
+        "UILaunchStoryboardName": "SplashScreen",
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait"
+        ]
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "年齢推定のため顔映像を使用します。映像は端末内のみで処理され、保存・送信は行いません。",
+          "enableFrameProcessors": true
+        }
+      ]
+    ]
+  }
+}

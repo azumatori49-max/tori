@@ -15,6 +15,9 @@ export const CONFIG = {
   /** 推定値の移動平均サンプル数 */
   SMOOTHING_WINDOW: 8,
 
+  /** 顔を継続検出してから年齢を確定させるまでのミリ秒 */
+  LOCK_AFTER_MS: 2000,
+
   /** 顔未検出からアイドル表示に戻るまでのミリ秒 */
   IDLE_TIMEOUT_MS: 1500,
 

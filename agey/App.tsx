@@ -29,7 +29,11 @@ export default function App() {
   );
 
   const overlayColor =
-    state.decision === 'pass' ? '#22c55e' : state.decision === 'checkId' ? '#ef4444' : '#ffffff80';
+    state.phase === 'locked'
+      ? state.decision === 'pass'
+        ? '#22c55e'
+        : '#ef4444'
+      : '#ffffff80';
 
   return (
     <SafeAreaProvider>
@@ -57,11 +61,15 @@ export default function App() {
           </View>
 
           <View className="mt-8 items-center">
-            <AgeDisplay age={state.smoothedAge} pending={state.decision === 'idle'} />
+            <AgeDisplay
+              age={state.phase === 'locked' ? state.lockedAge : state.smoothedAge}
+              phase={state.phase}
+              progress={state.progress}
+            />
           </View>
 
           <View className="mt-auto gap-3">
-            <GateBanner decision={state.decision} />
+            <GateBanner decision={state.decision} phase={state.phase} />
             <PrivacyNote />
           </View>
         </View>

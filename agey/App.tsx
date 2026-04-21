@@ -17,13 +17,13 @@ export default function App() {
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
 
   const handleFace = useCallback(
-    (face: FaceBox | null, frameWidth: number, frameHeight: number) => {
+    (face: FaceBox | null, estimatedAge: number | null, frameWidth: number, frameHeight: number) => {
       setFrameSize((prev) =>
         prev.width === frameWidth && prev.height === frameHeight
           ? prev
           : { width: frameWidth, height: frameHeight },
       );
-      onFaceDetected(face, frameWidth);
+      onFaceDetected(face, estimatedAge, frameWidth);
     },
     [onFaceDetected],
   );

@@ -34,7 +34,7 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
     landmarkMode: 'none',
     contourMode: 'none',
     classificationMode: 'none',
-    minFaceSize: CONFIG.MIN_FACE_RATIO,
+    minFaceSize: 0.05,
     trackingEnabled: false,
   });
 

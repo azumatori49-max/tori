@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import type { KioskPhase } from '@/types/agey';
+import type { KioskPhase, SamplingHint } from '@/types/agey';
 
 type Props = {
   age: number | null;
   phase: KioskPhase;
   progress: number;
-  aligned: boolean;
+  samplingHint: SamplingHint;
 };
 
-export function AgeDisplay({ age, phase, progress, aligned }: Props) {
+const HINT_TEXT: Record<NonNullable<SamplingHint>, { main: string; sub: string }> = {
+  tooFar:     { main: 'もう少し近づいてください', sub: 'カメラに顔を近づけると測定が始まります' },
+  tooClose:   { main: '少し離れてください',       sub: 'カメラから少し距離を取ってください' },
+  misaligned: { main: 'まっすぐ向けてください',   sub: '顔を正面カメラに向けると測定が始まります' },
+};
+
+export function AgeDisplay({ age, phase, progress, samplingHint }: Props) {
   if (phase === 'idle' || age === null) {
     return (
       <View className="items-center">
@@ -20,14 +26,16 @@ export function AgeDisplay({ age, phase, progress, aligned }: Props) {
   }
 
   if (phase === 'sampling') {
-    if (!aligned) {
+    if (samplingHint !== null) {
+      const { main, sub } = HINT_TEXT[samplingHint];
       return (
         <View className="items-center">
-          <Text className="text-2xl font-semibold text-yellow-400">まっすぐ向けてください</Text>
-          <Text className="mt-1 text-sm text-white/50">顔を正面カメラに向けると測定が始まります</Text>
+          <Text className="text-2xl font-semibold text-yellow-400">{main}</Text>
+          <Text className="mt-1 text-sm text-white/50">{sub}</Text>
         </View>
       );
     }
+
     return (
       <View className="items-center">
         <View className="relative h-28 w-28 items-center justify-center">
@@ -44,14 +52,13 @@ export function AgeDisplay({ age, phase, progress, aligned }: Props) {
   return <LockedDisplay baseAge={Math.round(age)} />;
 }
 
-/** 確定後: ベース年齢から ±2 でゆっくり揺れる */
 function LockedDisplay({ baseAge }: { baseAge: number }) {
   const [displayAge, setDisplayAge] = useState(baseAge);
 
   useEffect(() => {
     setDisplayAge(baseAge);
     const id = setInterval(() => {
-      const drift = Math.round((Math.random() - 0.5) * 4); // -2 〜 +2
+      const drift = Math.round((Math.random() - 0.5) * 4);
       setDisplayAge(Math.max(baseAge - 2, Math.min(baseAge + 2, baseAge + drift)));
     }, 400);
     return () => clearInterval(id);
@@ -76,26 +83,10 @@ function ProgressRing({ progress, size }: { progress: number; size: number }) {
 
   return (
     <Svg width={size} height={size}>
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke="rgba(255,255,255,0.15)"
-        strokeWidth={stroke}
-        fill="transparent"
-      />
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        stroke="#ffffff"
-        strokeWidth={stroke}
-        fill="transparent"
-        strokeDasharray={circumference}
-        strokeDashoffset={dashOffset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
+      <Circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255,255,255,0.15)" strokeWidth={stroke} fill="transparent" />
+      <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#ffffff" strokeWidth={stroke} fill="transparent"
+        strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
     </Svg>
   );
 }

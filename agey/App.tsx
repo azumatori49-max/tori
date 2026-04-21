@@ -30,9 +30,8 @@ export default function App() {
 
   const overlayColor =
     state.phase === 'locked'
-      ? state.decision === 'pass'
-        ? '#22c55e'
-        : '#ef4444'
+      ? state.decision === 'pass' ? '#22c55e' : '#ef4444'
+      : state.samplingHint !== null ? '#facc15'
       : '#ffffff80';
 
   return (
@@ -65,7 +64,7 @@ export default function App() {
               age={state.phase === 'locked' ? state.lockedAge : state.smoothedAge}
               phase={state.phase}
               progress={state.progress}
-              aligned={state.aligned}
+              samplingHint={state.samplingHint}
             />
           </View>
 

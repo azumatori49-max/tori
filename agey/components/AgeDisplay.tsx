@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import type { KioskPhase } from '@/types/agey';
@@ -31,13 +32,27 @@ export function AgeDisplay({ age, phase, progress }: Props) {
     );
   }
 
-  // locked
-  const rounded = Math.round(age);
+  return <LockedDisplay baseAge={Math.round(age)} />;
+}
+
+/** 確定後: ベース年齢から ±2 でゆっくり揺れる */
+function LockedDisplay({ baseAge }: { baseAge: number }) {
+  const [displayAge, setDisplayAge] = useState(baseAge);
+
+  useEffect(() => {
+    setDisplayAge(baseAge);
+    const id = setInterval(() => {
+      const drift = Math.round((Math.random() - 0.5) * 4); // -2 〜 +2
+      setDisplayAge(Math.max(baseAge - 2, Math.min(baseAge + 2, baseAge + drift)));
+    }, 400);
+    return () => clearInterval(id);
+  }, [baseAge]);
+
   return (
     <View className="items-center">
       <Text className="text-xl text-white/70">推定年齢</Text>
       <View className="mt-2 flex-row items-end">
-        <Text className="text-[144px] font-bold leading-none text-white">{rounded}</Text>
+        <Text className="text-[144px] font-bold leading-none text-white">{displayAge}</Text>
         <Text className="mb-6 ml-2 text-4xl text-white/80">歳</Text>
       </View>
     </View>

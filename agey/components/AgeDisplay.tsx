@@ -7,9 +7,10 @@ type Props = {
   age: number | null;
   phase: KioskPhase;
   progress: number;
+  aligned: boolean;
 };
 
-export function AgeDisplay({ age, phase, progress }: Props) {
+export function AgeDisplay({ age, phase, progress, aligned }: Props) {
   if (phase === 'idle' || age === null) {
     return (
       <View className="items-center">
@@ -19,6 +20,14 @@ export function AgeDisplay({ age, phase, progress }: Props) {
   }
 
   if (phase === 'sampling') {
+    if (!aligned) {
+      return (
+        <View className="items-center">
+          <Text className="text-2xl font-semibold text-yellow-400">まっすぐ向けてください</Text>
+          <Text className="mt-1 text-sm text-white/50">顔を正面カメラに向けると測定が始まります</Text>
+        </View>
+      );
+    }
     return (
       <View className="items-center">
         <View className="relative h-28 w-28 items-center justify-center">

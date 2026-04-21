@@ -3,6 +3,9 @@ export type FaceBox = {
   y: number;
   width: number;
   height: number;
+  yawAngle?: number;
+  pitchAngle?: number;
+  rollAngle?: number;
 };
 
 export type AgeEstimate = {
@@ -25,4 +28,6 @@ export type KioskState = {
   progress: number;
   /** 確定した年齢 (locked フェーズでのみセット) */
   lockedAge: number | null;
+  /** 顔が正面を向いているか */
+  aligned: boolean;
 };

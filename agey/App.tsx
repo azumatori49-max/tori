@@ -65,6 +65,7 @@ export default function App() {
               age={state.phase === 'locked' ? state.lockedAge : state.smoothedAge}
               phase={state.phase}
               progress={state.progress}
+              aligned={state.aligned}
             />
           </View>
 

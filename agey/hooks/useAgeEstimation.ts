@@ -13,15 +13,25 @@ const INITIAL_STATE: KioskState = {
   phase: 'idle',
   progress: 0,
   lockedAge: null,
+  aligned: false,
 };
 
+function isFaceAligned(face: FaceBox): boolean {
+  const { yawAngle, pitchAngle, rollAngle } = face;
+  if (yawAngle !== undefined && Math.abs(yawAngle) > CONFIG.MAX_YAW_ANGLE) return false;
+  if (pitchAngle !== undefined && Math.abs(pitchAngle) > CONFIG.MAX_PITCH_ANGLE) return false;
+  if (rollAngle !== undefined && Math.abs(rollAngle) > CONFIG.MAX_ROLL_ANGLE) return false;
+  return true;
+}
+
 /**
- * 顔検出結果を受け取り、年齢推定 → 平滑化 → 判定 までを束ねるフック。
- *
  * フェーズ:
- *   idle     : 顔なし or 顔小さすぎ。ウェルカム表示。
- *   sampling : 顔検出中、まだ LOCK_AFTER_MS 経っていない。年齢は揺れる。
+ *   idle     : 顔なし。ウェルカム表示。
+ *   sampling : 顔検出中。正面を向いている間だけタイマー進行。
  *   locked   : 確定。顔が離れて IDLE_TIMEOUT_MS 経つまで値を固定。
+ *
+ * aligned: 顔が正面を向いているか。sampling 中に false になると
+ *          バッファとタイマーをリセットして再計測を強制する。
  */
 export function useAgeEstimation() {
   const estimator = useMemo(() => createEstimator(), []);
@@ -63,10 +73,19 @@ export function useAgeEstimation() {
       }
       clearIdleTimer();
 
-      // 既に確定済みなら値は固定、face だけ更新してオーバーレイを追従させる
+      const aligned = isFaceAligned(face);
+
       setState((prev) => {
+        // 確定済みなら face 位置だけ更新
         if (prev.phase === 'locked') {
           return prev.face === face ? prev : { ...prev, face };
+        }
+
+        // 顔が正面を向いていない → バッファ・タイマーをリセット、ヒント表示
+        if (!aligned) {
+          bufferRef.current.clear();
+          samplingStartedAtRef.current = null;
+          return { ...INITIAL_STATE, face, phase: 'sampling', aligned: false, progress: 0 };
         }
 
         const estimate = estimator.estimate(face, frameWidth);
@@ -93,6 +112,7 @@ export function useAgeEstimation() {
             phase: 'locked',
             progress: 1,
             lockedAge: smoothedAge,
+            aligned: true,
           };
         }
 
@@ -104,6 +124,7 @@ export function useAgeEstimation() {
           phase: 'sampling',
           progress,
           lockedAge: null,
+          aligned: true,
         };
       });
     },

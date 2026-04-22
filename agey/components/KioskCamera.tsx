@@ -18,9 +18,12 @@ type Props = {
   style?: { width: number; height: number };
 };
 
-// Run scripts/prepare_model.py to regenerate if this file is missing.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const MODEL_ASSET = require('../assets/models/age_model.tflite') as number;
+
+// InsightFace genderage 96×96 reference eye positions (from 112×112 template × 96/112)
+const TGT_LX = 32.82, TGT_LY = 44.31; // person's left  eye in aligned crop
+const TGT_RX = 63.03, TGT_RY = 44.14; // person's right eye in aligned crop
 
 export function KioskCamera({ onFace, onLayout, style }: Props) {
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -34,7 +37,6 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
 
   const { detectFaces } = useFaceDetector({
     performanceMode: 'fast',
-    // All landmarks needed for eye-based rotation correction
     landmarkMode: CONFIG.DEV_MOCK_ESTIMATOR ? 'none' : 'all',
     contourMode: 'none',
     classificationMode: 'none',
@@ -78,54 +80,83 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
       const model = tflite.model;
       if (!CONFIG.DEV_MOCK_ESTIMATOR && model != null) {
         try {
-          const S = CONFIG.MODEL_INPUT_SIZE;
-
-          // --- Compute aligned crop center, size, and roll angle ---
-          // Default: use bounding box center with padding
-          let cx = best.bounds.x + best.bounds.width / 2;
-          let cy = best.bounds.y + best.bounds.height / 2;
-          let cropSize = Math.max(best.bounds.width, best.bounds.height) * (1 + CONFIG.MODEL_FACE_PADDING * 2);
-          let rollAngle = 0;
-
-          const le = best.landmarks?.LEFT_EYE;
-          const re = best.landmarks?.RIGHT_EYE;
-          if (le && re) {
-            // Eye midpoint as crop center (more stable than bbox center)
-            cx = (le.x + re.x) / 2;
-            cy = (le.y + re.y) / 2;
-            // Roll angle between eyes → rotate input to align eyes horizontally
-            rollAngle = Math.atan2(re.y - le.y, re.x - le.x);
-            // Crop size from inter-eye distance: empirically ~2.7× gives a tight face crop
-            const eyeDist = Math.sqrt((re.x - le.x) ** 2 + (re.y - le.y) ** 2);
-            cropSize = eyeDist * 3.5;
-          }
-
-          const cosA = Math.cos(-rollAngle);
-          const sinA = Math.sin(-rollAngle);
-
-          const buffer = frame.toArrayBuffer();
-          const bytes = new Uint8Array(buffer);
+          const S = CONFIG.MODEL_INPUT_SIZE; // 96
           const fw = frame.width;
           const fh = frame.height;
 
-          // Build S×S input with rotation-corrected sampling
+          const buffer = frame.toArrayBuffer();
+          const bytes = new Uint8Array(buffer);
           const input = new Float32Array(S * S * 3);
-          for (let y = 0; y < S; y++) {
-            for (let x = 0; x < S; x++) {
-              // Normalised position in crop space [-0.5, 0.5]
-              const nx = x / S - 0.5;
-              const ny = y / S - 0.5;
-              // Rotate and map back to frame coordinates
-              const srcX = Math.round(cx + (nx * cosA - ny * sinA) * cropSize);
-              const srcY = Math.round(cy + (nx * sinA + ny * cosA) * cropSize);
 
-              const si = Math.max(0, Math.min(fw - 1, srcX));
-              const sj = Math.max(0, Math.min(fh - 1, srcY));
-              const srcIdx = (sj * fw + si) * 3;
-              const dstIdx = (y * S + x) * 3;
-              input[dstIdx]     = (bytes[srcIdx]     ?? 0) / 255;
-              input[dstIdx + 1] = (bytes[srcIdx + 1] ?? 0) / 255;
-              input[dstIdx + 2] = (bytes[srcIdx + 2] ?? 0) / 255;
+          const le = best.landmarks?.LEFT_EYE;
+          const re = best.landmarks?.RIGHT_EYE;
+
+          if (le && re) {
+            // ---- 2-point similarity transform (InsightFace-style alignment) ----
+            // Find M such that: M * source_eye = target_eye
+            //   forward:  crop_pt = a*frame_x - b*frame_y + c
+            //                       b*frame_x + a*frame_y + d
+            // We solve for (a, b, c, d) using two point correspondences.
+
+            const ds_x = re.x - le.x; // source right-left vector
+            const ds_y = re.y - le.y;
+            const denom = ds_x * ds_x + ds_y * ds_y;
+
+            if (denom > 4) { // guards against degenerate (faces too small / eyes same pos)
+              const dt_x = TGT_RX - TGT_LX;
+              const dt_y = TGT_RY - TGT_LY;
+
+              // Complex division: (dt) / (ds)  →  a + ib
+              const a  = (dt_x * ds_x + dt_y * ds_y) / denom;
+              const b  = (dt_y * ds_x - dt_x * ds_y) / denom;
+              const c  = TGT_LX - a * le.x + b * le.y;
+              const dv = TGT_LY - b * le.x - a * le.y;
+
+              // Inverse transform (crop → frame):
+              //   [[a,-b],[b,a]]^-1 = [[a,b],[-b,a]] / (a²+b²)
+              const det = a * a + b * b;
+              const ia = a / det;
+              const ib = b / det;
+
+              for (let py = 0; py < S; py++) {
+                for (let px = 0; px < S; px++) {
+                  const ex = px - c;
+                  const ey = py - dv;
+                  const fx = Math.round(ia * ex + ib * ey);
+                  const fy = Math.round(-ib * ex + ia * ey);
+                  const si = Math.max(0, Math.min(fw - 1, fx));
+                  const sj = Math.max(0, Math.min(fh - 1, fy));
+                  const srcIdx = (sj * fw + si) * 3;
+                  const dstIdx = (py * S + px) * 3;
+                  input[dstIdx]     = (bytes[srcIdx]     ?? 0) / 255;
+                  input[dstIdx + 1] = (bytes[srcIdx + 1] ?? 0) / 255;
+                  input[dstIdx + 2] = (bytes[srcIdx + 2] ?? 0) / 255;
+                }
+              }
+            } else {
+              // landmark denom too small — fall through to bbox crop below
+              le.x = 0; // mark le as invalid so we fall to bbox path
+            }
+          }
+
+          // Fallback: bbox-based crop (when no landmarks or denom too small)
+          if (!le || !re) {
+            const pad = CONFIG.MODEL_FACE_PADDING;
+            const bx = Math.max(0, Math.floor(best.bounds.x - best.bounds.width * pad));
+            const by = Math.max(0, Math.floor(best.bounds.y - best.bounds.height * pad));
+            const bw = Math.min(fw - bx, Math.ceil(best.bounds.width * (1 + pad * 2)));
+            const bh = Math.min(fh - by, Math.ceil(best.bounds.height * (1 + pad * 2)));
+
+            for (let y = 0; y < S; y++) {
+              for (let x = 0; x < S; x++) {
+                const srcX = bx + Math.floor((x * bw) / S);
+                const srcY = by + Math.floor((y * bh) / S);
+                const srcIdx = (srcY * fw + srcX) * 3;
+                const dstIdx = (y * S + x) * 3;
+                input[dstIdx]     = (bytes[srcIdx]     ?? 0) / 255;
+                input[dstIdx + 1] = (bytes[srcIdx + 1] ?? 0) / 255;
+                input[dstIdx + 2] = (bytes[srcIdx + 2] ?? 0) / 255;
+              }
             }
           }
 
@@ -135,7 +166,7 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
             estimatedAge = Math.max(1, Math.min(120, ageNorm * CONFIG.MODEL_AGE_SCALE));
           }
         } catch {
-          // Inference error — fall back to mock upstream
+          // inference error — mock fallback used upstream
         }
       }
 

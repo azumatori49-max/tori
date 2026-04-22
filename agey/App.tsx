@@ -56,6 +56,7 @@ export default function App() {
               frameWidth={frameSize.width}
               frameHeight={frameSize.height}
               color={overlayColor}
+              samplingHint={state.samplingHint}
             />
           </View>
 

@@ -34,7 +34,8 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
 
   const { detectFaces } = useFaceDetector({
     performanceMode: 'fast',
-    landmarkMode: 'none',
+    // All landmarks needed for eye-based rotation correction
+    landmarkMode: CONFIG.DEV_MOCK_ESTIMATOR ? 'none' : 'all',
     contourMode: 'none',
     classificationMode: 'none',
     minFaceSize: 0.05,
@@ -73,32 +74,54 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
         rollAngle: best.rollAngle,
       };
 
-      // Run TFLite age inference in worklet when model is loaded
       let estimatedAge: number | null = null;
       const model = tflite.model;
       if (!CONFIG.DEV_MOCK_ESTIMATOR && model != null) {
         try {
           const S = CONFIG.MODEL_INPUT_SIZE;
-          const pad = CONFIG.MODEL_FACE_PADDING;
 
-          // Face bounding box with padding, clamped to frame
-          const fx = Math.max(0, Math.floor(best.bounds.x - best.bounds.width * pad));
-          const fy = Math.max(0, Math.floor(best.bounds.y - best.bounds.height * pad));
-          const fw = Math.min(frame.width - fx, Math.ceil(best.bounds.width * (1 + pad * 2)));
-          const fh = Math.min(frame.height - fy, Math.ceil(best.bounds.height * (1 + pad * 2)));
+          // --- Compute aligned crop center, size, and roll angle ---
+          // Default: use bounding box center with padding
+          let cx = best.bounds.x + best.bounds.width / 2;
+          let cy = best.bounds.y + best.bounds.height / 2;
+          let cropSize = Math.max(best.bounds.width, best.bounds.height) * (1 + CONFIG.MODEL_FACE_PADDING * 2);
+          let rollAngle = 0;
 
-          // Raw RGB pixels: 3 bytes per pixel (R, G, B)
-          // Requires pixelFormat='rgb' on the Camera component
+          const le = best.landmarks?.LEFT_EYE;
+          const re = best.landmarks?.RIGHT_EYE;
+          if (le && re) {
+            // Eye midpoint as crop center (more stable than bbox center)
+            cx = (le.x + re.x) / 2;
+            cy = (le.y + re.y) / 2;
+            // Roll angle between eyes → rotate input to align eyes horizontally
+            rollAngle = Math.atan2(re.y - le.y, re.x - le.x);
+            // Crop size from inter-eye distance: empirically ~2.7× gives a tight face crop
+            const eyeDist = Math.sqrt((re.x - le.x) ** 2 + (re.y - le.y) ** 2);
+            cropSize = eyeDist * 3.5;
+          }
+
+          const cosA = Math.cos(-rollAngle);
+          const sinA = Math.sin(-rollAngle);
+
           const buffer = frame.toArrayBuffer();
           const bytes = new Uint8Array(buffer);
+          const fw = frame.width;
+          const fh = frame.height;
 
-          // Crop + nearest-neighbour resize to S×S, normalize to [0, 1]
+          // Build S×S input with rotation-corrected sampling
           const input = new Float32Array(S * S * 3);
           for (let y = 0; y < S; y++) {
             for (let x = 0; x < S; x++) {
-              const srcX = fx + Math.floor((x * fw) / S);
-              const srcY = fy + Math.floor((y * fh) / S);
-              const srcIdx = (srcY * frame.width + srcX) * 3;
+              // Normalised position in crop space [-0.5, 0.5]
+              const nx = x / S - 0.5;
+              const ny = y / S - 0.5;
+              // Rotate and map back to frame coordinates
+              const srcX = Math.round(cx + (nx * cosA - ny * sinA) * cropSize);
+              const srcY = Math.round(cy + (nx * sinA + ny * cosA) * cropSize);
+
+              const si = Math.max(0, Math.min(fw - 1, srcX));
+              const sj = Math.max(0, Math.min(fh - 1, srcY));
+              const srcIdx = (sj * fw + si) * 3;
               const dstIdx = (y * S + x) * 3;
               input[dstIdx]     = (bytes[srcIdx]     ?? 0) / 255;
               input[dstIdx + 1] = (bytes[srcIdx + 1] ?? 0) / 255;
@@ -112,7 +135,7 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
             estimatedAge = Math.max(1, Math.min(120, ageNorm * CONFIG.MODEL_AGE_SCALE));
           }
         } catch {
-          // Inference error — estimatedAge stays null, mock fallback used upstream
+          // Inference error — fall back to mock upstream
         }
       }
 
@@ -154,7 +177,6 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
         isActive={true}
         frameProcessor={frameProcessor}
         fps={CONFIG.FRAME_PROCESSOR_FPS}
-        // rgb gives consistent 3-byte pixels needed for face crop extraction
         pixelFormat={CONFIG.DEV_MOCK_ESTIMATOR ? 'native' : 'rgb'}
         photo={false}
         video={false}

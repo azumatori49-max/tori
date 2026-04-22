@@ -76,8 +76,9 @@ export function useAgeEstimation() {
           return prev.face === face ? prev : { ...prev, face };
         }
 
-        const estimate = estimator.estimate(face, frameWidth);
-        if (!estimate) return prev;
+        const raw = estimator.estimate(face, frameWidth);
+        if (!raw) return prev;
+        const estimate = { ...raw, age: Math.max(CONFIG.MIN_CUSTOMER_AGE, raw.age) };
 
         bufferRef.current.push(estimate);
         const smoothedAge = bufferRef.current.median();

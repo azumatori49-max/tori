@@ -1,5 +1,7 @@
 export const CONFIG = {
   MINOR_THRESHOLD: 20,
+  /** 居酒屋の客として想定される最小年齢。これ未満の推定値は切り上げる */
+  MIN_CUSTOMER_AGE: 14,
   SMOOTHING_WINDOW: 8,
   LOCK_AFTER_MS: 2000,
   IDLE_TIMEOUT_MS: 1500,

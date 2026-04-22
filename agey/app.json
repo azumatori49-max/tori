@@ -4,7 +4,7 @@
     "slug": "agey",
     "scheme": "agey",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
@@ -14,7 +14,9 @@
         "NSCameraUsageDescription": "年齢推定のため顔映像を使用します。映像は端末内のみで処理され、保存・送信は行いません。",
         "UILaunchStoryboardName": "SplashScreen",
         "UISupportedInterfaceOrientations": [
-          "UIInterfaceOrientationPortrait"
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
         ]
       }
     },

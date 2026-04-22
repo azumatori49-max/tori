@@ -17,14 +17,6 @@ export const CONFIG = {
   MAX_ROLL_ANGLE: 20,
 
   DEV_MOCK_ESTIMATOR: true,
-
-  // TFLite model: InsightFace buffalo_s genderage (converted via onnx2tf)
-  // Input:  [1, 96, 96, 3] float32 NHWC, values in [0, 1]
-  // Output: [1, 3] float32 → [gender_female_logit, gender_male_logit, age/100]
-  MODEL_INPUT_SIZE: 96,
-  MODEL_AGE_OUTPUT_IDX: 2,  // output[0][2] * MODEL_AGE_SCALE = estimated age
-  MODEL_AGE_SCALE: 100,
-  MODEL_FACE_PADDING: 0.10, // fractional padding added around face bbox
 } as const;
 
 export type Config = typeof CONFIG;

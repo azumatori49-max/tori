@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CONFIG } from '@/constants/config';
 import { AgeBuffer } from '@/lib/ageBuffer';
-import { createMockEstimator } from '@/lib/ageEstimator';
+import { createEstimator } from '@/lib/ageEstimator';
 import { decideGate } from '@/lib/decision';
 import type { FaceBox, KioskState, SamplingHint } from '@/types/agey';
 
@@ -28,8 +28,7 @@ function getSamplingHint(face: FaceBox, frameWidth: number): SamplingHint {
 }
 
 export function useAgeEstimation() {
-  // Mock estimator: used when DEV_MOCK_ESTIMATOR=true or as fallback when TFLite returns null
-  const mockEstimator = useMemo(() => createMockEstimator(), []);
+  const estimator = useMemo(() => createEstimator(), []);
   const bufferRef = useRef(new AgeBuffer(CONFIG.SMOOTHING_WINDOW));
   const samplingStartedAtRef = useRef<number | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,9 +54,8 @@ export function useAgeEstimation() {
     idleTimerRef.current = setTimeout(resetToIdle, CONFIG.IDLE_TIMEOUT_MS);
   }, [clearIdleTimer, resetToIdle]);
 
-  // estimatedAge: number from TFLite inference (real mode), or null (mock/fallback)
   const onFaceDetected = useCallback(
-    (face: FaceBox | null, estimatedAge: number | null, frameWidth: number) => {
+    (face: FaceBox | null, frameWidth: number) => {
       if (!face) {
         scheduleIdleReset();
         return;
@@ -78,17 +76,9 @@ export function useAgeEstimation() {
           return prev.face === face ? prev : { ...prev, face };
         }
 
-        // Use TFLite result when available; fall back to mock estimator
-        const rawAge =
-          estimatedAge !== null
-            ? estimatedAge
-            : CONFIG.DEV_MOCK_ESTIMATOR
-              ? mockEstimator.estimate(face, frameWidth)?.age ?? null
-              : null; // production TFLite failure → skip frame
+        const estimate = estimator.estimate(face, frameWidth);
+        if (!estimate) return prev;
 
-        if (rawAge === null) return prev;
-
-        const estimate = { age: rawAge, confidence: estimatedAge !== null ? 0.9 : 0.5, detectedAt: Date.now() };
         bufferRef.current.push(estimate);
         const smoothedAge = bufferRef.current.median();
 
@@ -115,7 +105,7 @@ export function useAgeEstimation() {
         };
       });
     },
-    [clearIdleTimer, mockEstimator, scheduleIdleReset],
+    [clearIdleTimer, estimator, scheduleIdleReset],
   );
 
   useEffect(() => () => clearIdleTimer(), [clearIdleTimer]);

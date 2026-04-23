@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "agey",
+    "slug": "agey",
+    "scheme": "agey",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "年齢推定のためにカメラを使用します。撮影画像は推定のみに使われ、保存されません。"
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "年齢推定のためにカメラを使用します。撮影画像は推定のみに使われ、保存されません。"
+        }
+      ]
+    ]
+  }
+}

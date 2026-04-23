@@ -3,7 +3,7 @@ export const CONFIG = {
   /** 居酒屋の客として想定される最小年齢。これ未満の推定値は切り上げる */
   MIN_CUSTOMER_AGE: 14,
   SMOOTHING_WINDOW: 8,
-  /** 顔が安定してからAPIを呼ぶまでの時間 (ms) */
+  /** 顔が安定してから撮影するまでの時間 (ms) */
   LOCK_AFTER_MS: 1500,
   IDLE_TIMEOUT_MS: 1500,
   MIN_SAMPLES_FOR_DECISION: 1,
@@ -20,14 +20,13 @@ export const CONFIG = {
   MAX_ROLL_ANGLE: 20,
 
   /**
-   * Azure Face API
-   * 取得先: https://portal.azure.com → Cognitive Services → Face
-   * Free tier: 30,000 calls/month
+   * 年齢推定プロキシURL。
+   * Azure キーはプロキシサーバー側にのみ保管し、アプリには含めない。
+   * server/ ディレクトリの Cloudflare Worker をデプロイして URL を設定する。
    */
-  AZURE_FACE_ENDPOINT: 'https://YOUR_RESOURCE_NAME.cognitiveservices.azure.com',
-  AZURE_FACE_KEY: 'YOUR_KEY_HERE',
+  AGE_API_PROXY_URL: 'https://agey-age-proxy.YOUR_SUBDOMAIN.workers.dev',
 
-  /** true の間はモックで動く（Azureキーなし開発用） */
+  /** true の間はモックで動く（プロキシなし開発用） */
   DEV_MOCK_ESTIMATOR: true,
 } as const;
 

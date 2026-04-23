@@ -1,13 +1,9 @@
 import { CONFIG } from '@/constants/config';
 
-type AzureFace = {
-  faceAttributes?: { age?: number };
-};
-
 export async function estimateAgeFromPhoto(photoPath: string): Promise<number> {
   if (CONFIG.DEV_MOCK_ESTIMATOR) {
     await new Promise((r) => setTimeout(r, 800));
-    return Math.round(25 + Math.random() * 30); // 25〜55のランダム値（開発用）
+    return Math.round(25 + Math.random() * 30);
   }
 
   const fileUri = photoPath.startsWith('file://') ? photoPath : `file://${photoPath}`;
@@ -21,26 +17,20 @@ export async function estimateAgeFromPhoto(photoPath: string): Promise<number> {
     xhr.send();
   });
 
-  const url =
-    `${CONFIG.AZURE_FACE_ENDPOINT}/face/v1.0/detect` +
-    `?returnFaceAttributes=age&detectionModel=detection_03&recognitionModel=recognition_04`;
-
-  const response = await fetch(url, {
+  // プロキシサーバーを経由して呼ぶ。Azure キーはサーバー側にのみ存在する。
+  const response = await fetch(CONFIG.AGE_API_PROXY_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Ocp-Apim-Subscription-Key': CONFIG.AZURE_FACE_KEY,
-    },
+    headers: { 'Content-Type': 'application/octet-stream' },
     body: blob,
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Azure API ${response.status}: ${text.slice(0, 200)}`);
+    throw new Error(`プロキシエラー ${response.status}: ${text.slice(0, 200)}`);
   }
 
-  const faces = (await response.json()) as AzureFace[];
-  const age = faces[0]?.faceAttributes?.age;
-  if (age == null) throw new Error('顔が検出されませんでした');
+  const { age, error } = (await response.json()) as { age?: number; error?: string };
+  if (error) throw new Error(error);
+  if (age == null) throw new Error('年齢が取得できませんでした');
   return age;
 }

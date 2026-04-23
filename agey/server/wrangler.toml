@@ -1,0 +1,10 @@
+name = "agey-age-proxy"
+main = "age-proxy.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# ★ 自分のリソース名に変更（キー末尾の .cognitiveservices.azure.com まで）
+AZURE_FACE_ENDPOINT = "https://YOUR_RESOURCE_NAME.cognitiveservices.azure.com"
+
+# AZURE_FACE_KEY は wrangler secret put AZURE_FACE_KEY で安全に登録する
+# このファイルには書かないこと

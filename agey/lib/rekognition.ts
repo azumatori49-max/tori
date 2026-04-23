@@ -11,6 +11,7 @@ export type FaceAnalysis = {
   confidence: number;
   qualityBrightness: number;
   qualitySharpness: number;
+  pose: { yaw: number; pitch: number; roll: number };
   boundingBox: { left: number; top: number; width: number; height: number };
   faceCount: number;
 };
@@ -63,6 +64,11 @@ export async function detectFaces(base64Jpeg: string): Promise<FaceAnalysis | nu
     confidence: face.Confidence ?? 0,
     qualityBrightness: face.Quality?.Brightness ?? 0,
     qualitySharpness: face.Quality?.Sharpness ?? 0,
+    pose: {
+      yaw: face.Pose?.Yaw ?? 0,
+      pitch: face.Pose?.Pitch ?? 0,
+      roll: face.Pose?.Roll ?? 0,
+    },
     boundingBox: {
       left: box?.Left ?? 0,
       top: box?.Top ?? 0,

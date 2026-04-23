@@ -12,11 +12,69 @@ import { detectFaces, type FaceAnalysis } from './lib/rekognition';
 import {
   AUTO_RESET_MS,
   CHECK_INTERVAL_MS,
+  MAX_BRIGHTNESS,
+  MAX_POSE_PITCH,
+  MAX_POSE_ROLL,
+  MAX_POSE_YAW,
+  MIN_BRIGHTNESS,
   MIN_FACE_CONFIDENCE,
   MIN_FACE_SIZE_RATIO,
+  MIN_SHARPNESS,
+  SAMPLE_COUNT,
+  SAMPLE_RESET_AFTER_MISSES,
 } from './constants/config';
 
 type Mode = 'scanning' | 'result' | 'error';
+
+type SampleCheck =
+  | { ok: true; face: FaceAnalysis }
+  | { ok: false; hint: string };
+
+// 撮影品質ゲート: 推定誤差を増やす条件を弾く。
+// 弾いた理由を画面のヒントに反映してユーザを誘導する。
+function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
+  if (!face) return { ok: false, hint: '枠に顔を合わせてください' };
+  if (face.confidence < MIN_FACE_CONFIDENCE) {
+    return { ok: false, hint: 'マスク・帽子を外してください' };
+  }
+  const faceSize = Math.max(face.boundingBox.width, face.boundingBox.height);
+  if (faceSize < MIN_FACE_SIZE_RATIO) {
+    return { ok: false, hint: 'もう少し近づいてください' };
+  }
+  if (face.qualityBrightness < MIN_BRIGHTNESS) {
+    return { ok: false, hint: '明るい場所でお試しください' };
+  }
+  if (face.qualityBrightness > MAX_BRIGHTNESS) {
+    return { ok: false, hint: '逆光を避けてください' };
+  }
+  if (face.qualitySharpness < MIN_SHARPNESS) {
+    return { ok: false, hint: '動かずに静止してください' };
+  }
+  if (Math.abs(face.pose.yaw) > MAX_POSE_YAW) {
+    return { ok: false, hint: '正面を向いてください' };
+  }
+  if (Math.abs(face.pose.pitch) > MAX_POSE_PITCH) {
+    return { ok: false, hint: '顔を真っ直ぐにしてください' };
+  }
+  if (Math.abs(face.pose.roll) > MAX_POSE_ROLL) {
+    return { ok: false, hint: '顔を真っ直ぐにしてください' };
+  }
+  return { ok: true, face };
+}
+
+// 中央値ベースのサンプル統合: 外れ値の影響を抑える。
+// AgeRange.Low と AgeRange.High を独立に中央値化する。
+function aggregateSamples(samples: FaceAnalysis[]): FaceAnalysis {
+  const lows = samples.map((s) => s.ageLow).sort((a, b) => a - b);
+  const highs = samples.map((s) => s.ageHigh).sort((a, b) => a - b);
+  const midIdx = Math.floor(samples.length / 2);
+  const latest = samples[samples.length - 1]!;
+  return {
+    ...latest,
+    ageLow: lows[midIdx]!,
+    ageHigh: highs[midIdx]!,
+  };
+}
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -25,9 +83,12 @@ export default function App() {
   const [result, setResult] = useState<FaceAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [hint, setHint] = useState('枠に顔を合わせてください');
+  const [sampleProgress, setSampleProgress] = useState(0);
   const cameraRef = useRef<CameraView | null>(null);
   const busyRef = useRef(false);
   const modeRef = useRef<Mode>('scanning');
+  const samplesRef = useRef<FaceAnalysis[]>([]);
+  const missCountRef = useRef(0);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -63,20 +124,31 @@ export default function App() {
       const face = await detectFaces(resized.base64);
       if (modeRef.current !== 'scanning') return;
 
-      if (!face) {
-        setHint('枠に顔を合わせてください');
+      const check = checkSampleQuality(face);
+      if (!check.ok) {
+        setHint(check.hint);
+        missCountRef.current += 1;
+        // 連続で失敗したら、計測中の客が離脱したと判断してバッファをリセット。
+        if (missCountRef.current > SAMPLE_RESET_AFTER_MISSES) {
+          samplesRef.current = [];
+          setSampleProgress(0);
+        }
         return;
       }
-      if (face.confidence < MIN_FACE_CONFIDENCE) {
-        setHint('マスク・帽子を外してください');
+
+      missCountRef.current = 0;
+      samplesRef.current.push(check.face);
+      setSampleProgress(samplesRef.current.length);
+
+      if (samplesRef.current.length < SAMPLE_COUNT) {
+        setHint(`計測中… (${samplesRef.current.length}/${SAMPLE_COUNT})`);
         return;
       }
-      const faceSize = Math.max(face.boundingBox.width, face.boundingBox.height);
-      if (faceSize < MIN_FACE_SIZE_RATIO) {
-        setHint('もう少し近づいてください');
-        return;
-      }
-      setResult(face);
+
+      const aggregated = aggregateSamples(samplesRef.current);
+      samplesRef.current = [];
+      setSampleProgress(0);
+      setResult(aggregated);
       setMode('result');
     } catch (e) {
       const message = e instanceof Error ? e.message : '通信エラーが発生しました';
@@ -105,6 +177,9 @@ export default function App() {
   }, []);
 
   const reset = useCallback(() => {
+    samplesRef.current = [];
+    missCountRef.current = 0;
+    setSampleProgress(0);
     setResult(null);
     setErrorMsg('');
     setHint('枠に顔を合わせてください');
@@ -173,6 +248,18 @@ export default function App() {
               <ActivityIndicator size="small" color="#fff" />
               <Text className="text-white ml-3 text-base">{hint}</Text>
             </View>
+            {sampleProgress > 0 && sampleProgress < SAMPLE_COUNT && (
+              <View className="flex-row mb-4">
+                {Array.from({ length: SAMPLE_COUNT }).map((_, i) => (
+                  <View
+                    key={i}
+                    className={`w-3 h-3 rounded-full mx-1 ${
+                      i < sampleProgress ? 'bg-emerald-400' : 'bg-white/30'
+                    }`}
+                  />
+                ))}
+              </View>
+            )}
           </SafeAreaView>
         )}
         {mode === 'result' && result && <ResultOverlay face={result} onReset={reset} />}

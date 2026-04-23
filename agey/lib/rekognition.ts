@@ -34,11 +34,13 @@ function getClient(): RekognitionClient {
   return cachedClient;
 }
 
-function pickLargestFace(faces: FaceDetail[]): FaceDetail {
-  return faces.reduce((largest, current) => {
-    const la = (largest.BoundingBox?.Width ?? 0) * (largest.BoundingBox?.Height ?? 0);
-    const ca = (current.BoundingBox?.Width ?? 0) * (current.BoundingBox?.Height ?? 0);
-    return ca > la ? current : largest;
+// グループ入店時の未成年検知のため、最年少候補（AgeRange.High が最小）を採用する。
+// 大人と一緒に入る未成年を「最大の顔」ロジックで見逃さないための措置。
+function pickYoungestFace(faces: FaceDetail[]): FaceDetail {
+  return faces.reduce((youngest, current) => {
+    const yHigh = youngest.AgeRange?.High ?? Number.POSITIVE_INFINITY;
+    const cHigh = current.AgeRange?.High ?? Number.POSITIVE_INFINITY;
+    return cHigh < yHigh ? current : youngest;
   });
 }
 
@@ -53,7 +55,7 @@ export async function detectFaces(base64Jpeg: string): Promise<FaceAnalysis | nu
   );
   const faces = res.FaceDetails ?? [];
   if (faces.length === 0) return null;
-  const face = pickLargestFace(faces);
+  const face = pickYoungestFace(faces);
   const box = face.BoundingBox;
   return {
     ageLow: face.AgeRange?.Low ?? 0,

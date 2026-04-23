@@ -10,6 +10,7 @@ import { ResultOverlay } from './components/ResultOverlay';
 import { ErrorOverlay } from './components/ErrorOverlay';
 import { detectFaces, type FaceAnalysis } from './lib/rekognition';
 import {
+  AUTO_RESET_MS,
   CHECK_INTERVAL_MS,
   MIN_FACE_CONFIDENCE,
   MIN_FACE_SIZE_RATIO,
@@ -63,15 +64,11 @@ export default function App() {
       if (modeRef.current !== 'scanning') return;
 
       if (!face) {
-        setHint('顔が検出できません。枠に顔を合わせてください');
-        return;
-      }
-      if (face.faceCount > 1) {
-        setHint('1人ずつお願いします');
+        setHint('枠に顔を合わせてください');
         return;
       }
       if (face.confidence < MIN_FACE_CONFIDENCE) {
-        setHint('もう一度、正面を向いてください');
+        setHint('マスク・帽子を外してください');
         return;
       }
       const faceSize = Math.max(face.boundingBox.width, face.boundingBox.height);
@@ -113,6 +110,13 @@ export default function App() {
     setHint('枠に顔を合わせてください');
     setMode('scanning');
   }, []);
+
+  // 入口キオスクは客が画面に触らない前提のため、結果表示後は自動でスキャン画面へ戻す。
+  useEffect(() => {
+    if (mode === 'scanning') return;
+    const id = setTimeout(() => reset(), AUTO_RESET_MS);
+    return () => clearTimeout(id);
+  }, [mode, reset]);
 
   if (!permission) {
     return (

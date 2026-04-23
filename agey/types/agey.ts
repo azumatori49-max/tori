@@ -16,7 +16,7 @@ export type AgeEstimate = {
 
 export type GateDecision = 'pass' | 'checkId' | 'idle';
 
-export type KioskPhase = 'idle' | 'sampling' | 'locked';
+export type KioskPhase = 'idle' | 'sampling' | 'analyzing' | 'locked';
 
 /** null = 問題なし、サンプリング可 */
 export type SamplingHint = 'tooFar' | 'tooClose' | 'misaligned' | null;

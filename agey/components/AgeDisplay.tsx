@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import type { KioskPhase, SamplingHint } from '@/types/agey';
 
@@ -17,7 +17,7 @@ const HINT_TEXT: Record<NonNullable<SamplingHint>, { main: string; sub: string }
 };
 
 export function AgeDisplay({ age, phase, progress, samplingHint }: Props) {
-  if (phase === 'idle' || age === null) {
+  if (phase === 'idle' || (phase === 'sampling' && age === null && samplingHint === null)) {
     return (
       <View className="items-center">
         <Text className="text-xl text-white/60">顔をカメラに向けてください</Text>
@@ -40,15 +40,24 @@ export function AgeDisplay({ age, phase, progress, samplingHint }: Props) {
       <View className="items-center">
         <View className="relative h-28 w-28 items-center justify-center">
           <ProgressRing progress={progress} size={112} />
-          <View className="absolute items-center">
-            <Text className="text-4xl font-bold text-white/80">{Math.round(age)}</Text>
-          </View>
+          <Text className="absolute text-lg text-white/70">解析準備中</Text>
         </View>
-        <Text className="mt-3 text-base text-white/60">測定中...</Text>
+        <Text className="mt-3 text-base text-white/60">静止してください...</Text>
       </View>
     );
   }
 
+  if (phase === 'analyzing') {
+    return (
+      <View className="items-center gap-3">
+        <ActivityIndicator size="large" color="#ffffff" />
+        <Text className="text-xl text-white/70">年齢を解析中...</Text>
+      </View>
+    );
+  }
+
+  // locked
+  if (age === null) return null;
   return <LockedDisplay baseAge={Math.round(age)} />;
 }
 

@@ -1,25 +1,32 @@
 import './global.css';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AgeDisplay } from '@/components/AgeDisplay';
 import { FaceFrameOverlay } from '@/components/FaceFrameOverlay';
 import { GateBanner } from '@/components/GateBanner';
-import { KioskCamera } from '@/components/KioskCamera';
+import { KioskCamera, type KioskCameraHandle } from '@/components/KioskCamera';
 import { PrivacyNote } from '@/components/PrivacyNote';
 import { useAgeEstimation } from '@/hooks/useAgeEstimation';
 import type { FaceBox } from '@/types/agey';
 
-const CAMERA_ASPECT = 320 / 420; // width / height
+const CAMERA_ASPECT = 320 / 420;
 
 function KioskLayout() {
-  const { state, onFaceDetected } = useAgeEstimation();
+  const cameraRef = useRef<KioskCameraHandle>(null);
   const [frameSize, setFrameSize] = useState({ width: 1, height: 1 });
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isLandscape = screenW > screenH;
+
+  const capturePhoto = useCallback(
+    () => cameraRef.current?.takePhoto() ?? Promise.resolve(null),
+    [],
+  );
+
+  const { state, onFaceDetected } = useAgeEstimation(capturePhoto);
 
   const handleFace = useCallback(
     (face: FaceBox | null, frameWidth: number, frameHeight: number) => {
@@ -39,7 +46,6 @@ function KioskLayout() {
       : state.samplingHint !== null ? '#facc15'
       : '#ffffff80';
 
-  // Camera dimensions adapt to orientation
   let cameraWidth: number;
   let cameraHeight: number;
   if (isLandscape) {
@@ -54,6 +60,7 @@ function KioskLayout() {
   const camera = (
     <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
       <KioskCamera
+        ref={cameraRef}
         onFace={handleFace}
         onLayout={setPreviewSize}
         style={{ width: cameraWidth, height: cameraHeight }}
@@ -71,7 +78,6 @@ function KioskLayout() {
   );
 
   if (isLandscape) {
-    // Camera left, info right
     return (
       <SafeAreaView className="flex-1 bg-neutral-950" edges={['top', 'bottom', 'left', 'right']}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 24 }}>
@@ -99,7 +105,6 @@ function KioskLayout() {
     );
   }
 
-  // Portrait: title → camera → age → gate/privacy
   return (
     <SafeAreaView className="flex-1 bg-neutral-950" edges={['top', 'bottom']}>
       <View className="flex-1 px-6 pb-6 pt-4">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { Text, View } from 'react-native';
 import {
   Camera,
@@ -11,23 +11,38 @@ import { Worklets } from 'react-native-worklets-core';
 import { CONFIG } from '@/constants/config';
 import type { FaceBox } from '@/types/agey';
 
+export type KioskCameraHandle = {
+  takePhoto: () => Promise<string | null>;
+};
+
 type Props = {
   onFace: (face: FaceBox | null, frameWidth: number, frameHeight: number) => void;
   onLayout?: (size: { width: number; height: number }) => void;
   style?: { width: number; height: number };
 };
 
-/**
- * フロントカメラでプレビュー + ML Kit 顔検出フレームプロセッサを動かす。
- * 最大の顔を 1 件だけ上位に伝える (キオスク想定: 画面を覗く人は通常 1 人)。
- */
-export function KioskCamera({ onFace, onLayout, style }: Props) {
+export const KioskCamera = forwardRef<KioskCameraHandle, Props>(function KioskCamera(
+  { onFace, onLayout, style },
+  ref,
+) {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('front');
+  const cameraRef = useRef<Camera>(null);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
   }, [hasPermission, requestPermission]);
+
+  useImperativeHandle(ref, () => ({
+    async takePhoto() {
+      try {
+        const photo = await cameraRef.current?.takePhoto({ qualityPrioritization: 'balanced' });
+        return photo?.path ?? null;
+      } catch {
+        return null;
+      }
+    },
+  }));
 
   const { detectFaces } = useFaceDetector({
     performanceMode: 'fast',
@@ -48,16 +63,13 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
         reportFace(null, frame.width, frame.height);
         return;
       }
-      // 最大顔のみ採用
       let best = faces[0];
       if (!best) {
         reportFace(null, frame.width, frame.height);
         return;
       }
       for (const f of faces) {
-        const areaBest = best.bounds.width * best.bounds.height;
-        const area = f.bounds.width * f.bounds.height;
-        if (area > areaBest) best = f;
+        if (f.bounds.width * f.bounds.height > best.bounds.width * best.bounds.height) best = f;
       }
       reportFace(
         {
@@ -104,15 +116,17 @@ export function KioskCamera({ onFace, onLayout, style }: Props) {
       }}
     >
       <Camera
+        ref={cameraRef}
         style={{ flex: 1 }}
         device={device}
         isActive={true}
         frameProcessor={frameProcessor}
         fps={CONFIG.FRAME_PROCESSOR_FPS}
-        photo={false}
+        pixelFormat="native"
+        photo={true}
         video={false}
         audio={false}
       />
     </View>
   );
-}
+});

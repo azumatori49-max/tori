@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CONFIG } from '@/constants/config';
-import { AgeBuffer } from '@/lib/ageBuffer';
-import { createEstimator } from '@/lib/ageEstimator';
+import { estimateAgeFromPhoto } from '@/lib/cloudAgeApi';
 import { decideGate } from '@/lib/decision';
 import type { FaceBox, KioskState, SamplingHint } from '@/types/agey';
 
@@ -27,24 +26,24 @@ function getSamplingHint(face: FaceBox, frameWidth: number): SamplingHint {
   return null;
 }
 
-export function useAgeEstimation() {
-  const estimator = useMemo(() => createEstimator(), []);
-  const bufferRef = useRef(new AgeBuffer(CONFIG.SMOOTHING_WINDOW));
-  const samplingStartedAtRef = useRef<number | null>(null);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+export function useAgeEstimation(capturePhoto: () => Promise<string | null>) {
   const [state, setState] = useState<KioskState>(INITIAL_STATE);
 
+  // refs to avoid recreating onFaceDetected on every state change
+  const phaseRef = useRef(state.phase);
+  phaseRef.current = state.phase;
+
+  const samplingStartedAtRef = useRef<number | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureTriggeredRef = useRef(false);
+
   const clearIdleTimer = useCallback(() => {
-    if (idleTimerRef.current) {
-      clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = null;
-    }
+    if (idleTimerRef.current) { clearTimeout(idleTimerRef.current); idleTimerRef.current = null; }
   }, []);
 
   const resetToIdle = useCallback(() => {
-    bufferRef.current.clear();
     samplingStartedAtRef.current = null;
+    captureTriggeredRef.current = false;
     clearIdleTimer();
     setState(INITIAL_STATE);
   }, [clearIdleTimer]);
@@ -54,8 +53,51 @@ export function useAgeEstimation() {
     idleTimerRef.current = setTimeout(resetToIdle, CONFIG.IDLE_TIMEOUT_MS);
   }, [clearIdleTimer, resetToIdle]);
 
+  // When phase transitions to 'analyzing', take photo and call API
+  useEffect(() => {
+    if (state.phase !== 'analyzing') return;
+    let cancelled = false;
+
+    async function run() {
+      const path = await capturePhoto();
+      if (cancelled) return;
+      if (!path) { resetToIdle(); return; }
+
+      try {
+        const rawAge = await estimateAgeFromPhoto(path);
+        if (cancelled) return;
+        const age = Math.max(CONFIG.MIN_CUSTOMER_AGE, Math.round(rawAge));
+        setState((prev) => ({
+          ...prev,
+          phase: 'locked',
+          lockedAge: age,
+          smoothedAge: age,
+          decision: decideGate(age, 1),
+          progress: 1,
+        }));
+      } catch {
+        if (!cancelled) resetToIdle();
+      }
+    }
+
+    void run();
+    return () => { cancelled = true; };
+  }, [state.phase, capturePhoto, resetToIdle]);
+
   const onFaceDetected = useCallback(
     (face: FaceBox | null, frameWidth: number) => {
+      const phase = phaseRef.current;
+
+      // Keep face position updated while locked
+      if (phase === 'locked') {
+        if (face) setState((prev) => (prev.face === face ? prev : { ...prev, face }));
+        else scheduleIdleReset();
+        return;
+      }
+
+      // Ignore face updates while API is running
+      if (phase === 'analyzing') return;
+
       if (!face) {
         scheduleIdleReset();
         return;
@@ -65,48 +107,28 @@ export function useAgeEstimation() {
       const hint = getSamplingHint(face, frameWidth);
 
       if (hint !== null) {
-        bufferRef.current.clear();
         samplingStartedAtRef.current = null;
+        captureTriggeredRef.current = false;
         setState({ ...INITIAL_STATE, face, phase: 'sampling', samplingHint: hint });
         return;
       }
 
-      setState((prev) => {
-        if (prev.phase === 'locked') {
-          return prev.face === face ? prev : { ...prev, face };
-        }
+      // Face is good — accumulate stable time
+      if (samplingStartedAtRef.current === null) samplingStartedAtRef.current = Date.now();
+      const elapsed = Date.now() - samplingStartedAtRef.current;
+      const progress = Math.min(1, elapsed / CONFIG.LOCK_AFTER_MS);
 
-        const raw = estimator.estimate(face, frameWidth);
-        if (!raw) return prev;
-        const estimate = { ...raw, age: Math.max(CONFIG.MIN_CUSTOMER_AGE, raw.age) };
+      if (elapsed >= CONFIG.LOCK_AFTER_MS && !captureTriggeredRef.current) {
+        captureTriggeredRef.current = true;
+        setState((prev) => ({ ...prev, face, phase: 'analyzing', progress: 1, samplingHint: null }));
+        return;
+      }
 
-        bufferRef.current.push(estimate);
-        const smoothedAge = bufferRef.current.median();
-
-        if (samplingStartedAtRef.current === null) {
-          samplingStartedAtRef.current = Date.now();
-        }
-        const elapsed = Date.now() - samplingStartedAtRef.current;
-        const progress = Math.min(1, elapsed / CONFIG.LOCK_AFTER_MS);
-        const shouldLock =
-          elapsed >= CONFIG.LOCK_AFTER_MS &&
-          bufferRef.current.size() >= CONFIG.MIN_SAMPLES_FOR_DECISION;
-
-        if (shouldLock && smoothedAge !== null) {
-          return {
-            face, estimate, smoothedAge,
-            decision: decideGate(smoothedAge, bufferRef.current.size()),
-            phase: 'locked', progress: 1, lockedAge: smoothedAge, samplingHint: null,
-          };
-        }
-
-        return {
-          face, estimate, smoothedAge,
-          decision: 'idle', phase: 'sampling', progress, lockedAge: null, samplingHint: null,
-        };
-      });
+      setState((prev) => ({
+        ...prev, face, phase: 'sampling', progress, samplingHint: null,
+      }));
     },
-    [clearIdleTimer, estimator, scheduleIdleReset],
+    [clearIdleTimer, scheduleIdleReset],
   );
 
   useEffect(() => () => clearIdleTimer(), [clearIdleTimer]);

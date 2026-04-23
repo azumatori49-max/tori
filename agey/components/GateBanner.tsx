@@ -7,6 +7,14 @@ type Props = {
 };
 
 export function GateBanner({ decision, phase }: Props) {
+  if (phase === 'analyzing') {
+    return (
+      <View className="w-full rounded-2xl bg-white/10 px-8 py-6">
+        <Text className="text-center text-2xl font-semibold text-white/70">解析中...</Text>
+      </View>
+    );
+  }
+
   if (phase === 'sampling') {
     return (
       <View className="w-full rounded-2xl bg-white/10 px-8 py-6">

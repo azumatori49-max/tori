@@ -11,7 +11,10 @@ import { ErrorOverlay } from './components/ErrorOverlay';
 import { detectFaces, type FaceAnalysis } from './lib/rekognition';
 import {
   AUTO_RESET_MS,
+  CAMERA_QUALITY,
+  CAPTURE_WIDTH,
   CHECK_INTERVAL_MS,
+  JPEG_QUALITY,
   MAX_BRIGHTNESS,
   MAX_POSE_PITCH,
   MAX_POSE_ROLL,
@@ -22,6 +25,7 @@ import {
   MIN_SHARPNESS,
   SAMPLE_COUNT,
   SAMPLE_RESET_AFTER_MISSES,
+  SAMPLE_TRIM,
 } from './constants/config';
 
 type Mode = 'scanning' | 'result' | 'error';
@@ -62,18 +66,26 @@ function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
   return { ok: true, face };
 }
 
-// 中央値ベースのサンプル統合: 外れ値の影響を抑える。
-// AgeRange.Low と AgeRange.High を独立に中央値化する。
+// トリム平均によるサンプル統合: 上下 SAMPLE_TRIM 個を除外して残りを平均する。
+// 単純な中央値より滑らか（量子化が粗くならない）かつ外れ値の影響を排除できる。
+// AgeRange.Low と AgeRange.High を独立に集計する。
+function trimmedMean(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const start = SAMPLE_TRIM;
+  const end = sorted.length - SAMPLE_TRIM;
+  const middle = sorted.slice(start, end);
+  if (middle.length === 0) {
+    return sorted[Math.floor(sorted.length / 2)]!;
+  }
+  const sum = middle.reduce((acc, v) => acc + v, 0);
+  return Math.round(sum / middle.length);
+}
+
 function aggregateSamples(samples: FaceAnalysis[]): FaceAnalysis {
-  const lows = samples.map((s) => s.ageLow).sort((a, b) => a - b);
-  const highs = samples.map((s) => s.ageHigh).sort((a, b) => a - b);
-  const midIdx = Math.floor(samples.length / 2);
+  const ageLow = trimmedMean(samples.map((s) => s.ageLow));
+  const ageHigh = trimmedMean(samples.map((s) => s.ageHigh));
   const latest = samples[samples.length - 1]!;
-  return {
-    ...latest,
-    ageLow: lows[midIdx]!,
-    ageHigh: highs[midIdx]!,
-  };
+  return { ...latest, ageLow, ageHigh };
 }
 
 export default function App() {
@@ -107,7 +119,7 @@ export default function App() {
     busyRef.current = true;
     try {
       const shot = await cameraRef.current.takePictureAsync({
-        quality: 0.4,
+        quality: CAMERA_QUALITY,
         base64: false,
         shutterSound: false,
         skipProcessing: true,
@@ -115,8 +127,8 @@ export default function App() {
       if (!shot?.uri) return;
       const resized = await manipulateAsync(
         shot.uri,
-        [{ resize: { width: 480 } }],
-        { base64: true, compress: 0.7, format: SaveFormat.JPEG },
+        [{ resize: { width: CAPTURE_WIDTH } }],
+        { base64: true, compress: JPEG_QUALITY, format: SaveFormat.JPEG },
       );
       if (!resized.base64) return;
       if (modeRef.current !== 'scanning') return;

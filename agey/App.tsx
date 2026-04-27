@@ -6,9 +6,11 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FaceFrame } from './components/FaceFrame';
-import { ResultOverlay } from './components/ResultOverlay';
+import { ResultOverlay, getVerdict } from './components/ResultOverlay';
 import { ErrorOverlay } from './components/ErrorOverlay';
+import { IdInputModal } from './components/IdInputModal';
 import { detectFaces, type FaceAnalysis } from './lib/rekognition';
+import { logCalibration } from './lib/calibrationLog';
 import {
   AUTO_RESET_MS,
   CAMERA_QUALITY,
@@ -66,24 +68,32 @@ function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
   return { ok: true, face };
 }
 
-// トリム平均によるサンプル統合: 上下 SAMPLE_TRIM 個を除外して残りを平均する。
-// 単純な中央値より滑らか（量子化が粗くならない）かつ外れ値の影響を排除できる。
-// AgeRange.Low と AgeRange.High を独立に集計する。
-function trimmedMean(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const start = SAMPLE_TRIM;
-  const end = sorted.length - SAMPLE_TRIM;
-  const middle = sorted.slice(start, end);
+// Sharpness 重み付きトリム平均: 上下 SAMPLE_TRIM 個を除外し、残ったサンプルを
+// Rekognition の Quality.Sharpness で重み付けして平均する。鮮明な画像ほど推定の
+// 信頼度が高いため、重みを乗せることで外れ値の影響をさらに抑える。
+function weightedTrimmedMean(
+  samples: FaceAnalysis[],
+  pickValue: (s: FaceAnalysis) => number,
+): number {
+  const sorted = [...samples].sort((a, b) => pickValue(a) - pickValue(b));
+  const middle = sorted.slice(SAMPLE_TRIM, sorted.length - SAMPLE_TRIM);
   if (middle.length === 0) {
-    return sorted[Math.floor(sorted.length / 2)]!;
+    return Math.round(pickValue(sorted[Math.floor(sorted.length / 2)]!));
   }
-  const sum = middle.reduce((acc, v) => acc + v, 0);
-  return Math.round(sum / middle.length);
+  let totalWeight = 0;
+  let weightedSum = 0;
+  for (const s of middle) {
+    // 重み 0 を防ぐためフロアを 1 に設定。
+    const weight = Math.max(s.qualitySharpness, 1);
+    totalWeight += weight;
+    weightedSum += pickValue(s) * weight;
+  }
+  return Math.round(weightedSum / totalWeight);
 }
 
 function aggregateSamples(samples: FaceAnalysis[]): FaceAnalysis {
-  const ageLow = trimmedMean(samples.map((s) => s.ageLow));
-  const ageHigh = trimmedMean(samples.map((s) => s.ageHigh));
+  const ageLow = weightedTrimmedMean(samples, (s) => s.ageLow);
+  const ageHigh = weightedTrimmedMean(samples, (s) => s.ageHigh);
   const latest = samples[samples.length - 1]!;
   return { ...latest, ageLow, ageHigh };
 }
@@ -96,6 +106,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [hint, setHint] = useState('枠に顔を合わせてください');
   const [sampleProgress, setSampleProgress] = useState(0);
+  const [logging, setLogging] = useState(false);
   const cameraRef = useRef<CameraView | null>(null);
   const busyRef = useRef(false);
   const modeRef = useRef<Mode>('scanning');
@@ -195,15 +206,44 @@ export default function App() {
     setResult(null);
     setErrorMsg('');
     setHint('枠に顔を合わせてください');
+    setLogging(false);
     setMode('scanning');
   }, []);
 
   // 入口キオスクは客が画面に触らない前提のため、結果表示後は自動でスキャン画面へ戻す。
+  // ただしスタッフが ID 入力中は止める。
   useEffect(() => {
     if (mode === 'scanning') return;
+    if (logging) return;
     const id = setTimeout(() => reset(), AUTO_RESET_MS);
     return () => clearTimeout(id);
-  }, [mode, reset]);
+  }, [mode, logging, reset]);
+
+  const submitCalibration = useCallback(
+    async (actualAge: number) => {
+      if (!result) {
+        setLogging(false);
+        return;
+      }
+      await logCalibration({
+        timestamp: new Date().toISOString(),
+        storeId: process.env.EXPO_PUBLIC_STORE_ID ?? null,
+        rekognitionLow: result.ageLow,
+        rekognitionHigh: result.ageHigh,
+        rekognitionMid: Math.round((result.ageLow + result.ageHigh) / 2),
+        verdict: getVerdict(result),
+        actualAge,
+        faceCount: result.faceCount,
+        qualityBrightness: result.qualityBrightness,
+        qualitySharpness: result.qualitySharpness,
+        poseYaw: result.pose.yaw,
+        posePitch: result.pose.pitch,
+        poseRoll: result.pose.roll,
+      });
+      reset();
+    },
+    [result, reset],
+  );
 
   if (!permission) {
     return (
@@ -274,8 +314,21 @@ export default function App() {
             )}
           </SafeAreaView>
         )}
-        {mode === 'result' && result && <ResultOverlay face={result} onReset={reset} />}
+        {mode === 'result' && result && (
+          <ResultOverlay
+            face={result}
+            onReset={reset}
+            onLogId={() => setLogging(true)}
+          />
+        )}
         {mode === 'error' && <ErrorOverlay message={errorMsg} onReset={reset} />}
+        {logging && result && (
+          <IdInputModal
+            face={result}
+            onSubmit={submitCalibration}
+            onCancel={() => setLogging(false)}
+          />
+        )}
       </View>
     </SafeAreaProvider>
   );

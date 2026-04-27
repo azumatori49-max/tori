@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { HARD_BLOCK_THRESHOLD, ID_CHECK_THRESHOLD } from '../constants/config';
 import type { FaceAnalysis } from '../lib/rekognition';
 
-type Verdict = 'block' | 'id_check' | 'pass';
+export type Verdict = 'block' | 'id_check' | 'pass';
 
 type VerdictStyle = {
   color: string;
@@ -31,7 +31,7 @@ const VERDICT_STYLES: Record<Verdict, VerdictStyle> = {
   },
 };
 
-function getVerdict(face: FaceAnalysis): Verdict {
+export function getVerdict(face: FaceAnalysis): Verdict {
   if (face.ageHigh < HARD_BLOCK_THRESHOLD) return 'block';
   if (face.ageLow < ID_CHECK_THRESHOLD) return 'id_check';
   return 'pass';
@@ -40,9 +40,10 @@ function getVerdict(face: FaceAnalysis): Verdict {
 type Props = {
   face: FaceAnalysis;
   onReset: () => void;
+  onLogId: () => void;
 };
 
-export function ResultOverlay({ face, onReset }: Props) {
+export function ResultOverlay({ face, onReset, onLogId }: Props) {
   const verdict = getVerdict(face);
   const style = VERDICT_STYLES[verdict];
   const ageMid = Math.round((face.ageLow + face.ageHigh) / 2);
@@ -124,14 +125,27 @@ export function ResultOverlay({ face, onReset }: Props) {
       {/* 下段: 判定バナー */}
       <SafeAreaView edges={['bottom']} className="items-center">
         <View
-          className="px-10 py-5 rounded-full mb-6"
+          className="px-10 py-5 rounded-full mb-4"
           style={{ backgroundColor: style.color }}
         >
           <Text className="text-white text-3xl font-bold text-center">
             {style.label}
           </Text>
         </View>
-        <Text className="text-white/60 text-sm mb-2">{style.sub}</Text>
+        <Text className="text-white/60 text-sm mb-3">{style.sub}</Text>
+
+        {/* スタッフ用: ID確認結果記録ボタン（境界域でのみ表示） */}
+        {verdict !== 'pass' && (
+          <Pressable
+            onPress={onLogId}
+            className="bg-white/15 px-6 py-2 rounded-full mb-2 active:opacity-70"
+          >
+            <Text className="text-white/90 text-sm font-bold">
+              🪪 ID確認結果を記録
+            </Text>
+          </Pressable>
+        )}
+
         <Text className="text-white/40 text-[10px] mb-6">
           ※ 推定値です。法的な年齢確認ではありません。
         </Text>

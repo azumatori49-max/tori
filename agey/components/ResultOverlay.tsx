@@ -92,9 +92,12 @@ export function ResultOverlay({ face, onReset, onLogId }: Props) {
         }}
       />
 
-      {/* 中央: 体温計風のLCDパネル */}
+      {/* 中央: 体温計風のLCDパネル（管理者用: 1秒ロングプレスでキャリブレーション記録） */}
       <View className="flex-1 items-center justify-center">
-        <View
+        <Pressable
+          onPress={onReset}
+          onLongPress={onLogId}
+          delayLongPress={1000}
           className="bg-black/90 rounded-3xl px-12 py-8 items-center"
           style={{ borderWidth: 4, borderColor: style.color }}
         >
@@ -119,7 +122,7 @@ export function ResultOverlay({ face, onReset, onLogId }: Props) {
           <Text className="text-white/70 text-base mt-1">
             ({face.ageLow} - {face.ageHigh} 歳)
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       {/* 下段: 判定バナー */}
@@ -133,19 +136,6 @@ export function ResultOverlay({ face, onReset, onLogId }: Props) {
           </Text>
         </View>
         <Text className="text-white/60 text-sm mb-3">{style.sub}</Text>
-
-        {/* スタッフ用: ID確認結果記録ボタン（境界域でのみ表示） */}
-        {verdict !== 'pass' && (
-          <Pressable
-            onPress={onLogId}
-            className="bg-white/15 px-6 py-2 rounded-full mb-2 active:opacity-70"
-          >
-            <Text className="text-white/90 text-sm font-bold">
-              🪪 ID確認結果を記録
-            </Text>
-          </Pressable>
-        )}
-
         <Text className="text-white/40 text-[10px] mb-6">
           ※ 推定値です。法的な年齢確認ではありません。
         </Text>

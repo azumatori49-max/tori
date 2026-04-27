@@ -117,7 +117,10 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const cameraRef = useRef<CameraView | null>(null);
-  const busyRef = useRef(false);
+  // シャッター衝突防止専用ロック。撮影完了で即解放するので API 呼び出しは並列で進む。
+  const capturingRef = useRef(false);
+  // 並列実行中の解析カウント。samples + inFlight が SAMPLE_COUNT を超えたら新規撮影を止める。
+  const inFlightRef = useRef(0);
   const modeRef = useRef<Mode>('scanning');
   const samplesRef = useRef<FaceAnalysis[]>([]);
   const missCountRef = useRef(0);
@@ -138,10 +141,15 @@ export default function App() {
   }, []);
 
   const captureAndAnalyze = useCallback(async () => {
-    if (busyRef.current) return;
     if (modeRef.current !== 'scanning') return;
     if (!cameraRef.current || !cameraReady) return;
-    busyRef.current = true;
+    if (capturingRef.current) return;
+    // 既に必要数のサンプルが揃いつつあるなら新規撮影は不要。
+    if (samplesRef.current.length + inFlightRef.current >= SAMPLE_COUNT) return;
+
+    // シャッターのみロック。撮影が終わり次第すぐ解放してリングバッファ的に回す。
+    capturingRef.current = true;
+    let shotUri: string | null = null;
     try {
       const shot = await cameraRef.current.takePictureAsync({
         quality: CAMERA_QUALITY,
@@ -149,9 +157,22 @@ export default function App() {
         shutterSound: false,
         skipProcessing: true,
       });
-      if (!shot?.uri) return;
+      shotUri = shot?.uri ?? null;
+    } catch (e) {
+      capturingRef.current = false;
+      const message = e instanceof Error ? e.message : '撮影エラーが発生しました';
+      setErrorMsg(message);
+      setMode('error');
+      return;
+    }
+    capturingRef.current = false;
+    if (!shotUri) return;
+
+    // ここから先（リサイズ + Rekognition）は並列で進める。
+    inFlightRef.current += 1;
+    try {
       const resized = await manipulateAsync(
-        shot.uri,
+        shotUri,
         [{ resize: { width: CAPTURE_WIDTH } }],
         { base64: true, compress: JPEG_QUALITY, format: SaveFormat.JPEG },
       );
@@ -173,15 +194,19 @@ export default function App() {
         return;
       }
 
+      // 並列で押し込まれるが、必要数を超えたサンプルは捨てる。
+      if (samplesRef.current.length >= SAMPLE_COUNT) return;
       missCountRef.current = 0;
       samplesRef.current.push(check.face);
-      setSampleProgress(samplesRef.current.length);
+      const count = samplesRef.current.length;
+      setSampleProgress(count);
 
-      if (samplesRef.current.length < SAMPLE_COUNT) {
-        setHint(`計測中… (${samplesRef.current.length}/${SAMPLE_COUNT})`);
+      if (count < SAMPLE_COUNT) {
+        setHint(`計測中… (${count}/${SAMPLE_COUNT})`);
         return;
       }
 
+      // 最後のサンプルを押し込んだ呼び出しが集計と確定を行う。
       const aggregated = aggregateSamples(samplesRef.current);
       samplesRef.current = [];
       setSampleProgress(0);
@@ -192,7 +217,7 @@ export default function App() {
       setErrorMsg(message);
       setMode('error');
     } finally {
-      busyRef.current = false;
+      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
     }
   }, [cameraReady]);
 
@@ -207,7 +232,8 @@ export default function App() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') {
-        busyRef.current = false;
+        capturingRef.current = false;
+        inFlightRef.current = 0;
       }
     });
     return () => sub.remove();
@@ -216,6 +242,8 @@ export default function App() {
   const reset = useCallback(() => {
     samplesRef.current = [];
     missCountRef.current = 0;
+    inFlightRef.current = 0;
+    capturingRef.current = false;
     setSampleProgress(0);
     setResult(null);
     setErrorMsg('');

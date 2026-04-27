@@ -18,8 +18,9 @@ export const ID_CHECK_THRESHOLD = 20;
 export const AUTO_RESET_MS = 3000;
 
 // 自動撮影の間隔 (ミリ秒)。
-// サンプル数を 5 に増やしつつ総計測時間を 7〜8 秒に抑えるため 1500 ms に短縮。
-export const CHECK_INTERVAL_MS = 1500;
+// API 呼び出しを並列化したのでカメラのシャッター速度が事実上の下限。
+// 600ms 間隔でシャッターを切り続け、レスポンスが揃った時点で確定する。
+export const CHECK_INTERVAL_MS = 600;
 
 // 顔が枠内に十分大きく収まっているかの判定 (画像比)。
 export const MIN_FACE_SIZE_RATIO = 0.22;
@@ -48,8 +49,9 @@ export const SAMPLE_COUNT = 5;
 export const SAMPLE_TRIM = 1;
 
 // ── 撮影解像度・JPEG圧縮（高品質化で推定誤差を下げる）─────────
-// 480px は顔特徴の解像度不足になりがち。720px に拡大すると精度が向上する。
-export const CAPTURE_WIDTH = 720;
+// 720px は精度面で理想だが通信時間が伸びる。並列化と引き換えに 600px に下げて
+// 1枚あたりのアップロード時間を約 30% 短縮する。精度低下は無視できる範囲。
+export const CAPTURE_WIDTH = 600;
 
 // JPEG圧縮率。0.7 だと圧縮ノイズで肌のテクスチャが失われやすい。
 // 0.85 に上げて Rekognition が肌の状態（しわ・毛穴・産毛）を読み取りやすくする。

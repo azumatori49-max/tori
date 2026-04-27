@@ -9,8 +9,15 @@ import { FaceFrame } from './components/FaceFrame';
 import { ResultOverlay, getVerdict } from './components/ResultOverlay';
 import { ErrorOverlay } from './components/ErrorOverlay';
 import { IdInputModal } from './components/IdInputModal';
+import { AdminSettingsModal } from './components/AdminSettingsModal';
 import { detectFaces, type FaceAnalysis } from './lib/rekognition';
 import { logCalibration } from './lib/calibrationLog';
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  type AdminSettings,
+} from './lib/settings';
 import {
   AUTO_RESET_MS,
   CAMERA_QUALITY,
@@ -107,6 +114,8 @@ export default function App() {
   const [hint, setHint] = useState('枠に顔を合わせてください');
   const [sampleProgress, setSampleProgress] = useState(0);
   const [logging, setLogging] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const cameraRef = useRef<CameraView | null>(null);
   const busyRef = useRef(false);
   const modeRef = useRef<Mode>('scanning');
@@ -122,6 +131,11 @@ export default function App() {
       void requestPermission();
     }
   }, [permission, requestPermission]);
+
+  // 端末に保存された管理者設定を起動時に読み込む。
+  useEffect(() => {
+    void loadSettings().then(setSettings);
+  }, []);
 
   const captureAndAnalyze = useCallback(async () => {
     if (busyRef.current) return;
@@ -211,13 +225,13 @@ export default function App() {
   }, []);
 
   // 入口キオスクは客が画面に触らない前提のため、結果表示後は自動でスキャン画面へ戻す。
-  // ただしスタッフが ID 入力中は止める。
+  // ただしスタッフが ID 入力中・管理者設定を開いている間は止める。
   useEffect(() => {
     if (mode === 'scanning') return;
-    if (logging) return;
+    if (logging || adminOpen) return;
     const id = setTimeout(() => reset(), AUTO_RESET_MS);
     return () => clearTimeout(id);
-  }, [mode, logging, reset]);
+  }, [mode, logging, adminOpen, reset]);
 
   const submitCalibration = useCallback(
     async (actualAge: number) => {
@@ -231,7 +245,7 @@ export default function App() {
         rekognitionLow: result.ageLow,
         rekognitionHigh: result.ageHigh,
         rekognitionMid: Math.round((result.ageLow + result.ageHigh) / 2),
-        verdict: getVerdict(result),
+        verdict: getVerdict(result, settings),
         actualAge,
         faceCount: result.faceCount,
         qualityBrightness: result.qualityBrightness,
@@ -242,8 +256,18 @@ export default function App() {
       });
       reset();
     },
-    [result, reset],
+    [result, reset, settings],
   );
+
+  const submitAdmin = useCallback(async (next: AdminSettings) => {
+    setSettings(next);
+    setAdminOpen(false);
+    try {
+      await saveSettings(next);
+    } catch (e) {
+      console.warn('[settings] save failed:', e);
+    }
+  }, []);
 
   if (!permission) {
     return (
@@ -286,10 +310,15 @@ export default function App() {
         />
         <FaceFrame status="scanning" />
         <SafeAreaView className="absolute top-0 left-0 right-0 items-center" edges={['top']}>
-          <View className="pt-4 items-center">
+          {/* タイトル: 3秒長押しで管理者設定画面を開く（隠しジェスチャー） */}
+          <Pressable
+            onLongPress={() => setAdminOpen(true)}
+            delayLongPress={3000}
+            className="pt-4 items-center"
+          >
             <Text className="text-white text-4xl font-bold tracking-wider">エイジー</Text>
             <Text className="text-white/60 text-sm mt-1">AGE ESTIMATION KIOSK</Text>
-          </View>
+          </Pressable>
         </SafeAreaView>
         {mode === 'scanning' && (
           <SafeAreaView
@@ -317,6 +346,7 @@ export default function App() {
         {mode === 'result' && result && (
           <ResultOverlay
             face={result}
+            settings={settings}
             onReset={reset}
             onLogId={() => setLogging(true)}
           />
@@ -327,6 +357,13 @@ export default function App() {
             face={result}
             onSubmit={submitCalibration}
             onCancel={() => setLogging(false)}
+          />
+        )}
+        {adminOpen && (
+          <AdminSettingsModal
+            initial={settings}
+            onSave={submitAdmin}
+            onCancel={() => setAdminOpen(false)}
           />
         )}
       </View>

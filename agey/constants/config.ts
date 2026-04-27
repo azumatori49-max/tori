@@ -5,8 +5,14 @@
 //   AgeRange.Low   < ID_CHECK_THRESHOLD   → 🪪 身分証ご提示（グレー）
 //   それ以外                               → ✅ お入りください（明らかな成人）
 
-export const HARD_BLOCK_THRESHOLD = 18;
-export const ID_CHECK_THRESHOLD = 22;
+// 推定年齢の上限すらこれ未満なら、確実な未成年とみなす。
+// デフォルト 20 は日本の飲酒可能年齢に合わせた設定（管理者画面で変更可）。
+export const HARD_BLOCK_THRESHOLD = 20;
+
+// グレー域の判定。デフォルト 20 にすることで「Low が 20 未満 = グレー」とし、
+// AgeRange.High だけが 20 を超えるパターン（推定範囲が境界を跨ぐケース）を
+// 身分証確認に振り分ける（管理者画面で変更可）。
+export const ID_CHECK_THRESHOLD = 20;
 
 // 結果表示後、自動でスキャン画面へ戻るまでの時間（ミリ秒）。
 export const AUTO_RESET_MS = 3000;

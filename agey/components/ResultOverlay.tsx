@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { HARD_BLOCK_THRESHOLD, ID_CHECK_THRESHOLD } from '../constants/config';
 import type { FaceAnalysis } from '../lib/rekognition';
+import type { AdminSettings } from '../lib/settings';
 
 export type Verdict = 'block' | 'id_check' | 'pass';
 
@@ -31,20 +31,21 @@ const VERDICT_STYLES: Record<Verdict, VerdictStyle> = {
   },
 };
 
-export function getVerdict(face: FaceAnalysis): Verdict {
-  if (face.ageHigh < HARD_BLOCK_THRESHOLD) return 'block';
-  if (face.ageLow < ID_CHECK_THRESHOLD) return 'id_check';
+export function getVerdict(face: FaceAnalysis, settings: AdminSettings): Verdict {
+  if (face.ageHigh < settings.hardBlockThreshold) return 'block';
+  if (face.ageLow < settings.idCheckThreshold) return 'id_check';
   return 'pass';
 }
 
 type Props = {
   face: FaceAnalysis;
+  settings: AdminSettings;
   onReset: () => void;
   onLogId: () => void;
 };
 
-export function ResultOverlay({ face, onReset, onLogId }: Props) {
-  const verdict = getVerdict(face);
+export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
+  const verdict = getVerdict(face, settings);
   const style = VERDICT_STYLES[verdict];
   const ageMid = Math.round((face.ageLow + face.ageHigh) / 2);
 

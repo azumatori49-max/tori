@@ -1,7 +1,4 @@
-import 'react-native-get-random-values';
-import 'react-native-url-polyfill/auto';
-import { Buffer } from 'buffer';
-
-if (typeof global.Buffer === 'undefined') {
-  global.Buffer = Buffer;
-}
+// 旧 AWS SDK 用ポリフィルは ONNX 推論モデルへの移行で不要になった。
+// このファイルは index.ts からのインポート整合性のために残しているが、空でよい。
+// 将来 ONNX ランタイム側でポリフィルが必要になった場合の追加ポイントとして使用する。
+export {};

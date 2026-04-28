@@ -2,23 +2,18 @@ import './global.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, AppState } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FaceFrame } from './components/FaceFrame';
 import { ResultOverlay } from './components/ResultOverlay';
 import { ErrorOverlay } from './components/ErrorOverlay';
-import { detectFaces, type FaceAnalysis } from './lib/rekognition';
+import { estimateAgeFromImage, type FaceAnalysis } from './lib/ageEstimator';
+import { warmupModels } from './lib/onnxModels';
 import {
   AUTO_RESET_MS,
   CAMERA_QUALITY,
-  CAPTURE_WIDTH,
   CHECK_INTERVAL_MS,
-  JPEG_QUALITY,
   MAX_BRIGHTNESS,
-  MAX_POSE_PITCH,
-  MAX_POSE_ROLL,
-  MAX_POSE_YAW,
   MIN_BRIGHTNESS,
   MIN_FACE_CONFIDENCE,
   MIN_FACE_SIZE_RATIO,
@@ -35,6 +30,9 @@ type SampleCheck =
   | { ok: false; hint: string };
 
 // 撮影品質ゲート: 推定誤差を増やす条件を弾く。
+// オンデバイス ONNX に切り替えたためポーズ推定は外している
+// （genderage モデルではポーズが取得できない）。
+// シャープネスも未実装のため当面は固定値 80 を返す ageEstimator 側の挙動に依存する。
 function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
   if (!face) return { ok: false, hint: '枠に顔を合わせてください' };
   if (face.confidence < MIN_FACE_CONFIDENCE) {
@@ -52,15 +50,6 @@ function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
   }
   if (face.qualitySharpness < MIN_SHARPNESS) {
     return { ok: false, hint: '動かずに静止してください' };
-  }
-  if (Math.abs(face.pose.yaw) > MAX_POSE_YAW) {
-    return { ok: false, hint: '正面を向いてください' };
-  }
-  if (Math.abs(face.pose.pitch) > MAX_POSE_PITCH) {
-    return { ok: false, hint: '顔を真っ直ぐにしてください' };
-  }
-  if (Math.abs(face.pose.roll) > MAX_POSE_ROLL) {
-    return { ok: false, hint: '顔を真っ直ぐにしてください' };
   }
   return { ok: true, face };
 }
@@ -118,6 +107,13 @@ export default function App() {
     }
   }, [permission, requestPermission]);
 
+  // ONNX モデルを起動時にロードしておく。最初のスキャン時のレイテンシを短縮する。
+  useEffect(() => {
+    void warmupModels().catch((e: unknown) => {
+      console.warn('[App] モデルロード失敗:', e);
+    });
+  }, []);
+
   const captureAndAnalyze = useCallback(async () => {
     if (modeRef.current !== 'scanning') return;
     if (!cameraRef.current || !cameraReady) return;
@@ -146,15 +142,9 @@ export default function App() {
 
     inFlightRef.current += 1;
     try {
-      const resized = await manipulateAsync(
-        shotUri,
-        [{ resize: { width: CAPTURE_WIDTH } }],
-        { base64: true, compress: JPEG_QUALITY, format: SaveFormat.JPEG },
-      );
-      if (!resized.base64) return;
       if (modeRef.current !== 'scanning') return;
-
-      const face = await detectFaces(resized.base64);
+      // CAPTURE_WIDTH へのリサイズと顔検出 + 年齢推定をオンデバイスで実行する。
+      const face = await estimateAgeFromImage(shotUri);
       if (modeRef.current !== 'scanning') return;
 
       const check = checkSampleQuality(face);

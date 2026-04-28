@@ -29,3 +29,6 @@ yarn-error.*
 
 /ios
 /android
+
+# ONNX モデル本体は容量が大きいので各開発者が手元に配置する運用
+assets/models/*.onnx

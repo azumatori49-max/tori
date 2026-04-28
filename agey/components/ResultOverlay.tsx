@@ -2,64 +2,30 @@ import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { FaceAnalysis } from '../lib/rekognition';
-import type { AdminSettings } from '../lib/settings';
 
-export type Verdict = 'block' | 'id_check' | 'pass';
-
-type VerdictStyle = {
-  color: string;
-  label: string;
-  sub: string;
-};
-
-// 体温計キオスク風の配色: 彩度高めの信号色 3色
-const VERDICT_STYLES: Record<Verdict, VerdictStyle> = {
-  block: {
-    color: '#ef4444',
-    label: 'ご入店いただけません',
-    sub: '20歳以上の方のみ',
-  },
-  id_check: {
-    color: '#f59e0b',
-    label: '身分証をご提示ください',
-    sub: 'スタッフが確認します',
-  },
-  pass: {
-    color: '#22c55e',
-    label: 'お入りください',
-    sub: 'ようこそ',
-  },
-};
-
-export function getVerdict(face: FaceAnalysis, settings: AdminSettings): Verdict {
-  if (face.ageHigh < settings.hardBlockThreshold) return 'block';
-  if (face.ageLow < settings.idCheckThreshold) return 'id_check';
-  return 'pass';
-}
+// 中立色 (シアン): 「これは情報提供であって判定ではない」を視覚的に伝えるため
+// 信号色 (赤・黄・緑) は使わない。
+const ACCENT = '#22d3ee';
 
 type Props = {
   face: FaceAnalysis;
-  settings: AdminSettings;
   onReset: () => void;
-  onLogId: () => void;
 };
 
-export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
-  const verdict = getVerdict(face, settings);
-  const style = VERDICT_STYLES[verdict];
+export function ResultOverlay({ face, onReset }: Props) {
   const ageMid = Math.round((face.ageLow + face.ageHigh) / 2);
 
   return (
     <Pressable onPress={onReset} className="absolute inset-0">
-      {/* 枠全体をキオスクLEDバーで囲む */}
+      {/* キオスクLEDバー（4辺） */}
       <View
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
-          height: 10,
-          backgroundColor: style.color,
+          height: 8,
+          backgroundColor: ACCENT,
         }}
       />
       <View
@@ -68,8 +34,8 @@ export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
           bottom: 0,
           left: 0,
           right: 0,
-          height: 10,
-          backgroundColor: style.color,
+          height: 8,
+          backgroundColor: ACCENT,
         }}
       />
       <View
@@ -78,8 +44,8 @@ export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
           top: 0,
           bottom: 0,
           left: 0,
-          width: 10,
-          backgroundColor: style.color,
+          width: 8,
+          backgroundColor: ACCENT,
         }}
       />
       <View
@@ -88,19 +54,16 @@ export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
           top: 0,
           bottom: 0,
           right: 0,
-          width: 10,
-          backgroundColor: style.color,
+          width: 8,
+          backgroundColor: ACCENT,
         }}
       />
 
-      {/* 中央: 体温計風のLCDパネル（管理者用: 1秒ロングプレスでキャリブレーション記録） */}
+      {/* 中央: LCDパネル風の数字表示 */}
       <View className="flex-1 items-center justify-center">
-        <Pressable
-          onPress={onReset}
-          onLongPress={onLogId}
-          delayLongPress={1000}
+        <View
           className="bg-black/90 rounded-3xl px-12 py-8 items-center"
-          style={{ borderWidth: 4, borderColor: style.color }}
+          style={{ borderWidth: 4, borderColor: ACCENT }}
         >
           <Text
             className="text-white/60 text-xs font-bold mb-2"
@@ -110,7 +73,7 @@ export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
           </Text>
           <Text
             style={{
-              color: style.color,
+              color: ACCENT,
               fontSize: 160,
               fontWeight: '900',
               fontVariant: ['tabular-nums'],
@@ -123,22 +86,13 @@ export function ResultOverlay({ face, settings, onReset, onLogId }: Props) {
           <Text className="text-white/70 text-base mt-1">
             ({face.ageLow} - {face.ageHigh} 歳)
           </Text>
-        </Pressable>
+        </View>
       </View>
 
-      {/* 下段: 判定バナー */}
+      {/* 下段: シンプルな注意書きのみ */}
       <SafeAreaView edges={['bottom']} className="items-center">
-        <View
-          className="px-10 py-5 rounded-full mb-4"
-          style={{ backgroundColor: style.color }}
-        >
-          <Text className="text-white text-3xl font-bold text-center">
-            {style.label}
-          </Text>
-        </View>
-        <Text className="text-white/60 text-sm mb-3">{style.sub}</Text>
-        <Text className="text-white/40 text-[10px] mb-6">
-          ※ 推定値です。法的な年齢確認ではありません。
+        <Text className="text-white/50 text-xs mb-6 text-center px-8">
+          ※ 推定値です。最終的な年齢確認は身分証で行ってください。
         </Text>
       </SafeAreaView>
     </Pressable>

@@ -6,18 +6,9 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { FaceFrame } from './components/FaceFrame';
-import { ResultOverlay, getVerdict } from './components/ResultOverlay';
+import { ResultOverlay } from './components/ResultOverlay';
 import { ErrorOverlay } from './components/ErrorOverlay';
-import { IdInputModal } from './components/IdInputModal';
-import { AdminSettingsModal } from './components/AdminSettingsModal';
 import { detectFaces, type FaceAnalysis } from './lib/rekognition';
-import { logCalibration } from './lib/calibrationLog';
-import {
-  DEFAULT_SETTINGS,
-  loadSettings,
-  saveSettings,
-  type AdminSettings,
-} from './lib/settings';
 import {
   AUTO_RESET_MS,
   CAMERA_QUALITY,
@@ -44,7 +35,6 @@ type SampleCheck =
   | { ok: false; hint: string };
 
 // 撮影品質ゲート: 推定誤差を増やす条件を弾く。
-// 弾いた理由を画面のヒントに反映してユーザを誘導する。
 function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
   if (!face) return { ok: false, hint: '枠に顔を合わせてください' };
   if (face.confidence < MIN_FACE_CONFIDENCE) {
@@ -76,8 +66,7 @@ function checkSampleQuality(face: FaceAnalysis | null): SampleCheck {
 }
 
 // Sharpness 重み付きトリム平均: 上下 SAMPLE_TRIM 個を除外し、残ったサンプルを
-// Rekognition の Quality.Sharpness で重み付けして平均する。鮮明な画像ほど推定の
-// 信頼度が高いため、重みを乗せることで外れ値の影響をさらに抑える。
+// Rekognition の Quality.Sharpness で重み付けして平均する。
 function weightedTrimmedMean(
   samples: FaceAnalysis[],
   pickValue: (s: FaceAnalysis) => number,
@@ -90,7 +79,6 @@ function weightedTrimmedMean(
   let totalWeight = 0;
   let weightedSum = 0;
   for (const s of middle) {
-    // 重み 0 を防ぐためフロアを 1 に設定。
     const weight = Math.max(s.qualitySharpness, 1);
     totalWeight += weight;
     weightedSum += pickValue(s) * weight;
@@ -113,13 +101,8 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const [hint, setHint] = useState('枠に顔を合わせてください');
   const [sampleProgress, setSampleProgress] = useState(0);
-  const [logging, setLogging] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const cameraRef = useRef<CameraView | null>(null);
-  // シャッター衝突防止専用ロック。撮影完了で即解放するので API 呼び出しは並列で進む。
   const capturingRef = useRef(false);
-  // 並列実行中の解析カウント。samples + inFlight が SAMPLE_COUNT を超えたら新規撮影を止める。
   const inFlightRef = useRef(0);
   const modeRef = useRef<Mode>('scanning');
   const samplesRef = useRef<FaceAnalysis[]>([]);
@@ -135,19 +118,12 @@ export default function App() {
     }
   }, [permission, requestPermission]);
 
-  // 端末に保存された管理者設定を起動時に読み込む。
-  useEffect(() => {
-    void loadSettings().then(setSettings);
-  }, []);
-
   const captureAndAnalyze = useCallback(async () => {
     if (modeRef.current !== 'scanning') return;
     if (!cameraRef.current || !cameraReady) return;
     if (capturingRef.current) return;
-    // 既に必要数のサンプルが揃いつつあるなら新規撮影は不要。
     if (samplesRef.current.length + inFlightRef.current >= SAMPLE_COUNT) return;
 
-    // シャッターのみロック。撮影が終わり次第すぐ解放してリングバッファ的に回す。
     capturingRef.current = true;
     let shotUri: string | null = null;
     try {
@@ -168,7 +144,6 @@ export default function App() {
     capturingRef.current = false;
     if (!shotUri) return;
 
-    // ここから先（リサイズ + Rekognition）は並列で進める。
     inFlightRef.current += 1;
     try {
       const resized = await manipulateAsync(
@@ -186,7 +161,6 @@ export default function App() {
       if (!check.ok) {
         setHint(check.hint);
         missCountRef.current += 1;
-        // 連続で失敗したら、計測中の客が離脱したと判断してバッファをリセット。
         if (missCountRef.current > SAMPLE_RESET_AFTER_MISSES) {
           samplesRef.current = [];
           setSampleProgress(0);
@@ -194,7 +168,6 @@ export default function App() {
         return;
       }
 
-      // 並列で押し込まれるが、必要数を超えたサンプルは捨てる。
       if (samplesRef.current.length >= SAMPLE_COUNT) return;
       missCountRef.current = 0;
       samplesRef.current.push(check.face);
@@ -206,7 +179,6 @@ export default function App() {
         return;
       }
 
-      // 最後のサンプルを押し込んだ呼び出しが集計と確定を行う。
       const aggregated = aggregateSamples(samplesRef.current);
       samplesRef.current = [];
       setSampleProgress(0);
@@ -248,54 +220,15 @@ export default function App() {
     setResult(null);
     setErrorMsg('');
     setHint('枠に顔を合わせてください');
-    setLogging(false);
     setMode('scanning');
   }, []);
 
   // 入口キオスクは客が画面に触らない前提のため、結果表示後は自動でスキャン画面へ戻す。
-  // ただしスタッフが ID 入力中・管理者設定を開いている間は止める。
   useEffect(() => {
     if (mode === 'scanning') return;
-    if (logging || adminOpen) return;
     const id = setTimeout(() => reset(), AUTO_RESET_MS);
     return () => clearTimeout(id);
-  }, [mode, logging, adminOpen, reset]);
-
-  const submitCalibration = useCallback(
-    async (actualAge: number) => {
-      if (!result) {
-        setLogging(false);
-        return;
-      }
-      await logCalibration({
-        timestamp: new Date().toISOString(),
-        storeId: process.env.EXPO_PUBLIC_STORE_ID ?? null,
-        rekognitionLow: result.ageLow,
-        rekognitionHigh: result.ageHigh,
-        rekognitionMid: Math.round((result.ageLow + result.ageHigh) / 2),
-        verdict: getVerdict(result, settings),
-        actualAge,
-        faceCount: result.faceCount,
-        qualityBrightness: result.qualityBrightness,
-        qualitySharpness: result.qualitySharpness,
-        poseYaw: result.pose.yaw,
-        posePitch: result.pose.pitch,
-        poseRoll: result.pose.roll,
-      });
-      reset();
-    },
-    [result, reset, settings],
-  );
-
-  const submitAdmin = useCallback(async (next: AdminSettings) => {
-    setSettings(next);
-    setAdminOpen(false);
-    try {
-      await saveSettings(next);
-    } catch (e) {
-      console.warn('[settings] save failed:', e);
-    }
-  }, []);
+  }, [mode, reset]);
 
   if (!permission) {
     return (
@@ -338,15 +271,10 @@ export default function App() {
         />
         <FaceFrame status="scanning" />
         <SafeAreaView className="absolute top-0 left-0 right-0 items-center" edges={['top']}>
-          {/* タイトル: 3秒長押しで管理者設定画面を開く（隠しジェスチャー） */}
-          <Pressable
-            onLongPress={() => setAdminOpen(true)}
-            delayLongPress={3000}
-            className="pt-4 items-center"
-          >
+          <View className="pt-4 items-center">
             <Text className="text-white text-4xl font-bold tracking-wider">エイジー</Text>
             <Text className="text-white/60 text-sm mt-1">AGE ESTIMATION KIOSK</Text>
-          </Pressable>
+          </View>
         </SafeAreaView>
         {mode === 'scanning' && (
           <SafeAreaView
@@ -371,29 +299,8 @@ export default function App() {
             )}
           </SafeAreaView>
         )}
-        {mode === 'result' && result && (
-          <ResultOverlay
-            face={result}
-            settings={settings}
-            onReset={reset}
-            onLogId={() => setLogging(true)}
-          />
-        )}
+        {mode === 'result' && result && <ResultOverlay face={result} onReset={reset} />}
         {mode === 'error' && <ErrorOverlay message={errorMsg} onReset={reset} />}
-        {logging && result && (
-          <IdInputModal
-            face={result}
-            onSubmit={submitCalibration}
-            onCancel={() => setLogging(false)}
-          />
-        )}
-        {adminOpen && (
-          <AdminSettingsModal
-            initial={settings}
-            onSave={submitAdmin}
-            onCancel={() => setAdminOpen(false)}
-          />
-        )}
       </View>
     </SafeAreaProvider>
   );

@@ -12,12 +12,20 @@
       "backgroundColor": "#000000"
     },
     "ios": {
+      "bundleIdentifier": "jp.toriyaro.agey",
       "supportsTablet": true,
+      "requireFullScreen": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "年齢推定のためにカメラを使用します。撮影画像は推定のみに使われ、保存されません。"
+        "NSCameraUsageDescription": "年齢推定のためにカメラを使用します。撮影画像は推定のみに使われ、保存されません。",
+        "UIRequiresFullScreen": true,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown"
+        ]
       }
     },
     "android": {
+      "package": "jp.toriyaro.agey",
       "edgeToEdgeEnabled": true,
       "permissions": ["android.permission.CAMERA"]
     },

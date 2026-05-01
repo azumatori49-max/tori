@@ -1,0 +1,15 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+
+# CoreML
+*.mlmodelc/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

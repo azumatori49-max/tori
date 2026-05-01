@@ -12,7 +12,7 @@ struct OvalFrameOverlay: View {
                     p.addRect(CGRect(origin: .zero, size: geo.size))
                     p.addEllipse(in: rect)
                 }
-                .fill(Color.black.opacity(0.35), style: FillStyle(eoFill: true))
+                .fill(Color.black.opacity(0.4), style: FillStyle(eoFill: true))
 
                 Ellipse()
                     .stroke(borderColor, lineWidth: 4)
@@ -34,10 +34,13 @@ struct OvalFrameOverlay: View {
     private var borderColor: Color {
         switch state {
         case .searching: return Color(red: 0.92, green: 0.86, blue: 0.5)
+        case .multipleFaces: return Color.orange
         case .aligning: return Color(red: 1.0, green: 0.85, blue: 0.3)
+        case .livenessRequired: return Color.cyan
         case .estimating: return Color.white
-        case .result: return Color.green
-        case .blockedMinor: return Color.red.opacity(0.85)
+        case .cleared: return Color.green
+        case .idCheckRequired: return Color.yellow
+        case .blockedMinor: return Color.red
         }
     }
 

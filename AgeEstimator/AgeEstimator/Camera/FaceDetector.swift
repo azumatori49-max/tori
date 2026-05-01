@@ -14,28 +14,42 @@ struct FaceDetection {
     let alignedFace: CGImage
 }
 
+struct FaceDetectionResult {
+    /// Number of faces Vision found in the frame, regardless of whether we
+    /// extracted a crop for them.
+    let totalFaceCount: Int
+    /// The largest face — the one we'll feed to the age model.
+    let primary: FaceDetection?
+}
+
 final class FaceDetector {
     private let sequenceHandler = VNSequenceRequestHandler()
     private let context = CIContext(options: [.useSoftwareRenderer: false])
+    /// Faces below this normalized bbox height are assumed to be background
+    /// passers-by, not the customer in front of the kiosk.
+    private let foregroundMinHeight: CGFloat = 0.18
 
-    func detect(in pixelBuffer: CVPixelBuffer) -> FaceDetection? {
+    func detect(in pixelBuffer: CVPixelBuffer) -> FaceDetectionResult {
         let request = VNDetectFaceRectanglesRequest()
         request.revision = VNDetectFaceRectanglesRequestRevision3
         do {
             try sequenceHandler.perform([request], on: pixelBuffer, orientation: .leftMirrored)
         } catch {
-            return nil
-        }
-        guard let observation = (request.results ?? [])
-            .max(by: { $0.boundingBox.size.area < $1.boundingBox.size.area }) else {
-            return nil
+            return FaceDetectionResult(totalFaceCount: 0, primary: nil)
         }
 
-        let bbox = observation.boundingBox
+        let observations = (request.results ?? [])
+            .filter { $0.boundingBox.height >= foregroundMinHeight }
+
+        guard let largest = observations
+            .max(by: { $0.boundingBox.size.area < $1.boundingBox.size.area }) else {
+            return FaceDetectionResult(totalFaceCount: 0, primary: nil)
+        }
+
+        let bbox = largest.boundingBox
         let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
 
-        // Vision normalized bbox -> CIImage pixel rect (origin bottom-left of original buffer).
         let pixelRect = CGRect(
             x: bbox.origin.x * width,
             y: bbox.origin.y * height,
@@ -47,17 +61,19 @@ final class FaceDetector {
             .oriented(.leftMirrored)
         let imgRect = ci.extent
         let clipped = pixelRect.intersection(imgRect)
-        guard !clipped.isEmpty else { return nil }
-        let cropped = ci.cropped(to: clipped)
-        guard let cg = context.createCGImage(cropped, from: clipped) else { return nil }
+        guard !clipped.isEmpty,
+              let cg = context.createCGImage(ci.cropped(to: clipped), from: clipped) else {
+            return FaceDetectionResult(totalFaceCount: observations.count, primary: nil)
+        }
 
-        return FaceDetection(
+        let primary = FaceDetection(
             boundingBoxNormalized: bbox,
-            roll: CGFloat(observation.roll?.doubleValue ?? 0),
-            yaw: CGFloat(observation.yaw?.doubleValue ?? 0),
-            pitch: CGFloat(observation.pitch?.doubleValue ?? 0),
+            roll: CGFloat(largest.roll?.doubleValue ?? 0),
+            yaw: CGFloat(largest.yaw?.doubleValue ?? 0),
+            pitch: CGFloat(largest.pitch?.doubleValue ?? 0),
             alignedFace: cg
         )
+        return FaceDetectionResult(totalFaceCount: observations.count, primary: primary)
     }
 }
 

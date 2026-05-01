@@ -91,33 +91,3 @@ final class PredictionSmoother {
         ageStdDev = 0
     }
 }
-
-/// Decides whether a smoothed prediction looks like an obvious minor that we
-/// should not display an age for. To avoid blocking legitimate adults who
-/// happen to look young, the gate fires only when *both*:
-///
-///  1. the smoothed point estimate is below `displayThreshold`, **and**
-///  2. the upper bound `mean + safetyMargin * stdDev` is *also* below
-///     `displayThreshold` — i.e. the model is confident the person is under
-///     age, not just uncertain.
-///
-/// Tune `displayThreshold` to match your jurisdiction (Japan 成人年齢 = 18)
-/// and use case. The default is intentionally a couple of years above 18
-/// because age models have ~3-5 year MAE on faces around the threshold.
-struct MinorGuard {
-    let displayThreshold: Double
-    let safetyMargin: Double
-    let minSamples: Int
-
-    func shouldBlock(age: Double, stdDev: Double, sampleCount: Int) -> Bool {
-        guard sampleCount >= minSamples else { return false }
-        let upperBound = age + safetyMargin * max(stdDev, 1.0)
-        return upperBound < displayThreshold
-    }
-
-    static let `default` = MinorGuard(
-        displayThreshold: 20,
-        safetyMargin: 1.5,
-        minSamples: 5
-    )
-}

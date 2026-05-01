@@ -5,100 +5,157 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            backgroundColor(for: viewModel.state).ignoresSafeArea()
 
             CameraPreviewView(session: viewModel.cameraManager.session)
                 .ignoresSafeArea()
-                .scaleEffect(x: -1, y: 1) // mirror for selfie UX
+                .scaleEffect(x: -1, y: 1)
+                .opacity(viewModel.state.isTerminal ? 0.25 : 1.0)
 
             OvalFrameOverlay(state: viewModel.state)
                 .ignoresSafeArea()
+                .opacity(viewModel.state.isTerminal ? 0 : 1)
 
-            VStack {
-                StatusText(state: viewModel.state)
-                    .padding(.top, 80)
+            VStack(spacing: 0) {
+                Header(state: viewModel.state)
+                    .padding(.top, 60)
                 Spacer()
-                BottomBar(viewModel: viewModel)
+                ResultPanel(viewModel: viewModel)
                     .padding(.bottom, 40)
+                FooterDisclaimer()
+                    .padding(.bottom, 20)
             }
         }
-        .task {
-            await viewModel.start()
-        }
-        .onDisappear {
-            viewModel.stop()
+        .animation(.easeInOut(duration: 0.25), value: viewModel.state)
+        .task { await viewModel.start() }
+        .onDisappear { viewModel.stop() }
+    }
+
+    private func backgroundColor(for state: AgeEstimationState) -> Color {
+        switch state {
+        case .cleared: return Color(red: 0.05, green: 0.35, blue: 0.20)
+        case .idCheckRequired: return Color(red: 0.55, green: 0.35, blue: 0.05)
+        case .blockedMinor: return Color(red: 0.45, green: 0.05, blue: 0.05)
+        default: return .black
         }
     }
 }
 
-private struct StatusText: View {
+private struct Header: View {
     let state: AgeEstimationState
 
     var body: some View {
         Group {
             switch state {
             case .searching:
-                Text("顔を近づけて\n枠に合わせてください")
+                title("枠に顔を合わせてください",
+                      subtitle: "ご来店ありがとうございます。年齢確認を行います。")
+            case .multipleFaces:
+                title("お一人ずつお願いします",
+                      subtitle: "枠の中に映るのは一名のみにしてください。")
             case .aligning(let progress):
-                Text(String(format: "そのまま静止… %d%%", Int(progress * 100)))
+                title("そのまま静止…",
+                      subtitle: String(format: "%d%%", Int(progress * 100)))
+            case .livenessRequired:
+                title("少し顔を動かしてください",
+                      subtitle: "本人確認のため、軽く顔を左右に振ってください。")
             case .estimating:
-                Text("解析中…")
-            case .result:
-                Text("推定年齢")
-            case .blockedMinor:
-                Text("ご利用いただけません")
-            }
-        }
-        .font(.system(size: 22, weight: .medium))
-        .foregroundColor(.white)
-        .multilineTextAlignment(.center)
-        .shadow(radius: 4)
-    }
-}
-
-private struct BottomBar: View {
-    @ObservedObject var viewModel: AgeEstimationViewModel
-
-    var body: some View {
-        VStack(spacing: 16) {
-            switch viewModel.state {
-            case .result(let age, let confidence):
-                Text("\(Int(age.rounded()))")
-                    .font(.system(size: 96, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text("歳")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.white.opacity(0.9))
-                Text(String(format: "信頼度 %d%%", Int(confidence * 100)))
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.7))
-                retryButton
-            case .blockedMinor:
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 56))
-                    .foregroundColor(.yellow)
-                Text("18 歳未満の可能性があるため、\n結果を表示できません。")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                Text("成人の方はもう一度お試しください")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                retryButton
-            default:
+                title("解析中…", subtitle: "数秒お待ちください。")
+            case .cleared, .idCheckRequired, .blockedMinor:
                 EmptyView()
             }
         }
     }
 
-    private var retryButton: some View {
-        Button("もう一度") { viewModel.reset() }
-            .font(.system(size: 16, weight: .semibold))
-            .padding(.horizontal, 32)
-            .padding(.vertical, 12)
-            .background(Color.white)
-            .foregroundColor(.black)
-            .clipShape(Capsule())
+    private func title(_ t: String, subtitle: String?) -> some View {
+        VStack(spacing: 8) {
+            Text(t)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.75))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 32)
+        .shadow(radius: 4)
+    }
+}
+
+private struct ResultPanel: View {
+    @ObservedObject var viewModel: AgeEstimationViewModel
+
+    var body: some View {
+        VStack(spacing: 18) {
+            switch viewModel.state {
+            case .cleared:
+                BigBadge(symbol: "checkmark.circle.fill",
+                         color: .green,
+                         heading: "OK どうぞお入りください",
+                         subheading: "20 歳以上と判定されました。")
+            case .idCheckRequired(let age, _):
+                BigBadge(symbol: "person.text.rectangle.fill",
+                         color: .yellow,
+                         heading: "店員に身分証をご提示ください",
+                         subheading: String(format: "推定 %d 歳前後 — 規定により確認させていただきます。",
+                                            Int(age.rounded())))
+            case .blockedMinor:
+                BigBadge(symbol: "xmark.octagon.fill",
+                         color: .red,
+                         heading: "ご利用いただけません",
+                         subheading: "20 歳未満の方への酒類提供はできません。")
+            default:
+                EmptyView()
+            }
+
+            if viewModel.state.isTerminal {
+                Button("次の方へ") { viewModel.reset() }
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.horizontal, 36)
+                    .padding(.vertical, 14)
+                    .background(Color.white)
+                    .foregroundColor(.black)
+                    .clipShape(Capsule())
+            }
+        }
+    }
+}
+
+private struct BigBadge: View {
+    let symbol: String
+    let color: Color
+    let heading: String
+    let subheading: String
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.system(size: 88, weight: .bold))
+                .foregroundColor(color)
+                .shadow(radius: 6)
+            Text(heading)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+            Text(subheading)
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 32)
+    }
+}
+
+private struct FooterDisclaimer: View {
+    var body: some View {
+        Text("AI 推定はあくまで一次スクリーニングです。最終判断は店舗スタッフが身分証で行います。\n撮影画像はデバイス内で処理され、保存・送信されません。")
+            .font(.system(size: 11))
+            .foregroundColor(.white.opacity(0.6))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
     }
 }
 

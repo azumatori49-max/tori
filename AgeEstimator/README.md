@@ -84,6 +84,31 @@ python finetune_japanese.py \
 を測り、`JapaneseCalibration.default.decadeOffsets` を更新してください。
 これで「日本人特化チューニング」の最終 1mm を当てに行けます。
 
+## 未成年フィルタ
+
+`MinorGuard`(`ML/JapaneseCalibration.swift`)が、明らかな未成年と判定された
+場合に推定年齢を**表示しません**(`AgeEstimationState.blockedMinor`)。
+
+ロジック:
+
+```
+平滑化後の推定年齢 + safetyMargin × 標準偏差   <   displayThreshold
+```
+
+両辺を見ているのがポイントで、推定値が threshold をわずかに下回るだけでは
+ブロックせず、**「上振れ余地を考えても閾値未満」と確信できたときだけ**ブロック
+します。これによって閾値ギリギリの成人を弾く偽陽性を抑えています。既定値は
+
+| パラメータ | 値 | 意味 |
+| --- | --- | --- |
+| `displayThreshold` | 20 | 表示を許す下限。年齢モデルの MAE が 3〜5 歳あるため 18 ではなく 20 から始めるのが安全 |
+| `safetyMargin` | 1.5 | 上限見込みに掛ける標準偏差の倍率 |
+| `minSamples` | 5 | この数のサンプルが揃うまでは判定を保留 |
+
+`displayThreshold` は要件(18 / 20 / 21 など)に合わせて変更してください。
+学習データセット側でも 18 歳未満を強めにオーバーサンプリングして判別性能を
+上げることを推奨します(`finetune_japanese.py` の Dataset 実装で対応)。
+
 ## キャリブレーションの考え方
 
 汎用モデル(IMDB-Wiki、UTKFace 等で学習)は東アジア顔に対して

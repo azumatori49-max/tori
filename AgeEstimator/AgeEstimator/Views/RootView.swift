@@ -45,6 +45,8 @@ private struct StatusText: View {
                 Text("解析中…")
             case .result:
                 Text("推定年齢")
+            case .blockedMinor:
+                Text("ご利用いただけません")
             }
         }
         .font(.system(size: 22, weight: .medium))
@@ -59,7 +61,8 @@ private struct BottomBar: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            if case .result(let age, let confidence) = viewModel.state {
+            switch viewModel.state {
+            case .result(let age, let confidence):
                 Text("\(Int(age.rounded()))")
                     .font(.system(size: 96, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
@@ -69,15 +72,33 @@ private struct BottomBar: View {
                 Text(String(format: "信頼度 %d%%", Int(confidence * 100)))
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.7))
-                Button("もう一度") { viewModel.reset() }
-                    .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .foregroundColor(.black)
-                    .clipShape(Capsule())
+                retryButton
+            case .blockedMinor:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 56))
+                    .foregroundColor(.yellow)
+                Text("18 歳未満の可能性があるため、\n結果を表示できません。")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                Text("成人の方はもう一度お試しください")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+                retryButton
+            default:
+                EmptyView()
             }
         }
+    }
+
+    private var retryButton: some View {
+        Button("もう一度") { viewModel.reset() }
+            .font(.system(size: 16, weight: .semibold))
+            .padding(.horizontal, 32)
+            .padding(.vertical, 12)
+            .background(Color.white)
+            .foregroundColor(.black)
+            .clipShape(Capsule())
     }
 }
 

@@ -37,6 +37,7 @@ struct OvalFrameOverlay: View {
         case .aligning: return Color(red: 1.0, green: 0.85, blue: 0.3)
         case .estimating: return Color.white
         case .result: return Color.green
+        case .blockedMinor: return Color.red.opacity(0.85)
         }
     }
 

@@ -7,6 +7,16 @@ enum AgeEstimationState: Equatable {
     case aligning(progress: Double)
     case estimating
     case result(age: Double, confidence: Double)
+    /// Predicted age was below the minor gate's threshold with enough
+    /// confidence that we refuse to display a number.
+    case blockedMinor
+
+    var isTerminal: Bool {
+        switch self {
+        case .result, .blockedMinor: return true
+        default: return false
+        }
+    }
 }
 
 final class AgeEstimationViewModel: ObservableObject {
@@ -16,6 +26,7 @@ final class AgeEstimationViewModel: ObservableObject {
     private let faceDetector = FaceDetector()
     private let estimator = AgeEstimator()
     private let smoother = PredictionSmoother(capacity: 5)
+    private let minorGuard: MinorGuard = .default
 
     /// Number of consecutive aligned frames required before triggering inference.
     private let requiredAlignedFrames = 12
@@ -83,7 +94,7 @@ extension AgeEstimationViewModel: CameraManagerDelegate {
     private func handleNoFace() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if case .result = self.state { return }
+            if self.state.isTerminal { return }
             self.alignedFrameCount = 0
             self.state = .searching
         }
@@ -95,7 +106,7 @@ extension AgeEstimationViewModel: CameraManagerDelegate {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if case .result = self.state { return }
+            if self.state.isTerminal { return }
 
             if !aligned {
                 self.alignedFrameCount = max(0, self.alignedFrameCount - 1)
@@ -134,11 +145,19 @@ extension AgeEstimationViewModel: CameraManagerDelegate {
                     return
                 }
                 let smoothed = smoother.add(prediction)
+                let stdDev = smoother.ageStdDev
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.inferenceInFlight = false
                     self.inferencesCollected += 1
-                    if self.inferencesCollected >= self.inferencesForResult {
+                    guard self.inferencesCollected >= self.inferencesForResult else {
+                        return
+                    }
+                    if self.minorGuard.shouldBlock(age: smoothed.age,
+                                                   stdDev: stdDev,
+                                                   sampleCount: self.inferencesCollected) {
+                        self.state = .blockedMinor
+                    } else {
                         self.state = .result(age: smoothed.age,
                                              confidence: smoothed.confidence)
                     }

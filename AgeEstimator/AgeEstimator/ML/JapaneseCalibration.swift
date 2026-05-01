@@ -57,6 +57,10 @@ final class PredictionSmoother {
 
     init(capacity: Int = 5) { self.capacity = capacity }
 
+    /// Standard deviation of the smoothed age across the current window.
+    /// Used by `MinorGuard` to estimate the upper bound of the prediction.
+    private(set) var ageStdDev: Double = 0
+
     func add(_ p: AgePrediction) -> AgePrediction {
         samples.append(p)
         if samples.count > capacity { samples.removeFirst() }
@@ -70,8 +74,50 @@ final class PredictionSmoother {
         }
         let mean = trimmed.reduce(0, +) / Double(trimmed.count)
         let confidence = samples.map(\.confidence).reduce(0, +) / Double(samples.count)
+        if samples.count >= 2 {
+            let allAges = samples.map(\.age)
+            let m = allAges.reduce(0, +) / Double(allAges.count)
+            let variance = allAges.map { pow($0 - m, 2) }.reduce(0, +)
+                / Double(allAges.count - 1)
+            ageStdDev = variance.squareRoot()
+        } else {
+            ageStdDev = 0
+        }
         return AgePrediction(rawAge: p.rawAge, age: mean, confidence: confidence)
     }
 
-    func reset() { samples.removeAll() }
+    func reset() {
+        samples.removeAll()
+        ageStdDev = 0
+    }
+}
+
+/// Decides whether a smoothed prediction looks like an obvious minor that we
+/// should not display an age for. To avoid blocking legitimate adults who
+/// happen to look young, the gate fires only when *both*:
+///
+///  1. the smoothed point estimate is below `displayThreshold`, **and**
+///  2. the upper bound `mean + safetyMargin * stdDev` is *also* below
+///     `displayThreshold` — i.e. the model is confident the person is under
+///     age, not just uncertain.
+///
+/// Tune `displayThreshold` to match your jurisdiction (Japan 成人年齢 = 18)
+/// and use case. The default is intentionally a couple of years above 18
+/// because age models have ~3-5 year MAE on faces around the threshold.
+struct MinorGuard {
+    let displayThreshold: Double
+    let safetyMargin: Double
+    let minSamples: Int
+
+    func shouldBlock(age: Double, stdDev: Double, sampleCount: Int) -> Bool {
+        guard sampleCount >= minSamples else { return false }
+        let upperBound = age + safetyMargin * max(stdDev, 1.0)
+        return upperBound < displayThreshold
+    }
+
+    static let `default` = MinorGuard(
+        displayThreshold: 20,
+        safetyMargin: 1.5,
+        minSamples: 5
+    )
 }

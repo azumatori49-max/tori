@@ -1,16 +1,8 @@
 import CoreML
 import Vision
 import CoreImage
-import UIKit
-
-struct AgePrediction {
-    /// Raw model output before Japanese calibration.
-    let rawAge: Double
-    /// Final calibrated age (years).
-    let age: Double
-    /// 0...1 confidence derived from the model's class probability mass.
-    let confidence: Double
-}
+import CoreGraphics
+import Foundation
 
 /// Runs CoreML age regression / classification on a cropped face image and
 /// applies the Japanese calibration on top of the raw prediction.

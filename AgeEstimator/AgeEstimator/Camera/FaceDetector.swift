@@ -1,26 +1,7 @@
 import Vision
 import CoreVideo
 import CoreImage
-import UIKit
-
-struct FaceDetection {
-    /// Bounding box in normalized image coordinates (Vision: origin bottom-left).
-    let boundingBoxNormalized: CGRect
-    /// Roll/yaw/pitch in radians, when available.
-    let roll: CGFloat
-    let yaw: CGFloat
-    let pitch: CGFloat
-    /// Cropped, upright RGB face image suitable for CoreML inference.
-    let alignedFace: CGImage
-}
-
-struct FaceDetectionResult {
-    /// Number of faces Vision found in the frame, regardless of whether we
-    /// extracted a crop for them.
-    let totalFaceCount: Int
-    /// The largest face — the one we'll feed to the age model.
-    let primary: FaceDetection?
-}
+import CoreGraphics
 
 final class FaceDetector {
     private let sequenceHandler = VNSequenceRequestHandler()

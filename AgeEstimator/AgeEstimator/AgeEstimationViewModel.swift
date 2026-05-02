@@ -85,6 +85,20 @@ final class AgeEstimationViewModel: ObservableObject {
         }
     }
 
+    #if DEBUG
+    /// Force the view model into a given state. Used by `SimulatorHarness`
+    /// for design-review on the iOS Simulator where there is no camera feed.
+    func simulate(state: AgeEstimationState) {
+        DispatchQueue.main.async { [weak self] in
+            self?.resetWorkItem?.cancel()
+            self?.state = state
+            if state.isTerminal {
+                self?.scheduleAutoReset()
+            }
+        }
+    }
+    #endif
+
     private func scheduleAutoReset() {
         resetWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.reset() }

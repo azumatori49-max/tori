@@ -140,6 +140,74 @@ open AgeEstimator.xcodeproj
 がバンドルに含まれていない場合、Debug ビルドはランダムなダミー年齢を返します。
 **本番運用前には必ず実モデルを同梱してください。**
 
+## 仮想環境でのテスト
+
+実機 / カメラなしで動作を確認する経路を 2 つ用意しています。
+
+### 1. `swift test` (純ロジックの単体テスト)
+
+Mac から Swift Package のテストとして回せます。
+
+```bash
+cd AgeEstimator
+swift test
+# あるいは
+./Scripts/run_tests.sh
+```
+
+`Package.swift` は `AgeEstimatorCore` という小さなライブラリを定義し、UIKit /
+AVFoundation / Vision / CoreML / SwiftUI に依存しないファイルだけ
+(`ScreeningPolicy` / `JapaneseCalibration` / `PredictionSmoother` /
+`LivenessDetector` / `FrameAlignment` / `DatasetInfo` / `AgePrediction` /
+`FaceDetection`) を含めます。テストは `Tests/AgeEstimatorCoreTests/` に
+あります:
+
+| テスト | カバー範囲 |
+| --- | --- |
+| `ScreeningPolicyTests` | 3 値判定の境界 (18 / 25 ライン、不確かさ band、最小サンプル数) |
+| `PredictionSmootherTests` | trimmed mean、stdDev、capacity 切り捨て、reset |
+| `JapaneseCalibrationTests` | 10 年代オフセット、scale/bias、clamp、index out-of-range |
+| `LivenessDetectorTests` | 静止写真の拒否、顔の動きでの通過、サンプル数不足の拒否 |
+| `FrameAlignmentTests` | 中心 / サイズ / yaw / roll の判定、score の値域 |
+| `DatasetInfoTests` | 「〜万人以上」の切り捨て表示、文言の整合性 |
+
+これらは iOS Simulator も Xcode プロジェクトも要らないので、CI から回す場合
+は macOS ランナーで `swift test` を 1 行流すだけです (Linux ランナーでは
+`QuartzCore` が無いので不可)。
+
+### 2. iOS Simulator デバッグハーネス (UI 全状態の手動確認)
+
+iOS Simulator にはカメラがないため通常起動だと `searching` のままです。
+全画面状態をワンタップで切り替えるデバッグオーバーレイを `DEBUG` ビルドに
+同梱しています:
+
+1. Xcode → Edit Scheme → Run → Arguments → "Arguments Passed On Launch" に
+   `-SimulatorHarness 1` を追加
+2. iPad のシミュレータをターゲットに Run
+3. 右上に表示されるリストから `cleared 32` / `idCheck 22` / `blocked` /
+   `multipleFaces` / `livenessRequired` 等をタップして遷移確認
+
+カメラ取得を呼ばず `viewModel.simulate(state:)` で直接ステートを差し替える
+だけなので、デザイナー / QA / 接客スタッフへのデモにも使えます。
+**Release ビルドではコンパイル対象外**(`#if DEBUG` でガード)です。
+
+### 3. CI に組み込む例 (GitHub Actions)
+
+```yaml
+jobs:
+  core-tests:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: cd AgeEstimator && swift test --parallel
+```
+
+実機テスト(カメラパイプライン込み)は別ジョブで `xcodebuild test
+-destination 'platform=iOS Simulator,name=iPad Pro (12.9-inch) (6th
+generation)'` を回す形になりますが、ステート機械の正しさは上の Core テスト
+だけで担保できます。
+
 ## モデルの作り方
 
 `Scripts/finetune_japanese.py` で AFAD / AAF / MegaAge-Asian の 3 つの東アジア

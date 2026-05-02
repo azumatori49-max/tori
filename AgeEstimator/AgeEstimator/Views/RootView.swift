@@ -27,6 +27,20 @@ struct RootView: View {
                 FooterDisclaimer()
                     .padding(.bottom, 20)
             }
+
+            #if DEBUG
+            if SimulatorHarness.isEnabled {
+                VStack {
+                    HStack {
+                        Spacer()
+                        SimulatorHarness(viewModel: viewModel)
+                            .padding(.top, 60)
+                            .padding(.trailing, 12)
+                    }
+                    Spacer()
+                }
+            }
+            #endif
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.state)
         .task { await viewModel.start() }

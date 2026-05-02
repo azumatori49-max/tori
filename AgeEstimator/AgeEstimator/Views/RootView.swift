@@ -17,8 +17,10 @@ struct RootView: View {
                 .opacity(viewModel.state.isTerminal ? 0 : 1)
 
             VStack(spacing: 0) {
+                DatasetBadge(info: .default)
+                    .padding(.top, 24)
                 Header(state: viewModel.state)
-                    .padding(.top, 60)
+                    .padding(.top, 24)
                 Spacer()
                 ResultPanel(viewModel: viewModel)
                     .padding(.bottom, 40)
@@ -49,7 +51,7 @@ private struct Header: View {
             switch state {
             case .searching:
                 title("枠に顔を合わせてください",
-                      subtitle: "ご来店ありがとうございます。年齢確認を行います。")
+                      subtitle: DatasetInfo.default.tagline)
             case .multipleFaces:
                 title("お一人ずつお願いします",
                       subtitle: "枠の中に映るのは一名のみにしてください。")
@@ -146,6 +148,26 @@ private struct BigBadge: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 32)
+    }
+}
+
+private struct DatasetBadge: View {
+    let info: DatasetInfo
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "person.3.sequence.fill")
+                .font(.system(size: 12, weight: .semibold))
+            Text("AI 学習データ \(info.displayCountJP)")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.18))
+        .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 0.5))
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.3), radius: 4, y: 1)
     }
 }
 

@@ -3,6 +3,7 @@ import { ADMIN_PASSWORD } from '../../data/stores';
 import { sortedStoreEntries } from '../../hooks/useStores';
 import { useStoresOnce } from '../../hooks/useStoresOnce';
 import type { StoreKey } from '../../types';
+import { StorePicker } from './StorePicker';
 
 interface Props {
   onStoreLogin: (key: StoreKey) => void;
@@ -65,25 +66,13 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
 
         <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-4 shadow-sm">
           <div>
-            <label className="label" htmlFor="storeKey">
-              店舗
-            </label>
-            <select
-              id="storeKey"
-              className="input appearance-none"
+            <span className="label">店舗</span>
+            <StorePicker
+              stores={stores}
               value={storeKey}
-              onChange={(e) => setStoreKey(e.target.value)}
-            >
-              <option value="">
-                {loading ? '店舗一覧を読み込み中…' : '選択してください'}
-              </option>
-              <option value="__admin__">＊ 管理者</option>
-              {entries.map(([key, store]) => (
-                <option key={key} value={key}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
+              loading={loading}
+              onChange={setStoreKey}
+            />
             {loadError && !loading ? (
               <p className="text-[11px] text-warn mt-1">
                 店舗一覧を取得できませんでした。管理者ログインで店舗を登録してください。

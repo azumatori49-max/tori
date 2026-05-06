@@ -62,14 +62,28 @@ npm run build
 netlify deploy --prod --dir=dist
 ```
 
-### Firebase Hosting
+### Firebase Hosting（推奨）
+
+リポジトリに `firebase.json` / `.firebaserc` を同梱済み。プロジェクトIDは
+`toriyaro-eisei-faf2e` で固定されているため `firebase init` 不要。
+
 ```bash
+# 初回のみ
 npm install -g firebase-tools
 firebase login
-firebase init hosting
+
+# 毎回のデプロイ
 npm run build
 firebase deploy --only hosting
+
+# DB / Storage ルールも一緒にデプロイ
+firebase deploy --only hosting,database,storage
+
+# 本番に上げる前に一時URLでプレビュー
+firebase hosting:channel:deploy preview
 ```
+
+公開URL: `https://toriyaro-eisei-faf2e.web.app`
 
 ## 実装上のポイント
 

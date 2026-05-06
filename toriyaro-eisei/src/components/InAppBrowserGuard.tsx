@@ -108,30 +108,47 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
           </p>
         </div>
 
-        {(isAndroid() || isIOS()) && (
+        {isAndroid() ? (
           <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
-            {isAndroid() ? '🚀 Chrome で開く' : '🚀 Chrome で開く（要インストール）'}
+            🚀 標準ブラウザで開く
           </button>
-        )}
+        ) : null}
+        {isIOS() ? (
+          <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
+            🚀 Chrome で開く<span className="text-[11px] font-normal opacity-80 ml-1">（Chrome 利用時）</span>
+          </button>
+        ) : null}
 
         <button type="button" onClick={handleCopy} className="btn-ghost w-full mb-5">
-          {copied ? '✓ URLをコピーしました' : '📋 URLをコピーして手動で開く'}
+          {copied ? '✓ URLをコピーしました' : '📋 URLをコピーして Safari / Chrome で開く'}
         </button>
 
         <div className="border-t border-border pt-4 text-xs text-text-muted leading-relaxed">
           <p className="font-bold text-text mb-2">手動で開く方法</p>
           {browser === 'LINE' ? (
-            <ol className="space-y-1 list-decimal pl-5">
-              <li>画面右下の「︙」または「…」アイコンをタップ</li>
-              <li>「他のブラウザで開く」を選択</li>
-              <li>Chrome / Safari を選んで開く</li>
-            </ol>
+            <>
+              {isIOS() ? (
+                <ol className="space-y-1 list-decimal pl-5">
+                  <li>画面右下の「⇗」共有アイコンをタップ</li>
+                  <li>「<strong>Safari で開く</strong>」を選択</li>
+                </ol>
+              ) : (
+                <ol className="space-y-1 list-decimal pl-5">
+                  <li>画面右下の「︙」または「…」をタップ</li>
+                  <li>「他のブラウザで開く」を選択</li>
+                  <li>Chrome / Samsung Internet など好きなブラウザを選ぶ</li>
+                </ol>
+              )}
+            </>
           ) : (
             <ol className="space-y-1 list-decimal pl-5">
               <li>画面右上の「⋯」メニューをタップ</li>
-              <li>「ブラウザで開く」または「Safariで開く」を選択</li>
+              <li>{isIOS() ? '「Safari で開く」' : '「ブラウザで開く」'}を選択</li>
             </ol>
           )}
+          <p className="text-[10px] mt-3 leading-relaxed">
+            💡 Safari でも Chrome でも、Edge でも Firefox でも動作します。LINE / Instagram などのアプリ内ブラウザだけが非対応です。
+          </p>
         </div>
 
         <p className="text-[10px] text-text-muted text-center mt-4 leading-relaxed">

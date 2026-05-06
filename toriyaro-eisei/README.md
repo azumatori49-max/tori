@@ -92,6 +92,22 @@ firebase hosting:channel:deploy preview
 - **管理者ダッシュボード**: 全店舗分の提出データを `Promise.all` で並列取得。
 - **日付キー**: デイリーは `YYYY-MM-DD`、ウィークリーは `WYYYY-MM-DD`（月曜日の日付）。
 
+## 認証 (Firebase Anonymous Auth)
+
+このアプリは、Firebase Realtime Database / Storage への読み書きをすべて
+**匿名認証経由** で行います。アプリ起動時に自動で `signInAnonymously` が
+呼ばれ、認証完了を待ってから DB / Storage アクセスが始まります。
+
+ユーザー側の操作は不要ですが、Firebase Console で **匿名認証を有効化**
+する必要があります（初回1回だけ）：
+
+1. Firebase Console → **Authentication** → 「Sign-in method」タブ
+2. 「**匿名**」プロバイダを **有効** に切り替え → 「保存」
+
+これにより、URL を知っているだけの第三者からの読み書きが拒否されます。
+（アプリ経由でアクセスした正規ユーザーは透過的に認証されるため UX には
+影響しません。）
+
 ## セキュリティルール
 
 `docs/firebase-rules/` 配下に Realtime Database / Storage のルールを置いています。

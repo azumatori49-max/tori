@@ -1,7 +1,7 @@
 import { get, ref, set as dbSet } from 'firebase/database';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useCallback, useEffect, useState } from 'react';
-import { db, storage } from '../lib/firebase';
+import { authReady, db, storage } from '../lib/firebase';
 import { compressImage } from '../lib/imageUtils';
 import type { ReportType, StoreKey, Submission } from '../types';
 
@@ -23,10 +23,14 @@ export const useSubmissionFor = (
     }
     let cancelled = false;
     setLoading(true);
-    get(ref(db, `submissions/${storeKey}/${type}/${periodKey}`))
+    authReady
+      .then(() => get(ref(db, `submissions/${storeKey}/${type}/${periodKey}`)))
       .then((snap) => {
         if (cancelled) return;
         setSubmission((snap.val() as Submission | null) ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) console.error('submission fetch failed:', err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -46,6 +50,7 @@ export const fetchSubmissionsBulk = async (
   type: ReportType,
   periodKey: string,
 ): Promise<SubmissionMap> => {
+  await authReady;
   const results = await Promise.all(
     storeKeys.map((key) =>
       get(ref(db, `submissions/${key}/${type}/${periodKey}`))
@@ -113,6 +118,7 @@ export const submitReport = async (params: {
   onProgress?: (progress: UploadProgress) => void;
 }): Promise<Submission> => {
   const { storeKey, storeName, type, periodKey, files, onProgress } = params;
+  await authReady;
   const total = files.length;
   const urls: string[] = new Array(total);
   let completed = 0;

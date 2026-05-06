@@ -1,6 +1,6 @@
 import { get, ref } from 'firebase/database';
 import { useCallback, useEffect, useState } from 'react';
-import { db } from '../lib/firebase';
+import { authReady, db } from '../lib/firebase';
 import type { Store, StoreKey } from '../types';
 
 const CACHE_KEY = 'toriyaro-eisei.stores-cache';
@@ -49,9 +49,10 @@ export const useStoresOnce = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('store fetch timed out')), 6000),
+      setTimeout(() => reject(new Error('store fetch timed out')), 9000),
     );
     try {
+      await authReady;
       const snap = await Promise.race([get(ref(db, 'stores')), timeout]);
       const data = (snap.val() as Record<StoreKey, Store> | null) ?? {};
       setStores(data);

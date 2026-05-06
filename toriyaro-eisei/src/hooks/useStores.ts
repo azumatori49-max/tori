@@ -1,6 +1,6 @@
 import { onValue, ref, remove, set, update } from 'firebase/database';
 import { useCallback, useEffect, useState } from 'react';
-import { db } from '../lib/firebase';
+import { authReady, db } from '../lib/firebase';
 import type { Store, StoreKey } from '../types';
 import { INITIAL_STORES } from '../data/stores';
 import { invalidateStoresCache } from './useStoresOnce';
@@ -20,20 +20,34 @@ export const useStores = () => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onValue(
-      ref(db, STORES_PATH),
-      (snapshot) => {
-        const value = (snapshot.val() as StoresMap | null) ?? {};
-        setStores(value);
-        setError(null);
-        setLoading(false);
-      },
-      (err) => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    authReady
+      .then(() => {
+        if (cancelled) return;
+        unsubscribe = onValue(
+          ref(db, STORES_PATH),
+          (snapshot) => {
+            const value = (snapshot.val() as StoresMap | null) ?? {};
+            setStores(value);
+            setError(null);
+            setLoading(false);
+          },
+          (err) => {
+            setError(err);
+            setLoading(false);
+          },
+        );
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
         setError(err);
         setLoading(false);
-      },
-    );
-    return () => unsubscribe();
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   const seedInitialStores = useCallback(async () => {

@@ -1,8 +1,8 @@
 {
   "rules": {
     "stores": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
+      ".write": "auth != null",
       "$storeKey": {
         ".validate": "newData.hasChildren(['name', 'password'])",
         "name": {
@@ -15,12 +15,12 @@
       }
     },
     "submissions": {
-      ".read": true,
+      ".read": "auth != null",
       "$storeKey": {
         "$type": {
           ".validate": "$type === 'daily' || $type === 'weekly'",
           "$periodKey": {
-            ".write": true,
+            ".write": "auth != null",
             ".validate": "newData.hasChildren(['count', 'submittedAt', 'photos', 'storeName'])",
             "count": {
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 14"

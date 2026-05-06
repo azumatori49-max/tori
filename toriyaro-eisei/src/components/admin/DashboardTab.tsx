@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { sortedStoreEntries } from '../../hooks/useStores';
 import { fetchSubmissionsBulk, type SubmissionMap } from '../../hooks/useSubmissions';
 import {
+  RETENTION_DAYS,
   formatDateJa,
   formatWeekRangeJa,
   getDateKey,
   getDateKeyFromDate,
   getWeekKey,
   getWeekKeyFromDate,
+  isBeyondRetention,
   isFutureDate,
+  oldestVisibleDate,
   weekKeyToMonday,
 } from '../../lib/dateUtils';
 import type { FilterMode, ReportTab, Store, StoreKey } from '../../types';
@@ -96,6 +99,7 @@ export const DashboardTab = ({ stores }: Props) => {
       next.setDate(next.getDate() + deltaDays * 7);
     }
     if (isFutureDate(next)) return;
+    if (isBeyondRetention(next)) return;
     setCursor(next);
   };
 
@@ -158,6 +162,9 @@ export const DashboardTab = ({ stores }: Props) => {
           →
         </button>
       </div>
+      <p className="text-[11px] text-text-muted text-center -mt-2">
+        ※ 写真は{RETENTION_DAYS}日経過すると自動削除されます（保存可能期間: {oldestVisibleDate().getMonth() + 1}/{oldestVisibleDate().getDate()} 以降）。
+      </p>
 
       <div className="grid grid-cols-3 gap-2">
         <SummaryCard label="提出済み" value={summary.ok} tone="ok" />

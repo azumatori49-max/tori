@@ -63,3 +63,18 @@ export const isFutureDate = (d: Date): boolean => {
   target.setHours(0, 0, 0, 0);
   return target.getTime() > today.getTime();
 };
+
+export const RETENTION_DAYS = 90;
+
+export const oldestVisibleDate = (): Date => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - RETENTION_DAYS);
+  return d;
+};
+
+export const isBeyondRetention = (d: Date): boolean => {
+  const target = new Date(d);
+  target.setHours(0, 0, 0, 0);
+  return target.getTime() < oldestVisibleDate().getTime();
+};

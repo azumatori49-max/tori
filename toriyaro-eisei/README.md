@@ -117,6 +117,46 @@ firebase hosting:channel:deploy preview
 
 Firebase Console で `database.rules.json` を貼り付けるか、`firebase deploy --only database` でデプロイしてください。
 
+## 写真の自動削除（90日）
+
+Storage 上にアップロードされた写真は **90日経過で自動削除** されるよう
+設定します（HACCP の標準的な保存期間と Storage コストのバランス）。
+
+設定方法は2通り。どちらかを **1度だけ** 実行すれば、以降は毎日自動で
+古い写真が削除されます。
+
+### A. gsutil コマンド（推奨）
+
+```bash
+gsutil lifecycle set docs/firebase-rules/storage-lifecycle.json \
+  gs://toriyaro-eisei-faf2e.firebasestorage.app
+```
+
+設定確認:
+```bash
+gsutil lifecycle get gs://toriyaro-eisei-faf2e.firebasestorage.app
+```
+
+`gsutil` は Google Cloud SDK に含まれます。未インストールなら
+[公式手順](https://cloud.google.com/sdk/docs/install) を参照。
+
+### B. Google Cloud Console（GUI）
+
+1. https://console.cloud.google.com/storage/browser/toriyaro-eisei-faf2e.firebasestorage.app を開く
+2. 「ライフサイクル」タブ → 「ルールを追加」
+3. 条件: 「**作成からの経過日数: 90**」、プレフィックス: `photos/`
+4. アクション: 「**オブジェクトを削除**」
+5. 保存
+
+### 注意
+
+- 90日 < age のオブジェクトは毎日（Google 側で）バッチ処理で削除されます。
+  サイズや本数によっては反映に最大24時間かかります。
+- 削除されるのは **Storage の写真ファイル** だけです。Realtime Database
+  内の提出メタデータ（store name / submitted at / count）は残りますが、
+  90日より前の日付には管理画面の日付ナビが進めない仕様にしてあるので
+  運用上は問題ありません。
+
 ## 本番運用時の注意
 
 ### Firebase プラン

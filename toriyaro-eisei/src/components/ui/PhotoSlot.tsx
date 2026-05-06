@@ -59,8 +59,11 @@ export const PhotoSlot = ({ index, file, onCapture, disabled }: Props) => {
             </span>
           </>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-text-muted">
-            <span className="text-3xl leading-none">📸</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-text-muted">
+            <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9.5a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z" />
+              <circle cx="12" cy="13.5" r="3.6" />
+            </svg>
             <span className="text-[11px] font-bold tracking-wider">タップして撮影</span>
             <span className="absolute top-2 left-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-border text-text-muted text-xs font-bold">
               {index + 1}

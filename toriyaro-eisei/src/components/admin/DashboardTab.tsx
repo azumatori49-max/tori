@@ -192,7 +192,7 @@ export const DashboardTab = ({ stores }: Props) => {
           <div className="text-center text-text-muted text-sm py-8">読み込み中…</div>
         ) : filtered.length === 0 ? (
           <div className="text-center text-text-muted text-sm py-8">
-            {filter === 'ng' ? '未提出の店舗はありません 🎉' : '該当する店舗がありません'}
+            {filter === 'ng' ? '未提出の店舗はありません' : '該当する店舗がありません'}
           </div>
         ) : (
           filtered.map(([key, store]) => (

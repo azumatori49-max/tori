@@ -89,7 +89,7 @@ export const StorePicker = ({ stores, value, loading, onChange }: Props) => {
                   className="w-9 h-9 rounded-full bg-surface2 hover:bg-border transition flex items-center justify-center text-base"
                   aria-label="閉じる"
                 >
-                  ✕
+                  ×
                 </button>
               </div>
               <input

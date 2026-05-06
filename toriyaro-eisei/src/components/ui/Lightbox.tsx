@@ -33,7 +33,7 @@ export const Lightbox = ({ src, onClose }: Props) => {
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white text-xl flex items-center justify-center hover:bg-white/20 transition"
         aria-label="閉じる"
       >
-        ✕
+        ×
       </button>
     </div>
   );

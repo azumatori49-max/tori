@@ -158,7 +158,7 @@ export const StoreManageTab = ({ stores }: Props) => {
           disabled={busy}
           className="btn-ghost py-2.5 text-sm"
         >
-          📄 CSVで追加インポート
+          CSVで追加インポート
         </button>
         <input
           ref={fileRef}
@@ -174,7 +174,7 @@ export const StoreManageTab = ({ stores }: Props) => {
             disabled={busy}
             className="btn-primary py-2.5 text-sm"
           >
-            🔥 Firebaseに51店舗を一括登録
+            Firebaseに51店舗を一括登録
           </button>
         ) : null}
         <p className="text-[11px] text-text-muted">

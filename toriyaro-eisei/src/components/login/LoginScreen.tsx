@@ -51,7 +51,7 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
         <div className="flex flex-col items-center text-center gap-3 mb-10">
           <img
             src="/logos/toriyaro.png"
-            alt="居酒屋それゆけ！鶏ヤロー！"
+            alt="居酒屋それゆけ 鶏ヤロー"
             className="w-32 h-32 object-contain drop-shadow"
           />
           <h1 className="font-display text-2xl font-extrabold tracking-wide">

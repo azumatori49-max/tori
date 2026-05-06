@@ -96,7 +96,12 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
     <div className="fixed inset-0 z-[100] bg-bg flex items-center justify-center p-4 overflow-y-auto">
       <div className="card max-w-sm w-full p-6 shadow-xl my-auto">
         <div className="text-center mb-5">
-          <div className="text-5xl mb-2">⚠️</div>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-warn-bg text-warn mb-3">
+            <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 9v4M12 17h.01" />
+              <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            </svg>
+          </div>
           <h2 className="font-display text-xl font-extrabold mb-2 leading-tight">
             標準ブラウザで開いてください
           </h2>
@@ -110,17 +115,17 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
 
         {isAndroid() ? (
           <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
-            🚀 標準ブラウザで開く
+            標準ブラウザで開く
           </button>
         ) : null}
         {isIOS() ? (
           <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
-            🚀 Chrome で開く<span className="text-[11px] font-normal opacity-80 ml-1">（Chrome 利用時）</span>
+            Chrome で開く<span className="text-[11px] font-normal opacity-80 ml-1">（Chrome 利用時）</span>
           </button>
         ) : null}
 
         <button type="button" onClick={handleCopy} className="btn-ghost w-full mb-5">
-          {copied ? '✓ URLをコピーしました' : '📋 URLをコピーして Safari / Chrome で開く'}
+          {copied ? 'URLをコピーしました' : 'URLをコピーして Safari / Chrome で開く'}
         </button>
 
         <div className="border-t border-border pt-4 text-xs text-text-muted leading-relaxed">
@@ -129,12 +134,12 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
             <>
               {isIOS() ? (
                 <ol className="space-y-1 list-decimal pl-5">
-                  <li>画面右下の「⇗」共有アイコンをタップ</li>
+                  <li>画面右下の共有アイコンをタップ</li>
                   <li>「<strong>Safari で開く</strong>」を選択</li>
                 </ol>
               ) : (
                 <ol className="space-y-1 list-decimal pl-5">
-                  <li>画面右下の「︙」または「…」をタップ</li>
+                  <li>画面右下のメニューアイコンをタップ</li>
                   <li>「他のブラウザで開く」を選択</li>
                   <li>Chrome / Samsung Internet など好きなブラウザを選ぶ</li>
                 </ol>
@@ -142,12 +147,12 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
             </>
           ) : (
             <ol className="space-y-1 list-decimal pl-5">
-              <li>画面右上の「⋯」メニューをタップ</li>
+              <li>画面右上のメニューをタップ</li>
               <li>{isIOS() ? '「Safari で開く」' : '「ブラウザで開く」'}を選択</li>
             </ol>
           )}
           <p className="text-[10px] mt-3 leading-relaxed">
-            💡 Safari でも Chrome でも、Edge でも Firefox でも動作します。LINE / Instagram などのアプリ内ブラウザだけが非対応です。
+            Safari / Chrome / Edge / Firefox / Samsung Internet など、標準ブラウザならすべて動作します。LINE / Instagram などアプリ内ブラウザだけが非対応です。
           </p>
         </div>
 

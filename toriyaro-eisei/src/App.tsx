@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { InAppBrowserGuard } from './components/InAppBrowserGuard';
 import { LoginScreen } from './components/login/LoginScreen';
 import { StoreTopScreen } from './components/store/StoreTopScreen';
 import { UploadScreen } from './components/store/UploadScreen';
@@ -31,42 +32,45 @@ export const App = () => {
     logout();
   };
 
-  if (screen === 'login') {
-    return <LoginScreen onStoreLogin={handleStoreLogin} onAdminLogin={loginAsAdmin} />;
-  }
-
-  if (screen === 'admin') {
-    return <AdminScreen onLogout={handleLogout} />;
-  }
-
-  const storeKey = auth.storeKey && auth.storeKey !== '__admin__' ? auth.storeKey : null;
-  if (!storeKey) {
-    return <LoginScreen onStoreLogin={handleStoreLogin} onAdminLogin={loginAsAdmin} />;
-  }
-
-  const storeName =
-    stores[storeKey]?.name ?? (storesLoading ? '読み込み中…' : '店舗');
-
-  if (screen === 'upload') {
+  const renderScreen = () => {
+    if (screen === 'login') {
+      return <LoginScreen onStoreLogin={handleStoreLogin} onAdminLogin={loginAsAdmin} />;
+    }
+    if (screen === 'admin') {
+      return <AdminScreen onLogout={handleLogout} />;
+    }
+    const storeKey = auth.storeKey && auth.storeKey !== '__admin__' ? auth.storeKey : null;
+    if (!storeKey) {
+      return <LoginScreen onStoreLogin={handleStoreLogin} onAdminLogin={loginAsAdmin} />;
+    }
+    const storeName = stores[storeKey]?.name ?? (storesLoading ? '読み込み中…' : '店舗');
+    if (screen === 'upload') {
+      return (
+        <UploadScreen
+          storeKey={storeKey}
+          storeName={storeName}
+          type={reportType}
+          onBack={() => setScreen('store-top')}
+        />
+      );
+    }
     return (
-      <UploadScreen
+      <StoreTopScreen
         storeKey={storeKey}
         storeName={storeName}
-        type={reportType}
-        onBack={() => setScreen('store-top')}
+        onOpenReport={(t) => {
+          setReportType(t);
+          setScreen('upload');
+        }}
+        onLogout={handleLogout}
       />
     );
-  }
+  };
 
   return (
-    <StoreTopScreen
-      storeKey={storeKey}
-      storeName={storeName}
-      onOpenReport={(t) => {
-        setReportType(t);
-        setScreen('upload');
-      }}
-      onLogout={handleLogout}
-    />
+    <>
+      <InAppBrowserGuard />
+      {renderScreen()}
+    </>
   );
 };

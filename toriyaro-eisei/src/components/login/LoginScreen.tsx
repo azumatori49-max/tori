@@ -48,9 +48,11 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
     <div className="app-shell min-h-screen flex flex-col">
       <div className="flex-1 px-6 pt-16 pb-8 flex flex-col">
         <div className="flex flex-col items-center text-center gap-3 mb-10">
-          <div className="w-20 h-20 rounded-3xl bg-accent text-white flex items-center justify-center text-4xl shadow-lg">
-            🐔
-          </div>
+          <img
+            src="/logos/toriyaro.png"
+            alt="居酒屋それゆけ！鶏ヤロー！"
+            className="w-32 h-32 object-contain drop-shadow"
+          />
           <h1 className="font-display text-2xl font-extrabold tracking-wide">鶏ヤロー 衛生管理</h1>
           <p className="text-xs text-text-muted">毎日のクリーンを、写真でかんたん。</p>
         </div>

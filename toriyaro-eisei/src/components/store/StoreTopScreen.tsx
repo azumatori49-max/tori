@@ -25,7 +25,7 @@ export const StoreTopScreen = ({ storeKey, storeName, onOpenReport, onLogout }: 
     <div className="app-shell min-h-screen flex flex-col">
       <AppHeader
         title={storeName}
-        subtitle="鶏ヤロー 衛生管理"
+        subtitle="鶏ヤロー・まる助 衛生管理"
         trailing={
           <button type="button" onClick={onLogout} className="btn-ghost px-3 py-1.5 text-xs">
             ログアウト

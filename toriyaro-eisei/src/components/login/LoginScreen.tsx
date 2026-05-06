@@ -53,7 +53,9 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
             alt="居酒屋それゆけ！鶏ヤロー！"
             className="w-32 h-32 object-contain drop-shadow"
           />
-          <h1 className="font-display text-2xl font-extrabold tracking-wide">鶏ヤロー 衛生管理</h1>
+          <h1 className="font-display text-2xl font-extrabold tracking-wide">
+            鶏ヤロー・まる助 衛生管理
+          </h1>
           <p className="text-xs text-text-muted leading-relaxed px-4">
             店舗の衛生チェック写真をスマホで撮影・提出し、
             <br />

@@ -7,6 +7,17 @@ interface Props {
   title?: string;
 }
 
+const detectInAppBrowser = (): string | null => {
+  if (typeof navigator === 'undefined') return null;
+  const ua = navigator.userAgent || '';
+  if (/Instagram/i.test(ua)) return 'Instagram';
+  if (/\bLine\//i.test(ua)) return 'LINE';
+  if (/FBAN|FBAV/i.test(ua)) return 'Facebook';
+  if (/Twitter/i.test(ua)) return 'Twitter / X';
+  if (/TikTok/i.test(ua)) return 'TikTok';
+  return null;
+};
+
 const stopStream = (stream: MediaStream | null) => {
   stream?.getTracks().forEach((t) => t.stop());
 };
@@ -44,12 +55,19 @@ export const CameraCapture = ({ open, onClose, onCapture, title = '写真撮影'
     } catch (e) {
       stopStream(streamRef.current);
       streamRef.current = null;
-      const msg =
-        e instanceof DOMException && e.name === 'NotAllowedError'
-          ? 'カメラの使用が許可されていません。ブラウザのカメラ権限を許可してください。'
-          : e instanceof Error
-            ? e.message
-            : 'カメラを起動できませんでした';
+      const inApp = detectInAppBrowser();
+      let msg: string;
+      if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        msg = inApp
+          ? `${inApp} のアプリ内ブラウザではカメラを使えません。\n右上のメニューから「Chrome で開く」または「ブラウザで開く」を選んでください。`
+          : 'カメラの使用が許可されていません。\nアドレスバーの🔒マーク → 権限 → カメラ → 許可\nに変更してから再読み込みしてください。';
+      } else if (e instanceof DOMException && e.name === 'NotFoundError') {
+        msg = '使用可能なカメラが見つかりませんでした。';
+      } else if (e instanceof Error) {
+        msg = e.message;
+      } else {
+        msg = 'カメラを起動できませんでした';
+      }
       setError(msg);
     }
   }, []);

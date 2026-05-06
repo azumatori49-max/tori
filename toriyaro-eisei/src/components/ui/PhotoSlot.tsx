@@ -67,8 +67,7 @@ export const PhotoSlot = ({ index, file, onCapture, disabled }: Props) => {
         ref={inputRef}
         type="file"
         accept="image/*"
-        // Force the camera UI on mobile (Android maps any capture value to camera; iOS treats any non-empty value as a capture hint).
-        {...({ capture: 'camera' } as Record<string, string>)}
+        capture="environment"
         className="hidden"
         onChange={handleChange}
       />

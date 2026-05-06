@@ -47,8 +47,12 @@ export const useStoresOnce = () => {
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('store fetch timed out')), 6000),
+    );
     try {
-      const snap = await get(ref(db, 'stores'));
+      const snap = await Promise.race([get(ref(db, 'stores')), timeout]);
       const data = (snap.val() as Record<StoreKey, Store> | null) ?? {};
       setStores(data);
       writeCache(data);

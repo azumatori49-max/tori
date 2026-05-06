@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
-  const { stores, loading } = useStoresOnce();
+  const { stores, loading, error: loadError } = useStoresOnce();
   const [storeKey, setStoreKey] = useState<string>('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -73,9 +73,10 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
               className="input appearance-none"
               value={storeKey}
               onChange={(e) => setStoreKey(e.target.value)}
-              disabled={loading}
             >
-              <option value="">{loading ? '読み込み中…' : '選択してください'}</option>
+              <option value="">
+                {loading ? '店舗一覧を読み込み中…' : '選択してください'}
+              </option>
               <option value="__admin__">＊ 管理者</option>
               {entries.map(([key, store]) => (
                 <option key={key} value={key}>
@@ -83,6 +84,11 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
                 </option>
               ))}
             </select>
+            {loadError && !loading ? (
+              <p className="text-[11px] text-warn mt-1">
+                店舗一覧を取得できませんでした。管理者ログインで店舗を登録してください。
+              </p>
+            ) : null}
           </div>
 
           <div>

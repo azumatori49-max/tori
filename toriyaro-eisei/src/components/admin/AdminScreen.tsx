@@ -13,7 +13,7 @@ interface Props {
 
 export const AdminScreen = ({ onLogout }: Props) => {
   const [tab, setTab] = useState<AdminTab>('dashboard');
-  const { stores, loading } = useStores();
+  const { stores, loading, error } = useStores();
   const today = new Date();
 
   return (
@@ -36,6 +36,17 @@ export const AdminScreen = ({ onLogout }: Props) => {
       <main className="flex-1 overflow-y-auto">
         {loading ? (
           <p className="text-center text-text-muted text-sm py-10">読み込み中…</p>
+        ) : error ? (
+          <div className="m-4 p-4 rounded-xl bg-ng-bg text-ng text-sm">
+            <p className="font-bold mb-1">店舗データの取得に失敗しました</p>
+            <p className="text-xs leading-relaxed">
+              Firebase Realtime Database のルールで読み取りが拒否されています。
+              Firebase Console → Realtime Database → ルール で
+              <code className="font-mono mx-1">{'{".read":true,".write":true}'}</code>
+              を公開してから再読み込みしてください。
+            </p>
+            <p className="text-[11px] mt-2 opacity-75 font-mono">{error.message}</p>
+          </div>
         ) : tab === 'dashboard' ? (
           <DashboardTab stores={stores} />
         ) : (

@@ -17,13 +17,22 @@ const generateStoreKey = (): StoreKey => {
 export const useStores = () => {
   const [stores, setStores] = useState<StoresMap>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onValue(ref(db, STORES_PATH), (snapshot) => {
-      const value = (snapshot.val() as StoresMap | null) ?? {};
-      setStores(value);
-      setLoading(false);
-    });
+    const unsubscribe = onValue(
+      ref(db, STORES_PATH),
+      (snapshot) => {
+        const value = (snapshot.val() as StoresMap | null) ?? {};
+        setStores(value);
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        setError(err);
+        setLoading(false);
+      },
+    );
     return () => unsubscribe();
   }, []);
 
@@ -60,6 +69,7 @@ export const useStores = () => {
   return {
     stores,
     loading,
+    error,
     seedInitialStores,
     addStore,
     addStoresBulk,

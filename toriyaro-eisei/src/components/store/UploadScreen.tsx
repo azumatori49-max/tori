@@ -3,7 +3,7 @@ import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
 import { getDateKey, getWeekKey, formatDateJa, weekKeyToMonday, formatWeekRangeJa } from '../../lib/dateUtils';
-import { submitReport } from '../../hooks/useSubmissions';
+import { submitReport, type UploadProgress } from '../../hooks/useSubmissions';
 import type { ReportType, StoreKey } from '../../types';
 
 interface Props {
@@ -30,7 +30,7 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
   const meta = META[type];
   const [files, setFiles] = useState<Array<File | null>>(() => Array(REQUIRED).fill(null));
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState({ uploaded: 0, total: 0 });
+  const [progress, setProgress] = useState<UploadProgress>({ uploaded: 0, total: 0, retrying: 0 });
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,7 +56,7 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
     if (!allFilled || submitting) return;
     setError('');
     setSubmitting(true);
-    setProgress({ uploaded: 0, total: REQUIRED });
+    setProgress({ uploaded: 0, total: REQUIRED, retrying: 0 });
     try {
       await submitReport({
         storeKey,
@@ -64,7 +64,7 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
         type,
         periodKey,
         files: files.filter((f): f is File => !!f),
-        onProgress: (uploaded, total) => setProgress({ uploaded, total }),
+        onProgress: (p) => setProgress(p),
       });
       setSuccess(true);
       setTimeout(() => {
@@ -141,7 +141,9 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
           className="btn-primary py-4 text-base"
         >
           {submitting
-            ? `アップロード中… (${progress.uploaded}/${progress.total})`
+            ? `アップロード中… ${progress.uploaded}/${progress.total}${
+                progress.retrying > 0 ? ` (再試行 ${progress.retrying})` : ''
+              }`
             : allFilled
               ? '7枚を提出する'
               : `あと ${REQUIRED - filledCount} 枚`}

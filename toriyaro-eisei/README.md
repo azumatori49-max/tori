@@ -78,7 +78,33 @@ firebase deploy --only hosting
 - **管理者ダッシュボード**: 全店舗分の提出データを `Promise.all` で並列取得。
 - **日付キー**: デイリーは `YYYY-MM-DD`、ウィークリーは `WYYYY-MM-DD`（月曜日の日付）。
 
-## セキュリティルール（参考）
+## セキュリティルール
 
-`docs/firebase-rules/` 配下に Realtime Database / Storage のルール例があります。
-本番では Firebase Auth と組み合わせてさらに強化してください。
+`docs/firebase-rules/` 配下に Realtime Database / Storage のルールを置いています。
+
+- `database.rules.json`: スキーマ検証付き。`stores`/`submissions` の各フィールドの型・長さ・必須項目をチェック。`count <= 14`、写真URLは `https://` 始まりに限定など。
+- `storage.rules`: 全許可（最低限）。本番では Firebase Auth と組み合わせて強化を推奨。
+
+Firebase Console で `database.rules.json` を貼り付けるか、`firebase deploy --only database` でデプロイしてください。
+
+## 本番運用時の注意
+
+### Firebase プラン
+**Blaze（従量課金）プラン必須** です。Spark（無料）プランでは Realtime Database の同時接続が **100まで** に制限されるため、店舗が同時にアクセスする場面で接続失敗が発生します。Blaze ならデフォルトで20万接続まで可能です。
+
+### 容量試算（70店舗運用）
+
+| 区分 | 計算 | 月間データ量 |
+|---|---|---|
+| デイリー | 70店 × 7枚 × 30日 | 約 3.7 GB |
+| ウィークリー | 70店 × 7枚 × 4回 | 約 0.5 GB |
+| 合計 | | **約 4.2 GB / 月** |
+
+※ 1枚 250KB 想定（1200px JPEG 80%圧縮後）。Storage 月額コストは数十円程度です。
+
+### スケーラビリティ対応（実装済み）
+
+- **写真アップロードは3並列＋自動リトライ3回**: モバイル回線で1枚失敗してもリトライ。全部やり直しになりません（`src/hooks/useSubmissions.ts`）。
+- **店舗一覧はワンショット取得＋localStorageキャッシュ**: 200端末同時アクセスでも余分な永続購読が走りません（`src/hooks/useStoresOnce.ts`）。管理画面で店舗を追加/削除するとキャッシュは自動無効化されます。
+- **画像はクライアント側で圧縮**: アップロード前に1200px / JPEG 80% に圧縮（`src/lib/imageUtils.ts`）。
+- **管理者ダッシュボードは並列フェッチ**: 全店舗の提出データを `Promise.all` で同時取得。

@@ -4,12 +4,12 @@ import { StoreTopScreen } from './components/store/StoreTopScreen';
 import { UploadScreen } from './components/store/UploadScreen';
 import { AdminScreen } from './components/admin/AdminScreen';
 import { useAuth } from './hooks/useAuth';
-import { useStores } from './hooks/useStores';
+import { useStoresOnce } from './hooks/useStoresOnce';
 import type { ReportType, Screen, StoreKey } from './types';
 
 export const App = () => {
   const { auth, loginAsStore, loginAsAdmin, logout } = useAuth();
-  const { stores, loading: storesLoading } = useStores();
+  const { stores, loading: storesLoading } = useStoresOnce();
   const [screen, setScreen] = useState<Screen>('login');
   const [reportType, setReportType] = useState<ReportType>('daily');
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ADMIN_PASSWORD } from '../../data/stores';
-import { sortedStoreEntries, useStores } from '../../hooks/useStores';
+import { sortedStoreEntries } from '../../hooks/useStores';
+import { useStoresOnce } from '../../hooks/useStoresOnce';
 import type { StoreKey } from '../../types';
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
 }
 
 export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
-  const { stores, loading } = useStores();
+  const { stores, loading } = useStoresOnce();
   const [storeKey, setStoreKey] = useState<string>('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

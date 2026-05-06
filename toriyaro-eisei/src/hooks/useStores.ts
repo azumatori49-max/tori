@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
 import type { Store, StoreKey } from '../types';
 import { INITIAL_STORES } from '../data/stores';
+import { invalidateStoresCache } from './useStoresOnce';
 
 type StoresMap = Record<StoreKey, Store>;
 
@@ -28,6 +29,7 @@ export const useStores = () => {
 
   const seedInitialStores = useCallback(async () => {
     await set(ref(db, STORES_PATH), INITIAL_STORES);
+    invalidateStoresCache();
   }, []);
 
   const addStore = useCallback(async (name: string, password: string) => {
@@ -35,6 +37,7 @@ export const useStores = () => {
     await update(ref(db), {
       [`${STORES_PATH}/${key}`]: { name, password },
     });
+    invalidateStoresCache();
     return key;
   }, []);
 
@@ -45,11 +48,13 @@ export const useStores = () => {
       updates[`${STORES_PATH}/${key}`] = { name: entry.name, password: entry.password };
     }
     await update(ref(db), updates);
+    invalidateStoresCache();
     return Object.keys(updates).length;
   }, []);
 
   const deleteStore = useCallback(async (key: StoreKey) => {
     await remove(ref(db, `${STORES_PATH}/${key}`));
+    invalidateStoresCache();
   }, []);
 
   return {

@@ -1,6 +1,46 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "stores": {
+      ".read": true,
+      ".write": true,
+      "$storeKey": {
+        ".validate": "newData.hasChildren(['name', 'password'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "password": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+        },
+        "$other": { ".validate": false }
+      }
+    },
+    "submissions": {
+      ".read": true,
+      "$storeKey": {
+        "$type": {
+          ".validate": "$type === 'daily' || $type === 'weekly'",
+          "$periodKey": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['count', 'submittedAt', 'photos', 'storeName'])",
+            "count": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 14"
+            },
+            "submittedAt": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "storeName": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "photos": {
+              ".validate": "newData.hasChildren()",
+              "$idx": {
+                ".validate": "newData.isString() && newData.val().length <= 2048 && newData.val().beginsWith('https://')"
+              }
+            },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
   }
 }

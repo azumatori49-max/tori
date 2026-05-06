@@ -56,27 +56,97 @@ export const fetchSubmissionsBulk = async (
   return Object.fromEntries(results);
 };
 
+const PARALLELISM = 3;
+const MAX_RETRIES = 3;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const uploadOne = async (
+  storeKey: StoreKey,
+  type: ReportType,
+  periodKey: string,
+  idx: number,
+  file: File,
+): Promise<string> => {
+  const blob = await compressImage(file).catch(() => file);
+  const path = `photos/${storeKey}/${type}/${periodKey}/${idx}_${Date.now()}.jpg`;
+  const sref = storageRef(storage, path);
+  await uploadBytes(sref, blob, { contentType: 'image/jpeg' });
+  return getDownloadURL(sref);
+};
+
+const uploadOneWithRetry = async (
+  storeKey: StoreKey,
+  type: ReportType,
+  periodKey: string,
+  idx: number,
+  file: File,
+  onAttempt?: (attempt: number) => void,
+): Promise<string> => {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    onAttempt?.(attempt);
+    try {
+      return await uploadOne(storeKey, type, periodKey, idx, file);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < MAX_RETRIES) {
+        await sleep(500 * 2 ** (attempt - 1));
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('upload failed');
+};
+
+export interface UploadProgress {
+  uploaded: number;
+  total: number;
+  retrying: number;
+}
+
 export const submitReport = async (params: {
   storeKey: StoreKey;
   storeName: string;
   type: ReportType;
   periodKey: string;
   files: File[];
-  onProgress?: (uploaded: number, total: number) => void;
+  onProgress?: (progress: UploadProgress) => void;
 }): Promise<Submission> => {
   const { storeKey, storeName, type, periodKey, files, onProgress } = params;
-  const urls: string[] = [];
   const total = files.length;
-  for (let i = 0; i < total; i += 1) {
-    const file = files[i];
-    const blob = await compressImage(file).catch(() => file);
-    const path = `photos/${storeKey}/${type}/${periodKey}/${i}_${Date.now()}.jpg`;
-    const sref = storageRef(storage, path);
-    await uploadBytes(sref, blob, { contentType: 'image/jpeg' });
-    const url = await getDownloadURL(sref);
-    urls.push(url);
-    onProgress?.(i + 1, total);
-  }
+  const urls: string[] = new Array(total);
+  let completed = 0;
+  let retrying = 0;
+
+  const queue = files.map((file, idx) => ({ file, idx }));
+  const emit = () => onProgress?.({ uploaded: completed, total, retrying });
+
+  const worker = async () => {
+    while (queue.length > 0) {
+      const job = queue.shift();
+      if (!job) break;
+      const url = await uploadOneWithRetry(
+        storeKey,
+        type,
+        periodKey,
+        job.idx,
+        job.file,
+        (attempt) => {
+          if (attempt > 1) {
+            retrying += 1;
+            emit();
+          }
+        },
+      );
+      urls[job.idx] = url;
+      completed += 1;
+      emit();
+    }
+  };
+
+  emit();
+  await Promise.all(Array.from({ length: Math.min(PARALLELISM, total) }, worker));
+
   const submission: Submission = {
     count: urls.length,
     submittedAt: new Date().toISOString(),

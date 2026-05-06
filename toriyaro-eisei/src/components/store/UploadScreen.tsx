@@ -73,7 +73,15 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
       }, 1400);
     } catch (e) {
       console.error(e);
-      setError('提出に失敗しました。通信状況を確認して再試行してください。');
+      const msg =
+        e instanceof Error && /storage\/unauthorized|permission/i.test(e.message)
+          ? '権限エラーで提出できません。Firebase Storage のルールを公開設定にしてください。'
+          : e instanceof Error && /network|offline|fetch/i.test(e.message)
+            ? '通信エラーで提出できませんでした。電波の良い場所で再試行してください。'
+            : e instanceof Error
+              ? `提出に失敗しました：${e.message}`
+              : '提出に失敗しました。再試行してください。';
+      setError(msg);
     } finally {
       setSubmitting(false);
     }

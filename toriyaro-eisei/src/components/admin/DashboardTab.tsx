@@ -136,7 +136,7 @@ export const DashboardTab = ({ stores }: Props) => {
           ←
         </button>
         <div className="flex flex-col items-center text-center min-w-0">
-          <span className="font-display font-extrabold text-sm truncate">{cursorLabel}</span>
+          <span className="font-sans font-bold text-base truncate">{cursorLabel}</span>
           {isToday ? (
             <span className="text-[10px] text-accent font-mono tracking-wider">TODAY</span>
           ) : (
@@ -235,7 +235,9 @@ const SummaryCard = ({
   return (
     <div className={`${t.bg} rounded-xl p-3 flex flex-col items-start`}>
       <span className="text-[10px] font-mono tracking-widest text-text-muted">{label}</span>
-      <span className={`font-display text-2xl font-extrabold ${t.fg} tabular-nums`}>{value}</span>
+      <span className={`font-sans text-3xl font-black leading-none mt-1 ${t.fg} tabular-nums`}>
+        {value}
+      </span>
     </div>
   );
 };

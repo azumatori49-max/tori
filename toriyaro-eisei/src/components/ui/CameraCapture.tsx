@@ -59,7 +59,7 @@ export const CameraCapture = ({ open, onClose, onCapture, title = '写真撮影'
       let msg: string;
       if (e instanceof DOMException && e.name === 'NotAllowedError') {
         msg = inApp
-          ? `${inApp} のアプリ内ブラウザではカメラを使えません。\n右上のメニューから「Chrome で開く」または「ブラウザで開く」を選んでください。`
+          ? `${inApp} のアプリ内ブラウザではカメラを使えません。\n右上のメニューから「Google で開く」または「ブラウザで開く」を選んでください。`
           : 'カメラの使用が許可されていません。\nアドレスバーの鍵マーク → 権限 → カメラ → 許可\nに変更してから再読み込みしてください。';
       } else if (e instanceof DOMException && e.name === 'NotFoundError') {
         msg = '使用可能なカメラが見つかりませんでした。';

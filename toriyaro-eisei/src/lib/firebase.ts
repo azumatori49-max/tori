@@ -5,7 +5,8 @@ import { getStorage } from 'firebase/storage';
 const firebaseConfig = {
   apiKey: 'AIzaSyAb88OQsOQupIatDR8TlDPeTACymyPYKRQ',
   authDomain: 'toriyaro-eisei-faf2e.firebaseapp.com',
-  databaseURL: 'https://toriyaro-eisei-faf2e-default-rtdb.firebaseio.com',
+  databaseURL:
+    'https://toriyaro-eisei-faf2e-default-rtdb.asia-southeast1.firebasedatabase.app',
   projectId: 'toriyaro-eisei-faf2e',
   storageBucket: 'toriyaro-eisei-faf2e.firebasestorage.app',
   messagingSenderId: '120041502005',

@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    font-feature-settings: 'palt';
+  }
+  button {
+    @apply select-none;
+  }
+  /* iOS safe area */
+  #root {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply mx-auto w-full max-w-app min-h-full bg-bg;
+  }
+  .card {
+    @apply bg-surface border border-border rounded-2xl;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-accent text-white font-bold tracking-wide transition active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-surface2 text-text font-medium hover:bg-border transition active:scale-[0.98];
+  }
+  .input {
+    @apply w-full bg-surface2 border border-border rounded-xl px-4 py-3 text-base text-text outline-none focus:border-accent transition;
+  }
+  .label {
+    @apply block text-xs font-bold text-text-muted uppercase tracking-wider mb-2;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold;
+  }
+  .scroll-y {
+    @apply overflow-y-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Custom scrollbar (subtle) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}

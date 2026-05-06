@@ -54,7 +54,11 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
             className="w-32 h-32 object-contain drop-shadow"
           />
           <h1 className="font-display text-2xl font-extrabold tracking-wide">鶏ヤロー 衛生管理</h1>
-          <p className="text-xs text-text-muted">毎日のクリーンを、写真でかんたん。</p>
+          <p className="text-xs text-text-muted leading-relaxed px-4">
+            店舗の衛生チェック写真をスマホで撮影・提出し、
+            <br />
+            本部が全店の提出状況をリアルタイム管理。
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-4 shadow-sm">

@@ -19,7 +19,7 @@ export const AdminScreen = ({ onLogout }: Props) => {
   return (
     <div className="app-shell min-h-screen flex flex-col">
       <AppHeader
-        title="管理者ダッシュボード"
+        title="鶏ヤロー・まる助 管理"
         subtitle={formatDateJa(today)}
         variant="accent"
         trailing={

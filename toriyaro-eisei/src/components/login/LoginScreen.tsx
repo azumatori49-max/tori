@@ -47,12 +47,28 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
   return (
     <div className="app-shell min-h-screen flex flex-col">
       <div className="flex-1 px-6 pt-16 pb-8 flex flex-col">
-        <div className="flex flex-col items-center text-center gap-3 mb-10">
-          <div className="w-20 h-20 rounded-3xl bg-accent text-white flex items-center justify-center text-4xl shadow-lg">
-            🐔
+        <div className="flex flex-col items-center text-center gap-4 mb-10">
+          <div className="flex items-center justify-center gap-3">
+            <img
+              src="/logos/toriyaro.png"
+              alt="居酒屋それゆけ！鶏ヤロー！"
+              className="h-16 w-auto object-contain"
+            />
+            <img src="/logos/tori.png" alt="鶏" className="h-16 w-auto object-contain" />
+            <img
+              src="/logos/marusuke.png"
+              alt="秩父ホルモン酒場まる助"
+              className="h-16 w-auto object-contain"
+            />
           </div>
-          <h1 className="font-display text-2xl font-extrabold tracking-wide">鶏ヤロー 衛生管理</h1>
-          <p className="text-xs text-text-muted">毎日のクリーンを、写真でかんたん。</p>
+          <div>
+            <h1 className="font-display text-xl font-extrabold tracking-wide leading-tight">
+              鶏ヤロー・まる助
+              <br />
+              衛生管理
+            </h1>
+            <p className="text-xs text-text-muted mt-2">毎日のクリーンを、写真でかんたん。</p>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-4 shadow-sm">
@@ -111,7 +127,7 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
       </div>
 
       <footer className="py-4 text-center text-[10px] text-text-muted tracking-wider font-mono">
-        TORIYARO HYGIENE © 2026
+        TORIYARO × MARUSUKE HYGIENE © 2026
       </footer>
     </div>
   );

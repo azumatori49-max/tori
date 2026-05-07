@@ -37,7 +37,25 @@ interface SlotState {
   url: string | null;
   status: SlotStatus;
   pendingFile: File | null;
+  errorMessage?: string;
 }
+
+const explainError = (e: unknown): string => {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (/admin-restricted-operation|operation-not-allowed/i.test(raw)) {
+    return '匿名認証が有効化されていません。Firebase Console → Authentication → ログイン方法 で「匿名」を有効化してください。';
+  }
+  if (/storage\/unauthorized|permission|denied/i.test(raw)) {
+    return 'Storage ルールで拒否されました。Firebase Console → Storage → ルール で auth != null 設定を公開してください。';
+  }
+  if (/network|offline|fetch|timeout/i.test(raw)) {
+    return '通信エラーで送信できませんでした。電波の良い場所で再試行してください。';
+  }
+  if (/quota|limit/i.test(raw)) {
+    return '容量上限に達しました。管理者に連絡してください。';
+  }
+  return raw || '原因不明のエラーで送信できませんでした。';
+};
 
 const buildEmpty = (type: ReportType): SlotState[] =>
   Array.from({ length: slotCountFor(type) }, () => ({
@@ -121,9 +139,12 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
       });
     } catch (e) {
       console.error('upload failed:', e);
+      const msg = explainError(e);
       setSlots((prev) =>
         prev.map((s, i) =>
-          i === idx ? { ...s, status: 'failed' as SlotStatus, pendingFile: file } : s,
+          i === idx
+            ? { ...s, status: 'failed' as SlotStatus, pendingFile: file, errorMessage: msg }
+            : s,
         ),
       );
     }
@@ -199,8 +220,17 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
         )}
 
         {failed > 0 ? (
-          <div className="text-sm text-ng bg-ng-bg rounded-xl px-3 py-2 font-medium">
-            {failed}枚の送信に失敗しました。失敗マークが付いたスロットをタップして再試行してください。
+          <div className="text-sm text-ng bg-ng-bg rounded-xl px-3 py-2.5 font-medium space-y-1.5">
+            <p className="font-bold">{failed}枚の送信に失敗しました</p>
+            {(() => {
+              const reason = slots.find((s) => s.status === 'failed')?.errorMessage;
+              return reason ? (
+                <p className="text-xs leading-relaxed font-normal">{reason}</p>
+              ) : null;
+            })()}
+            <p className="text-xs leading-relaxed font-normal opacity-90">
+              対処後、失敗マークが付いたスロットをタップして再試行してください。
+            </p>
           </div>
         ) : null}
 

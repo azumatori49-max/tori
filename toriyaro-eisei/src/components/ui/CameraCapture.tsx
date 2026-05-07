@@ -146,7 +146,7 @@ export const CameraCapture = ({ open, onClose, onCapture, title = '写真撮影'
         >
           キャンセル
         </button>
-        <span className="font-display text-sm font-bold tracking-wide">{title}</span>
+        <span className="font-sans text-base font-bold tracking-wide tabular-nums">{title}</span>
         <span className="w-[68px]" aria-hidden />
       </header>
 

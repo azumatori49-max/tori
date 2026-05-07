@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ADMIN_PASSWORD } from '../../data/stores';
+import {
+  clearRememberedLogin,
+  readRememberedLogin,
+  writeRememberedLogin,
+} from '../../hooks/useRememberedLogin';
 import { sortedStoreEntries } from '../../hooks/useStores';
 import { useStoresOnce } from '../../hooks/useStoresOnce';
 import type { StoreKey } from '../../types';
@@ -14,9 +19,26 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
   const { stores, loading, error: loadError } = useStoresOnce();
   const [storeKey, setStoreKey] = useState<string>('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
 
   const entries = useMemo(() => sortedStoreEntries(stores), [stores]);
+
+  useEffect(() => {
+    const remembered = readRememberedLogin();
+    if (remembered) {
+      setStoreKey(remembered.storeKey);
+      setPassword(remembered.password);
+    }
+  }, []);
+
+  const persistOnSuccess = () => {
+    if (remember) {
+      writeRememberedLogin({ storeKey, password });
+    } else {
+      clearRememberedLogin();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +49,7 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
     }
     if (storeKey === '__admin__') {
       if (password === ADMIN_PASSWORD) {
+        persistOnSuccess();
         onAdminLogin();
       } else {
         setError('管理者パスワードが違います');
@@ -42,8 +65,17 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
       setError('パスワードが違います');
       return;
     }
+    persistOnSuccess();
     onStoreLogin(storeKey);
   };
+
+  const handleClearRemembered = () => {
+    clearRememberedLogin();
+    setStoreKey('');
+    setPassword('');
+  };
+
+  const hasRemembered = !!readRememberedLogin();
 
   return (
     <div className="app-shell min-h-screen flex flex-col">
@@ -95,6 +127,18 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
             />
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="w-4 h-4 rounded border-border accent-accent"
+            />
+            <span className="text-xs text-text">
+              次回からログイン情報を保存する
+            </span>
+          </label>
+
           {error ? (
             <div className="text-sm text-ng bg-ng-bg rounded-xl px-3 py-2 font-medium">
               {error}
@@ -104,6 +148,16 @@ export const LoginScreen = ({ onStoreLogin, onAdminLogin }: Props) => {
           <button type="submit" className="btn-primary mt-1">
             ログイン
           </button>
+
+          {hasRemembered ? (
+            <button
+              type="button"
+              onClick={handleClearRemembered}
+              className="text-[11px] text-text-muted underline mx-auto"
+            >
+              保存されたログイン情報を消去
+            </button>
+          ) : null}
         </form>
 
         {entries.length === 0 && !loading ? (

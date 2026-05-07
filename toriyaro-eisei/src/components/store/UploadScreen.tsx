@@ -1,10 +1,18 @@
-import { useMemo, useState } from 'react';
+import { get, ref } from 'firebase/database';
+import { useEffect, useMemo, useState } from 'react';
+import { authReady, db } from '../../lib/firebase';
+import {
+  formatDateJa,
+  formatWeekRangeJa,
+  getDateKey,
+  getWeekKey,
+  weekKeyToMonday,
+} from '../../lib/dateUtils';
+import { uploadSinglePhoto } from '../../hooks/useSubmissions';
+import type { ReportType, StoreKey, Submission } from '../../types';
 import { AppHeader } from '../layout/AppHeader';
-import { PhotoSlot } from '../ui/PhotoSlot';
+import { PhotoSlot, type SlotStatus } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
-import { getDateKey, getWeekKey, formatDateJa, weekKeyToMonday, formatWeekRangeJa } from '../../lib/dateUtils';
-import { submitReport, type UploadProgress } from '../../hooks/useSubmissions';
-import type { ReportType, StoreKey } from '../../types';
 
 interface Props {
   storeKey: StoreKey;
@@ -18,21 +26,28 @@ const REQUIRED = 7;
 const META: Record<ReportType, { title: string; description: string }> = {
   daily: {
     title: 'デイリー衛生チェック',
-    description: '所定の7箇所を撮影し、まとめて提出してください。',
+    description: '所定の7箇所を撮影してください。撮影した写真は自動で順次保存されます。',
   },
   weekly: {
     title: 'ウィークリー衛生チェック',
-    description: '週次の7箇所を撮影し、まとめて提出してください。',
+    description: '週次の7箇所を撮影してください。撮影した写真は自動で順次保存されます。',
   },
 };
 
+interface SlotState {
+  url: string | null;
+  status: SlotStatus;
+  pendingFile: File | null;
+}
+
+const emptySlots = (): SlotState[] =>
+  Array.from({ length: REQUIRED }, () => ({ url: null, status: 'empty', pendingFile: null }));
+
 export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
   const meta = META[type];
-  const [files, setFiles] = useState<Array<File | null>>(() => Array(REQUIRED).fill(null));
-  const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState<UploadProgress>({ uploaded: 0, total: 0, retrying: 0 });
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [slots, setSlots] = useState<SlotState[]>(emptySlots);
+  const [hydrating, setHydrating] = useState(true);
+  const [completedShown, setCompletedShown] = useState(false);
 
   const periodKey = useMemo(
     () => (type === 'daily' ? getDateKey() : getWeekKey()),
@@ -41,51 +56,83 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
   const today = useMemo(() => new Date(), []);
   const monday = useMemo(() => weekKeyToMonday(getWeekKey()), []);
 
-  const filledCount = files.filter(Boolean).length;
-  const allFilled = filledCount === REQUIRED;
+  // On mount: hydrate slots from any photos already submitted for this period.
+  useEffect(() => {
+    let cancelled = false;
+    setHydrating(true);
+    authReady
+      .then(() => get(ref(db, `submissions/${storeKey}/${type}/${periodKey}`)))
+      .then((snap) => {
+        if (cancelled) return;
+        const existing = snap.val() as Submission | null;
+        if (existing?.photos?.length) {
+          setSlots(
+            Array.from({ length: REQUIRED }, (_, i) => ({
+              url: existing.photos[i] ?? null,
+              status: existing.photos[i] ? 'uploaded' : 'empty',
+              pendingFile: null,
+            })),
+          );
+        }
+      })
+      .catch((err) => console.error('hydrate failed:', err))
+      .finally(() => {
+        if (!cancelled) setHydrating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeKey, type, periodKey]);
 
-  const handleCapture = (index: number, file: File) => {
-    setFiles((prev) => {
-      const next = [...prev];
-      next[index] = file;
-      return next;
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!allFilled || submitting) return;
-    setError('');
-    setSubmitting(true);
-    setProgress({ uploaded: 0, total: REQUIRED, retrying: 0 });
+  const uploadAt = async (idx: number, file: File) => {
+    setSlots((prev) =>
+      prev.map((s, i) =>
+        i === idx ? { ...s, status: 'uploading', pendingFile: file } : s,
+      ),
+    );
     try {
-      await submitReport({
+      const { url } = await uploadSinglePhoto({
         storeKey,
         storeName,
         type,
         periodKey,
-        files: files.filter((f): f is File => !!f),
-        onProgress: (p) => setProgress(p),
+        idx,
+        file,
       });
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        onBack();
-      }, 1400);
+      setSlots((prev) => {
+        const next = prev.map((s, i) =>
+          i === idx ? { url, status: 'uploaded' as SlotStatus, pendingFile: null } : s,
+        );
+        const finished = next.every((s) => s.status === 'uploaded');
+        if (finished && !completedShown) {
+          setCompletedShown(true);
+          setTimeout(() => setCompletedShown(false), 2000);
+        }
+        return next;
+      });
     } catch (e) {
-      console.error(e);
-      const msg =
-        e instanceof Error && /storage\/unauthorized|permission/i.test(e.message)
-          ? '権限エラーで提出できません。Firebase Storage のルールを公開設定にしてください。'
-          : e instanceof Error && /network|offline|fetch/i.test(e.message)
-            ? '通信エラーで提出できませんでした。電波の良い場所で再試行してください。'
-            : e instanceof Error
-              ? `提出に失敗しました：${e.message}`
-              : '提出に失敗しました。再試行してください。';
-      setError(msg);
-    } finally {
-      setSubmitting(false);
+      console.error('upload failed:', e);
+      setSlots((prev) =>
+        prev.map((s, i) =>
+          i === idx ? { ...s, status: 'failed' as SlotStatus, pendingFile: file } : s,
+        ),
+      );
     }
   };
+
+  const handleCapture = (idx: number) => (file: File) => {
+    void uploadAt(idx, file);
+  };
+
+  const handleRetry = (idx: number) => () => {
+    const file = slots[idx].pendingFile;
+    if (file) void uploadAt(idx, file);
+  };
+
+  const uploadedCount = slots.filter((s) => s.status === 'uploaded').length;
+  const inflight = slots.filter((s) => s.status === 'uploading').length;
+  const failed = slots.filter((s) => s.status === 'failed').length;
+  const allDone = uploadedCount === REQUIRED;
 
   return (
     <div className="app-shell min-h-screen flex flex-col">
@@ -111,54 +158,66 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
       <main className="flex-1 px-4 py-5 flex flex-col gap-5">
         <div className="card p-4">
           <h2 className="font-display text-base font-extrabold">{storeName}</h2>
-          <p className="text-xs text-text-muted mt-1">{meta.description}</p>
+          <p className="text-xs text-text-muted mt-1 leading-relaxed">{meta.description}</p>
           <div className="flex items-center justify-between mt-4">
-            <span className="label !mb-0">選択枚数</span>
+            <span className="label !mb-0">アップロード済み</span>
             <span className="font-mono text-base font-bold tabular-nums">
-              {filledCount}<span className="text-text-muted"> / {REQUIRED}</span>
+              {uploadedCount}<span className="text-text-muted"> / {REQUIRED}</span>
             </span>
           </div>
           <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mt-2">
             <div
               className={`h-full ${type === 'daily' ? 'bg-accent' : 'bg-blue-500'} transition-all`}
-              style={{ width: `${(filledCount / REQUIRED) * 100}%` }}
+              style={{ width: `${(uploadedCount / REQUIRED) * 100}%` }}
             />
           </div>
+          <p className="text-[11px] text-text-muted mt-3 leading-relaxed">
+            撮影した写真はその場で送信されます。途中で画面を閉じても、続きから再開できます。
+          </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {files.map((file, idx) => (
-            <PhotoSlot
-              key={idx}
-              index={idx}
-              file={file}
-              onCapture={(f) => handleCapture(idx, f)}
-              disabled={submitting}
-            />
-          ))}
-        </div>
+        {hydrating ? (
+          <p className="text-center text-text-muted text-sm py-4">読み込み中…</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {slots.map((slot, idx) => (
+              <PhotoSlot
+                key={idx}
+                index={idx}
+                imageUrl={slot.url}
+                status={slot.status}
+                onCapture={handleCapture(idx)}
+                onRetry={slot.status === 'failed' ? handleRetry(idx) : undefined}
+              />
+            ))}
+          </div>
+        )}
 
-        {error ? (
-          <div className="text-sm text-ng bg-ng-bg rounded-xl px-3 py-2 font-medium">{error}</div>
+        {failed > 0 ? (
+          <div className="text-sm text-ng bg-ng-bg rounded-xl px-3 py-2 font-medium">
+            {failed}枚の送信に失敗しました。失敗マークが付いたスロットをタップして再試行してください。
+          </div>
         ) : null}
 
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={!allFilled || submitting}
-          className="btn-primary py-4 text-base"
-        >
-          {submitting
-            ? `アップロード中… ${progress.uploaded}/${progress.total}${
-                progress.retrying > 0 ? ` (再試行 ${progress.retrying})` : ''
-              }`
-            : allFilled
-              ? '7枚を提出する'
-              : `あと ${REQUIRED - filledCount} 枚`}
-        </button>
+        <div className="flex items-center justify-between gap-3 mt-1">
+          <span className="text-xs text-text-muted">
+            {inflight > 0
+              ? `送信中… ${inflight}枚`
+              : allDone
+                ? '全7枚の送信が完了しました'
+                : `あと ${REQUIRED - uploadedCount} 枚`}
+          </span>
+          <button
+            type="button"
+            onClick={onBack}
+            className={allDone ? 'btn-primary px-5 py-2.5 text-sm' : 'btn-ghost px-5 py-2.5 text-sm'}
+          >
+            {allDone ? '完了して戻る' : '途中で戻る'}
+          </button>
+        </div>
       </main>
 
-      <SuccessOverlay visible={success} subtitle="ご協力ありがとうございました" />
+      <SuccessOverlay visible={completedShown} subtitle="全7枚を送信しました" />
     </div>
   );
 };

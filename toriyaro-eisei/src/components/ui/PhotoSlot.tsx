@@ -1,81 +1,143 @@
 import { useEffect, useState } from 'react';
 import { CameraCapture } from './CameraCapture';
 
+export type SlotStatus = 'empty' | 'uploading' | 'uploaded' | 'failed';
+
 interface Props {
   index: number;
-  file: File | null;
+  imageUrl: string | null;
+  status: SlotStatus;
   onCapture: (file: File) => void;
+  onRetry?: () => void;
   disabled?: boolean;
 }
 
-export const PhotoSlot = ({ index, file, onCapture, disabled }: Props) => {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+export const PhotoSlot = ({ index, imageUrl, status, onCapture, onRetry, disabled }: Props) => {
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [localUrl, setLocalUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
+    if (!localFile) {
+      setLocalUrl(null);
       return;
     }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    const url = URL.createObjectURL(localFile);
+    setLocalUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [file]);
+  }, [localFile]);
+
+  // When the parent confirms the upload (status flips to 'uploaded' with a
+  // URL), drop the local preview so we render the canonical Storage image.
+  useEffect(() => {
+    if (status === 'uploaded' && imageUrl) {
+      setLocalFile(null);
+    }
+  }, [status, imageUrl]);
+
+  const previewUrl = imageUrl ?? localUrl;
 
   const handleClick = () => {
     if (disabled) return;
     setCameraOpen(true);
   };
 
-  const handleCapture = (f: File) => {
+  const handleCaptured = (f: File) => {
+    setLocalFile(f);
     onCapture(f);
   };
+
+  const borderClass = previewUrl
+    ? status === 'failed'
+      ? 'border-ng shadow-sm'
+      : 'border-accent shadow-sm'
+    : 'border-dashed border-border bg-surface2 hover:border-accent/60';
 
   return (
     <>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={status === 'failed' && onRetry ? onRetry : handleClick}
         disabled={disabled}
-        className={`relative aspect-square w-full rounded-2xl overflow-hidden border-2 transition active:scale-[0.97] ${
-          previewUrl
-            ? 'border-accent shadow-sm'
-            : 'border-dashed border-border bg-surface2 hover:border-accent/60'
-        }`}
+        className={`relative aspect-square w-full rounded-2xl overflow-hidden border-2 transition active:scale-[0.97] ${borderClass}`}
         aria-label={`スロット ${index + 1}`}
       >
         {previewUrl ? (
-          <>
-            <img
-              src={previewUrl}
-              alt={`撮影 ${index + 1}`}
-              className="w-full h-full object-cover"
-            />
-            <span className="absolute top-2 left-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-accent text-white text-xs font-bold shadow">
-              {index + 1}
-            </span>
-            <span className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-black/60 text-white text-[11px] font-bold tracking-wider">
-              再撮影
-            </span>
-          </>
+          <img
+            src={previewUrl}
+            alt={`撮影 ${index + 1}`}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-text-muted">
-            <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-8 h-8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M3 9.5a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z" />
               <circle cx="12" cy="13.5" r="3.6" />
             </svg>
             <span className="text-[11px] font-bold tracking-wider">タップして撮影</span>
-            <span className="absolute top-2 left-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-border text-text-muted text-xs font-bold">
-              {index + 1}
-            </span>
           </div>
         )}
+
+        {/* Slot number badge */}
+        <span
+          className={`absolute top-2 left-2 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shadow ${
+            previewUrl ? 'bg-accent text-white' : 'bg-border text-text-muted'
+          }`}
+        >
+          {index + 1}
+        </span>
+
+        {/* Status overlay */}
+        {status === 'uploading' ? (
+          <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 text-text text-[11px] font-bold">
+              <span className="w-3 h-3 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+              送信中
+            </span>
+          </span>
+        ) : null}
+
+        {status === 'uploaded' ? (
+          <span className="absolute bottom-2 right-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-ok text-white shadow">
+            <svg
+              viewBox="0 0 24 24"
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="5 12.5 10 17.5 19 7.5" />
+            </svg>
+          </span>
+        ) : null}
+
+        {status === 'failed' ? (
+          <span className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-ng text-white text-[11px] font-bold tracking-wider">
+            失敗・再試行
+          </span>
+        ) : null}
+
+        {status === 'uploaded' || status === 'failed' ? (
+          <span className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-black/60 text-white text-[11px] font-bold tracking-wider">
+            再撮影
+          </span>
+        ) : null}
       </button>
 
       <CameraCapture
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
-        onCapture={handleCapture}
+        onCapture={handleCaptured}
         title={`スロット ${index + 1} を撮影`}
       />
     </>

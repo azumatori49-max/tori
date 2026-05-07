@@ -109,6 +109,38 @@ export interface UploadProgress {
   retrying: number;
 }
 
+export const uploadSinglePhoto = async (params: {
+  storeKey: StoreKey;
+  storeName: string;
+  type: ReportType;
+  periodKey: string;
+  idx: number;
+  file: File;
+}): Promise<{ url: string; count: number }> => {
+  const { storeKey, storeName, type, periodKey, idx, file } = params;
+  await authReady;
+
+  const url = await uploadOneWithRetry(storeKey, type, periodKey, idx, file);
+
+  const path = `submissions/${storeKey}/${type}/${periodKey}`;
+  const snap = await get(ref(db, path));
+  const existing = (snap.val() as Submission | null) ?? null;
+  const photos = [...(existing?.photos ?? [])];
+  photos[idx] = url;
+  // Compact tail-only nulls (do not shift indices); rules accept the
+  // photos object so long as it has children.
+  const count = photos.filter(Boolean).length;
+
+  const next: Submission = {
+    count,
+    photos,
+    submittedAt: new Date().toISOString(),
+    storeName,
+  };
+  await dbSet(ref(db, path), next);
+  return { url, count };
+};
+
 export const submitReport = async (params: {
   storeKey: StoreKey;
   storeName: string;

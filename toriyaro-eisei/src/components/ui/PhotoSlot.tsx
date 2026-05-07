@@ -10,9 +10,18 @@ interface Props {
   onCapture: (file: File) => void;
   onRetry?: () => void;
   disabled?: boolean;
+  label?: string;
 }
 
-export const PhotoSlot = ({ index, imageUrl, status, onCapture, onRetry, disabled }: Props) => {
+export const PhotoSlot = ({
+  index,
+  imageUrl,
+  status,
+  onCapture,
+  onRetry,
+  disabled,
+  label,
+}: Props) => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [localUrl, setLocalUrl] = useState<string | null>(null);
@@ -54,13 +63,13 @@ export const PhotoSlot = ({ index, imageUrl, status, onCapture, onRetry, disable
     : 'border-dashed border-border bg-surface2 hover:border-accent/60';
 
   return (
-    <>
+    <div className="flex flex-col gap-1.5">
       <button
         type="button"
         onClick={status === 'failed' && onRetry ? onRetry : handleClick}
         disabled={disabled}
         className={`relative aspect-square w-full rounded-2xl overflow-hidden border-2 transition active:scale-[0.97] ${borderClass}`}
-        aria-label={`スロット ${index + 1}`}
+        aria-label={`スロット ${index + 1}${label ? ` ${label}` : ''}`}
       >
         {previewUrl ? (
           <img
@@ -134,12 +143,18 @@ export const PhotoSlot = ({ index, imageUrl, status, onCapture, onRetry, disable
         ) : null}
       </button>
 
+      {label ? (
+        <span className="text-[10px] leading-tight font-bold text-text text-center px-0.5 break-keep">
+          {label}
+        </span>
+      ) : null}
+
       <CameraCapture
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onCapture={handleCaptured}
-        title={`スロット ${index + 1} を撮影`}
+        title={label ? `${index + 1}. ${label}` : `スロット ${index + 1} を撮影`}
       />
-    </>
+    </div>
   );
 };

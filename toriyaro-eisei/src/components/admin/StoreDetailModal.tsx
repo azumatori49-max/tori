@@ -3,7 +3,8 @@ import { Lightbox } from '../ui/Lightbox';
 import { StatusChip, statusFromCount } from '../ui/StatusChip';
 import { formatTimestampJa, getWeekKeyFromDate, dateKeyToDate } from '../../lib/dateUtils';
 import { useSubmissionFor } from '../../hooks/useSubmissions';
-import type { StoreKey } from '../../types';
+import { slotLabelFor } from '../../data/slotLabels';
+import type { ReportType, StoreKey } from '../../types';
 
 interface Props {
   open: boolean;
@@ -16,28 +17,55 @@ interface Props {
 const PHOTO_GRID = 'grid grid-cols-4 gap-2';
 
 const PhotoGrid = ({
+  type,
   photos,
   onSelect,
 }: {
+  type: ReportType;
   photos: string[];
   onSelect: (url: string) => void;
-}) =>
-  photos.length === 0 ? (
-    <p className="text-xs text-text-muted py-4 text-center">写真はまだ提出されていません</p>
-  ) : (
+}) => {
+  // Always show 7 cells so missing photos are obvious.
+  const cells = Array.from({ length: Math.max(7, photos.length) });
+  if (cells.length === 0) {
+    return <p className="text-xs text-text-muted py-4 text-center">写真はまだ提出されていません</p>;
+  }
+  return (
     <div className={PHOTO_GRID}>
-      {photos.map((url, i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={() => onSelect(url)}
-          className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
-        >
-          <img src={url} alt={`写真 ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
-        </button>
-      ))}
+      {cells.map((_, i) => {
+        const url = photos[i];
+        const label = slotLabelFor(type, i);
+        return (
+          <div key={i} className="flex flex-col gap-1">
+            {url ? (
+              <button
+                type="button"
+                onClick={() => onSelect(url)}
+                className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
+              >
+                <img
+                  src={url}
+                  alt={label}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ) : (
+              <div className="aspect-square rounded-lg bg-surface2 border border-dashed border-border flex items-center justify-center text-text-muted text-[10px]">
+                未提出
+              </div>
+            )}
+            {label ? (
+              <span className="text-[9px] leading-tight font-bold text-text-muted text-center break-keep">
+                {label}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
+};
 
 export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }: Props) => {
   const weekKey = useMemo(
@@ -99,7 +127,7 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
                 <StatusChip status={statusFromCount(dailyCount, 7)} label={`${dailyCount}/7`} />
               )}
             </header>
-            <PhotoGrid photos={daily.submission?.photos ?? []} onSelect={setLightboxSrc} />
+            <PhotoGrid type="daily" photos={daily.submission?.photos ?? []} onSelect={setLightboxSrc} />
             {daily.submission?.submittedAt ? (
               <p className="text-[11px] text-text-muted mt-2">
                 提出: {formatTimestampJa(daily.submission.submittedAt)}
@@ -121,7 +149,7 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
                 <StatusChip status={statusFromCount(weeklyCount, 7)} label={`${weeklyCount}/7`} />
               )}
             </header>
-            <PhotoGrid photos={weekly.submission?.photos ?? []} onSelect={setLightboxSrc} />
+            <PhotoGrid type="weekly" photos={weekly.submission?.photos ?? []} onSelect={setLightboxSrc} />
             {weekly.submission?.submittedAt ? (
               <p className="text-[11px] text-text-muted mt-2">
                 提出: {formatTimestampJa(weekly.submission.submittedAt)}

@@ -9,6 +9,7 @@ import {
   weekKeyToMonday,
 } from '../../lib/dateUtils';
 import { uploadSinglePhoto } from '../../hooks/useSubmissions';
+import { slotLabelFor } from '../../data/slotLabels';
 import type { ReportType, StoreKey, Submission } from '../../types';
 import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot, type SlotStatus } from '../ui/PhotoSlot';
@@ -188,6 +189,7 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
                 status={slot.status}
                 onCapture={handleCapture(idx)}
                 onRetry={slot.status === 'failed' ? handleRetry(idx) : undefined}
+                label={slotLabelFor(type, idx)}
               />
             ))}
           </div>

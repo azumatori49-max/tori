@@ -53,15 +53,18 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
     }
   }, [allowBypass]);
 
-  const handleOpenChrome = useCallback(() => {
+  const handleOpenDefault = useCallback(() => {
     const url = window.location.href;
     if (isAndroid()) {
       const stripped = url.replace(/^https?:\/\//, '');
-      // Android intent — works from most in-app browsers including LINE.
-      const intentUrl = `intent://${stripped}#Intent;scheme=https;package=com.android.chrome;end`;
+      // No package= → routes to the user's default browser handler.
+      const intentUrl = `intent://${stripped}#Intent;scheme=https;action=android.intent.action.VIEW;end`;
       window.location.href = intentUrl;
     } else if (isIOS()) {
-      // iOS Chrome scheme.
+      // iOS provides no public API to open the system-default browser
+      // from inside another app's webview. Best effort: try Chrome's
+      // URL scheme; if Chrome isn't installed, the user falls back to
+      // the manual instructions below.
       const stripped = url.replace(/^https?:\/\//, '');
       window.location.href = `googlechrome://${stripped}`;
     }
@@ -114,12 +117,12 @@ export const InAppBrowserGuard = ({ allowBypass = true }: Props) => {
         </div>
 
         {isAndroid() ? (
-          <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
-            Google で開く
+          <button type="button" onClick={handleOpenDefault} className="btn-primary w-full mb-3">
+            規定ブラウザで開く
           </button>
         ) : null}
         {isIOS() ? (
-          <button type="button" onClick={handleOpenChrome} className="btn-primary w-full mb-3">
+          <button type="button" onClick={handleOpenDefault} className="btn-primary w-full mb-3">
             Google で開く<span className="text-[11px] font-normal opacity-80 ml-1">（Google アプリ利用時）</span>
           </button>
         ) : null}

@@ -109,25 +109,6 @@ export interface UploadProgress {
   retrying: number;
 }
 
-const buildSubmission = (
-  storeName: string,
-  photos: string[],
-  checks: Record<string, string> | undefined,
-): Submission => {
-  const photoCount = photos.filter(Boolean).length;
-  const checkCount = checks ? Object.keys(checks).length : 0;
-  const submission: Submission = {
-    count: photoCount + checkCount,
-    photos,
-    submittedAt: new Date().toISOString(),
-    storeName,
-  };
-  if (checks && Object.keys(checks).length > 0) {
-    submission.checks = checks;
-  }
-  return submission;
-};
-
 export const uploadSinglePhoto = async (params: {
   storeKey: StoreKey;
   storeName: string;
@@ -146,56 +127,16 @@ export const uploadSinglePhoto = async (params: {
   const existing = (snap.val() as Submission | null) ?? null;
   const photos = [...(existing?.photos ?? [])];
   photos[idx] = url;
+  const count = photos.filter(Boolean).length;
 
-  const next = buildSubmission(storeName, photos, existing?.checks);
+  const next: Submission = {
+    count,
+    photos,
+    submittedAt: new Date().toISOString(),
+    storeName,
+  };
   await dbSet(ref(db, path), next);
-  return { url, count: next.count };
-};
-
-export const confirmCheck = async (params: {
-  storeKey: StoreKey;
-  storeName: string;
-  type: ReportType;
-  periodKey: string;
-  idx: number;
-}): Promise<{ count: number; timestamp: string }> => {
-  const { storeKey, storeName, type, periodKey, idx } = params;
-  await authReady;
-
-  const path = `submissions/${storeKey}/${type}/${periodKey}`;
-  const snap = await get(ref(db, path));
-  const existing = (snap.val() as Submission | null) ?? null;
-  const checks = { ...(existing?.checks ?? {}) };
-  const timestamp = new Date().toISOString();
-  checks[String(idx)] = timestamp;
-
-  const photos = existing?.photos ?? [];
-  const next = buildSubmission(storeName, photos, checks);
-  await dbSet(ref(db, path), next);
-  return { count: next.count, timestamp };
-};
-
-export const undoCheck = async (params: {
-  storeKey: StoreKey;
-  storeName: string;
-  type: ReportType;
-  periodKey: string;
-  idx: number;
-}): Promise<{ count: number }> => {
-  const { storeKey, storeName, type, periodKey, idx } = params;
-  await authReady;
-
-  const path = `submissions/${storeKey}/${type}/${periodKey}`;
-  const snap = await get(ref(db, path));
-  const existing = (snap.val() as Submission | null) ?? null;
-  if (!existing) return { count: 0 };
-  const checks = { ...(existing.checks ?? {}) };
-  delete checks[String(idx)];
-
-  const photos = existing.photos ?? [];
-  const next = buildSubmission(storeName, photos, checks);
-  await dbSet(ref(db, path), next);
-  return { count: next.count };
+  return { url, count };
 };
 
 export const submitReport = async (params: {

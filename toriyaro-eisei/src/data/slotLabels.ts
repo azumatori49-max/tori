@@ -1,5 +1,7 @@
 import type { ReportType } from '../types';
 
+export type SlotInputMode = 'camera' | 'gallery';
+
 export const DAILY_SLOT_LABELS: readonly string[] = [
   'コーラサーバー洗浄',
   'ビールサーバー洗浄',
@@ -26,15 +28,12 @@ const LABELS: Record<ReportType, readonly string[]> = {
   weekly: WEEKLY_SLOT_LABELS,
 };
 
-const PHOTO_INDICES: Record<ReportType, readonly number[]> = {
-  daily: [0, 1, 2, 3, 4, 5, 6],
-  weekly: [7],
-};
-
 export const slotCountFor = (type: ReportType): number => LABELS[type].length;
 
 export const slotLabelFor = (type: ReportType, index: number): string =>
   LABELS[type][index] ?? `スロット ${index + 1}`;
 
-export const slotIsPhoto = (type: ReportType, index: number): boolean =>
-  PHOTO_INDICES[type].includes(index);
+export const slotInputMode = (type: ReportType, index: number): SlotInputMode => {
+  if (type === 'weekly' && index === 7) return 'gallery';
+  return 'camera';
+};

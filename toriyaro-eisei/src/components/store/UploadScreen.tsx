@@ -8,12 +8,11 @@ import {
   getWeekKey,
   weekKeyToMonday,
 } from '../../lib/dateUtils';
-import { confirmCheck, undoCheck, uploadSinglePhoto } from '../../hooks/useSubmissions';
-import { slotCountFor, slotIsPhoto, slotLabelFor } from '../../data/slotLabels';
+import { uploadSinglePhoto } from '../../hooks/useSubmissions';
+import { slotCountFor, slotInputMode, slotLabelFor } from '../../data/slotLabels';
 import type { ReportType, StoreKey, Submission } from '../../types';
 import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot, type SlotStatus } from '../ui/PhotoSlot';
-import { CheckSlot } from '../ui/CheckSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
 
 interface Props {
@@ -30,57 +29,37 @@ const META: Record<ReportType, { title: string; description: string }> = {
   },
   weekly: {
     title: 'ウィークリー衛生チェック',
-    description: '各項目を確認してタップ。防犯カメラのみ写真撮影が必要です。',
+    description: '7項目はカメラで撮影、防犯カメラのみ写真フォルダから選択して提出してください。',
   },
 };
 
-interface PhotoSlotState {
-  kind: 'photo';
+interface SlotState {
   url: string | null;
   status: SlotStatus;
   pendingFile: File | null;
 }
 
-interface CheckSlotState {
-  kind: 'check';
-  checkedAt: string | null;
-  busy: boolean;
-}
+const buildEmpty = (type: ReportType): SlotState[] =>
+  Array.from({ length: slotCountFor(type) }, () => ({
+    url: null,
+    status: 'empty',
+    pendingFile: null,
+  }));
 
-type SlotState = PhotoSlotState | CheckSlotState;
-
-const buildEmptySlots = (type: ReportType): SlotState[] => {
-  const total = slotCountFor(type);
-  return Array.from({ length: total }, (_, i): SlotState =>
-    slotIsPhoto(type, i)
-      ? { kind: 'photo', url: null, status: 'empty', pendingFile: null }
-      : { kind: 'check', checkedAt: null, busy: false },
-  );
-};
-
-const hydrateSlots = (type: ReportType, existing: Submission | null): SlotState[] => {
+const hydrate = (type: ReportType, existing: Submission | null): SlotState[] => {
   const total = slotCountFor(type);
   const photos = existing?.photos ?? [];
-  const checks = existing?.checks ?? {};
-  return Array.from({ length: total }, (_, i): SlotState => {
-    if (slotIsPhoto(type, i)) {
-      const url = photos[i] ?? null;
-      return {
-        kind: 'photo',
-        url,
-        status: url ? 'uploaded' : 'empty',
-        pendingFile: null,
-      };
-    }
-    const checkedAt = checks[String(i)] ?? null;
-    return { kind: 'check', checkedAt, busy: false };
-  });
+  return Array.from({ length: total }, (_, i) => ({
+    url: photos[i] ?? null,
+    status: photos[i] ? ('uploaded' as SlotStatus) : ('empty' as SlotStatus),
+    pendingFile: null,
+  }));
 };
 
 export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
   const meta = META[type];
   const total = slotCountFor(type);
-  const [slots, setSlots] = useState<SlotState[]>(() => buildEmptySlots(type));
+  const [slots, setSlots] = useState<SlotState[]>(() => buildEmpty(type));
   const [hydrating, setHydrating] = useState(true);
   const [completedShown, setCompletedShown] = useState(false);
 
@@ -94,13 +73,12 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
   useEffect(() => {
     let cancelled = false;
     setHydrating(true);
-    setSlots(buildEmptySlots(type));
+    setSlots(buildEmpty(type));
     authReady
       .then(() => get(ref(db, `submissions/${storeKey}/${type}/${periodKey}`)))
       .then((snap) => {
         if (cancelled) return;
-        const existing = snap.val() as Submission | null;
-        setSlots(hydrateSlots(type, existing));
+        setSlots(hydrate(type, snap.val() as Submission | null));
       })
       .catch((err) => console.error('hydrate failed:', err))
       .finally(() => {
@@ -111,28 +89,15 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
     };
   }, [storeKey, type, periodKey]);
 
-  const completedCount = slots.filter((s) =>
-    s.kind === 'photo' ? s.status === 'uploaded' : !!s.checkedAt,
-  ).length;
-  const inflight = slots.filter(
-    (s) => (s.kind === 'photo' && s.status === 'uploading') || (s.kind === 'check' && s.busy),
-  ).length;
-  const failed = slots.filter((s) => s.kind === 'photo' && s.status === 'failed').length;
-  const allDone = completedCount === total;
-
-  const maybeShowSuccess = () => {
-    if (!completedShown) {
-      setCompletedShown(true);
-      setTimeout(() => setCompletedShown(false), 2000);
-    }
-  };
+  const uploadedCount = slots.filter((s) => s.status === 'uploaded').length;
+  const inflight = slots.filter((s) => s.status === 'uploading').length;
+  const failed = slots.filter((s) => s.status === 'failed').length;
+  const allDone = uploadedCount === total;
 
   const uploadAt = async (idx: number, file: File) => {
     setSlots((prev) =>
       prev.map((s, i) =>
-        i === idx && s.kind === 'photo'
-          ? { ...s, status: 'uploading', pendingFile: file }
-          : s,
+        i === idx ? { ...s, status: 'uploading', pendingFile: file } : s,
       ),
     );
     try {
@@ -145,71 +110,20 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
         file,
       });
       setSlots((prev) => {
-        const next = prev.map((s, i): SlotState =>
-          i === idx && s.kind === 'photo'
-            ? { kind: 'photo', url, status: 'uploaded', pendingFile: null }
-            : s,
+        const next = prev.map((s, i) =>
+          i === idx ? { url, status: 'uploaded' as SlotStatus, pendingFile: null } : s,
         );
-        const done = next.every((s) =>
-          s.kind === 'photo' ? s.status === 'uploaded' : !!s.checkedAt,
-        );
-        if (done) maybeShowSuccess();
+        if (next.every((s) => s.status === 'uploaded') && !completedShown) {
+          setCompletedShown(true);
+          setTimeout(() => setCompletedShown(false), 2000);
+        }
         return next;
       });
     } catch (e) {
       console.error('upload failed:', e);
       setSlots((prev) =>
-        prev.map((s, i): SlotState =>
-          i === idx && s.kind === 'photo'
-            ? { ...s, status: 'failed', pendingFile: file }
-            : s,
-        ),
-      );
-    }
-  };
-
-  const toggleCheck = async (idx: number, next: boolean) => {
-    setSlots((prev) =>
-      prev.map((s, i) =>
-        i === idx && s.kind === 'check' ? { ...s, busy: true } : s,
-      ),
-    );
-    try {
-      if (next) {
-        const { timestamp } = await confirmCheck({
-          storeKey,
-          storeName,
-          type,
-          periodKey,
-          idx,
-        });
-        setSlots((prev) => {
-          const updated = prev.map((s, i): SlotState =>
-            i === idx && s.kind === 'check'
-              ? { kind: 'check', checkedAt: timestamp, busy: false }
-              : s,
-          );
-          const done = updated.every((s) =>
-            s.kind === 'photo' ? s.status === 'uploaded' : !!s.checkedAt,
-          );
-          if (done) maybeShowSuccess();
-          return updated;
-        });
-      } else {
-        await undoCheck({ storeKey, storeName, type, periodKey, idx });
-        setSlots((prev) =>
-          prev.map((s, i): SlotState =>
-            i === idx && s.kind === 'check'
-              ? { kind: 'check', checkedAt: null, busy: false }
-              : s,
-          ),
-        );
-      }
-    } catch (e) {
-      console.error('check toggle failed:', e);
-      setSlots((prev) =>
         prev.map((s, i) =>
-          i === idx && s.kind === 'check' ? { ...s, busy: false } : s,
+          i === idx ? { ...s, status: 'failed' as SlotStatus, pendingFile: file } : s,
         ),
       );
     }
@@ -219,12 +133,8 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
     void uploadAt(idx, file);
   };
   const handleRetry = (idx: number) => () => {
-    const slot = slots[idx];
-    if (slot.kind !== 'photo') return;
-    if (slot.pendingFile) void uploadAt(idx, slot.pendingFile);
-  };
-  const handleToggle = (idx: number) => (next: boolean) => {
-    void toggleCheck(idx, next);
+    const file = slots[idx].pendingFile;
+    if (file) void uploadAt(idx, file);
   };
 
   return (
@@ -253,19 +163,19 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
           <h2 className="font-display text-base font-extrabold">{storeName}</h2>
           <p className="text-xs text-text-muted mt-1 leading-relaxed">{meta.description}</p>
           <div className="flex items-center justify-between mt-4">
-            <span className="label !mb-0">完了</span>
+            <span className="label !mb-0">アップロード済み</span>
             <span className="font-mono text-base font-bold tabular-nums">
-              {completedCount}<span className="text-text-muted"> / {total}</span>
+              {uploadedCount}<span className="text-text-muted"> / {total}</span>
             </span>
           </div>
           <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mt-2">
             <div
               className={`h-full ${type === 'daily' ? 'bg-accent' : 'bg-blue-500'} transition-all`}
-              style={{ width: `${(completedCount / total) * 100}%` }}
+              style={{ width: `${(uploadedCount / total) * 100}%` }}
             />
           </div>
           <p className="text-[11px] text-text-muted mt-3 leading-relaxed">
-            撮影・確認はその場で送信されます。途中で画面を閉じても、続きから再開できます。
+            撮影した写真はその場で送信されます。途中で画面を閉じても、続きから再開できます。
           </p>
         </div>
 
@@ -273,32 +183,18 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
           <p className="text-center text-text-muted text-sm py-4">読み込み中…</p>
         ) : (
           <div className="grid grid-cols-3 gap-3">
-            {slots.map((slot, idx) => {
-              const label = slotLabelFor(type, idx);
-              if (slot.kind === 'photo') {
-                return (
-                  <PhotoSlot
-                    key={idx}
-                    index={idx}
-                    imageUrl={slot.url}
-                    status={slot.status}
-                    onCapture={handleCapture(idx)}
-                    onRetry={slot.status === 'failed' ? handleRetry(idx) : undefined}
-                    label={label}
-                  />
-                );
-              }
-              return (
-                <CheckSlot
-                  key={idx}
-                  index={idx}
-                  label={label}
-                  checkedAt={slot.checkedAt}
-                  busy={slot.busy}
-                  onToggle={handleToggle(idx)}
-                />
-              );
-            })}
+            {slots.map((slot, idx) => (
+              <PhotoSlot
+                key={idx}
+                index={idx}
+                imageUrl={slot.url}
+                status={slot.status}
+                onCapture={handleCapture(idx)}
+                onRetry={slot.status === 'failed' ? handleRetry(idx) : undefined}
+                label={slotLabelFor(type, idx)}
+                mode={slotInputMode(type, idx)}
+              />
+            ))}
           </div>
         )}
 
@@ -311,10 +207,10 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
         <div className="flex items-center justify-between gap-3 mt-1">
           <span className="text-xs text-text-muted">
             {inflight > 0
-              ? `処理中… ${inflight}件`
+              ? `送信中… ${inflight}枚`
               : allDone
-                ? `${total}項目すべて完了しました`
-                : `あと ${total - completedCount} 件`}
+                ? `全${total}枚の送信が完了しました`
+                : `あと ${total - uploadedCount} 枚`}
           </span>
           <button
             type="button"
@@ -326,7 +222,7 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack }: Props) => {
         </div>
       </main>
 
-      <SuccessOverlay visible={completedShown} subtitle={`${total}項目すべて完了しました`} />
+      <SuccessOverlay visible={completedShown} subtitle={`全${total}枚を送信しました`} />
     </div>
   );
 };

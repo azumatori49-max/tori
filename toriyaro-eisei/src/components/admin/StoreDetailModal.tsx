@@ -3,7 +3,7 @@ import { Lightbox } from '../ui/Lightbox';
 import { StatusChip, statusFromCount } from '../ui/StatusChip';
 import { formatTimestampJa, getWeekKeyFromDate, dateKeyToDate } from '../../lib/dateUtils';
 import { useSubmissionFor } from '../../hooks/useSubmissions';
-import { slotCountFor, slotIsPhoto, slotLabelFor } from '../../data/slotLabels';
+import { slotCountFor, slotLabelFor } from '../../data/slotLabels';
 import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
@@ -27,7 +27,6 @@ const SlotGrid = ({
 }) => {
   const total = slotCountFor(type);
   const photos = submission?.photos ?? [];
-  const checks = submission?.checks ?? {};
   if (!submission) {
     return <p className="text-xs text-text-muted py-4 text-center">提出はまだありません</p>;
   }
@@ -35,50 +34,30 @@ const SlotGrid = ({
     <div className={PHOTO_GRID}>
       {Array.from({ length: total }).map((_, i) => {
         const label = slotLabelFor(type, i);
-        const isPhoto = slotIsPhoto(type, i);
         const url = photos[i];
-        const checkedAt = checks[String(i)];
         return (
           <div key={i} className="flex flex-col gap-1">
-            {isPhoto ? (
-              url ? (
-                <button
-                  type="button"
-                  onClick={() => onSelect(url)}
-                  className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
-                >
-                  <img
-                    src={url}
-                    alt={label}
-                    loading="lazy"
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ) : (
-                <div className="aspect-square rounded-lg bg-surface2 border border-dashed border-border flex items-center justify-center text-text-muted text-[10px]">
-                  未提出
-                </div>
-              )
-            ) : checkedAt ? (
-              <div className="aspect-square rounded-lg bg-ok-bg border border-ok/30 flex flex-col items-center justify-center text-ok gap-0.5">
-                <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="5 12.5 10 17.5 19 7.5" />
-                </svg>
-                <span className="text-[9px] font-bold tracking-wider">確認済み</span>
-              </div>
+            {url ? (
+              <button
+                type="button"
+                onClick={() => onSelect(url)}
+                className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
+              >
+                <img
+                  src={url}
+                  alt={label}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              </button>
             ) : (
               <div className="aspect-square rounded-lg bg-surface2 border border-dashed border-border flex items-center justify-center text-text-muted text-[10px]">
-                未確認
+                未提出
               </div>
             )}
             <span className="text-[9px] leading-tight font-bold text-text-muted text-center break-keep">
               {label}
             </span>
-            {!isPhoto && checkedAt ? (
-              <span className="text-[8px] leading-tight text-text-muted text-center font-mono">
-                {formatTimestampJa(checkedAt)}
-              </span>
-            ) : null}
           </div>
         );
       })}

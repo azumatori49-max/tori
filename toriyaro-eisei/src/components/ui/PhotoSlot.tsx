@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CameraCapture } from './CameraCapture';
 
 export type SlotStatus = 'empty' | 'uploading' | 'uploaded' | 'failed';
@@ -11,6 +11,7 @@ interface Props {
   onRetry?: () => void;
   disabled?: boolean;
   label?: string;
+  mode?: 'camera' | 'gallery';
 }
 
 export const PhotoSlot = ({
@@ -21,10 +22,12 @@ export const PhotoSlot = ({
   onRetry,
   disabled,
   label,
+  mode = 'camera',
 }: Props) => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [localUrl, setLocalUrl] = useState<string | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!localFile) {
@@ -36,8 +39,6 @@ export const PhotoSlot = ({
     return () => URL.revokeObjectURL(url);
   }, [localFile]);
 
-  // When the parent confirms the upload (status flips to 'uploaded' with a
-  // URL), drop the local preview so we render the canonical Storage image.
   useEffect(() => {
     if (status === 'uploaded' && imageUrl) {
       setLocalFile(null);
@@ -46,14 +47,27 @@ export const PhotoSlot = ({
 
   const previewUrl = imageUrl ?? localUrl;
 
-  const handleClick = () => {
+  const openInput = () => {
     if (disabled) return;
-    setCameraOpen(true);
+    if (mode === 'gallery') {
+      galleryInputRef.current?.click();
+    } else {
+      setCameraOpen(true);
+    }
   };
 
-  const handleCaptured = (f: File) => {
+  const handleCameraCaptured = (f: File) => {
     setLocalFile(f);
     onCapture(f);
+  };
+
+  const handleGalleryPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (f) {
+      setLocalFile(f);
+      onCapture(f);
+    }
   };
 
   const borderClass = previewUrl
@@ -62,40 +76,53 @@ export const PhotoSlot = ({
       : 'border-accent shadow-sm'
     : 'border-dashed border-border bg-surface2 hover:border-accent/60';
 
+  const emptyHint = mode === 'gallery' ? 'フォルダから選択' : 'タップして撮影';
+
   return (
     <div className="flex flex-col gap-1.5">
       <button
         type="button"
-        onClick={status === 'failed' && onRetry ? onRetry : handleClick}
+        onClick={status === 'failed' && onRetry ? onRetry : openInput}
         disabled={disabled}
         className={`relative aspect-square w-full rounded-2xl overflow-hidden border-2 transition active:scale-[0.97] ${borderClass}`}
         aria-label={`スロット ${index + 1}${label ? ` ${label}` : ''}`}
       >
         {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt={`撮影 ${index + 1}`}
-            className="w-full h-full object-cover"
-          />
+          <img src={previewUrl} alt={`撮影 ${index + 1}`} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-text-muted">
-            <svg
-              viewBox="0 0 24 24"
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M3 9.5a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z" />
-              <circle cx="12" cy="13.5" r="3.6" />
-            </svg>
-            <span className="text-[11px] font-bold tracking-wider">タップして撮影</span>
+            {mode === 'gallery' ? (
+              <svg
+                viewBox="0 0 24 24"
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <circle cx="9" cy="11" r="2" />
+                <path d="M21 17l-5-5-4 4-3-3-6 6" />
+              </svg>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 9.5a2 2 0 0 1 2-2h2.2l1.4-2h6.8l1.4 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z" />
+                <circle cx="12" cy="13.5" r="3.6" />
+              </svg>
+            )}
+            <span className="text-[11px] font-bold tracking-wider">{emptyHint}</span>
           </div>
         )}
 
-        {/* Slot number badge */}
         <span
           className={`absolute top-2 left-2 inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shadow ${
             previewUrl ? 'bg-accent text-white' : 'bg-border text-text-muted'
@@ -104,7 +131,6 @@ export const PhotoSlot = ({
           {index + 1}
         </span>
 
-        {/* Status overlay */}
         {status === 'uploading' ? (
           <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 text-text text-[11px] font-bold">
@@ -138,7 +164,7 @@ export const PhotoSlot = ({
 
         {status === 'uploaded' || status === 'failed' ? (
           <span className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-black/60 text-white text-[11px] font-bold tracking-wider">
-            再撮影
+            {mode === 'gallery' ? '選び直し' : '再撮影'}
           </span>
         ) : null}
       </button>
@@ -149,12 +175,22 @@ export const PhotoSlot = ({
         </span>
       ) : null}
 
-      <CameraCapture
-        open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        onCapture={handleCaptured}
-        title={label ? `${index + 1}. ${label}` : `スロット ${index + 1} を撮影`}
-      />
+      {mode === 'gallery' ? (
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleGalleryPick}
+        />
+      ) : (
+        <CameraCapture
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onCapture={handleCameraCaptured}
+          title={label ? `${index + 1}. ${label}` : `スロット ${index + 1} を撮影`}
+        />
+      )}
     </div>
   );
 };

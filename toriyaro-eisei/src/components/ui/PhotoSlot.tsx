@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { CameraCapture } from './CameraCapture';
 
-export type SlotStatus = 'empty' | 'uploading' | 'uploaded' | 'failed';
+export type SlotStatus = 'empty' | 'captured' | 'uploading' | 'uploaded' | 'failed';
 
 interface Props {
   index: number;
   imageUrl: string | null;
   status: SlotStatus;
   onCapture: (file: File) => void;
-  onRetry?: () => void;
   disabled?: boolean;
   label?: string;
   mode?: 'camera' | 'gallery';
@@ -19,7 +18,6 @@ export const PhotoSlot = ({
   imageUrl,
   status,
   onCapture,
-  onRetry,
   disabled,
   label,
   mode = 'camera',
@@ -82,8 +80,8 @@ export const PhotoSlot = ({
     <div className="flex flex-col gap-1.5">
       <button
         type="button"
-        onClick={status === 'failed' && onRetry ? onRetry : openInput}
-        disabled={disabled}
+        onClick={openInput}
+        disabled={disabled || status === 'uploading'}
         className={`relative aspect-square w-full rounded-2xl overflow-hidden border-2 transition active:scale-[0.97] ${borderClass}`}
         aria-label={`スロット ${index + 1}${label ? ` ${label}` : ''}`}
       >
@@ -140,6 +138,12 @@ export const PhotoSlot = ({
           </span>
         ) : null}
 
+        {status === 'captured' ? (
+          <span className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-warn text-white text-[11px] font-bold tracking-wider">
+            未送信
+          </span>
+        ) : null}
+
         {status === 'uploaded' ? (
           <span className="absolute bottom-2 right-2 inline-flex items-center justify-center w-7 h-7 rounded-full bg-ok text-white shadow">
             <svg
@@ -158,11 +162,11 @@ export const PhotoSlot = ({
 
         {status === 'failed' ? (
           <span className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-ng text-white text-[11px] font-bold tracking-wider">
-            失敗・再試行
+            失敗
           </span>
         ) : null}
 
-        {status === 'uploaded' || status === 'failed' ? (
+        {status !== 'empty' && status !== 'uploading' ? (
           <span className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-black/60 text-white text-[11px] font-bold tracking-wider">
             {mode === 'gallery' ? '選び直し' : '再撮影'}
           </span>

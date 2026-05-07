@@ -3,6 +3,7 @@ import { AppHeader } from '../layout/AppHeader';
 import { ReportCard } from './ReportCard';
 import { formatDateJa, getDateKey, getWeekKey, weekKeyToMonday, formatWeekRangeJa } from '../../lib/dateUtils';
 import { useSubmissionFor } from '../../hooks/useSubmissions';
+import { slotCountFor } from '../../data/slotLabels';
 import type { ReportType, StoreKey } from '../../types';
 
 interface Props {
@@ -45,7 +46,7 @@ export const StoreTopScreen = ({ storeKey, storeName, onOpenReport, onLogout }: 
         <ReportCard
           type="daily"
           count={daily.submission?.count ?? 0}
-          required={7}
+          required={slotCountFor('daily')}
           loading={daily.loading}
           submittedAt={daily.submission?.submittedAt}
           onOpen={() => onOpenReport('daily')}
@@ -54,7 +55,7 @@ export const StoreTopScreen = ({ storeKey, storeName, onOpenReport, onLogout }: 
         <ReportCard
           type="weekly"
           count={weekly.submission?.count ?? 0}
-          required={7}
+          required={slotCountFor('weekly')}
           loading={weekly.loading}
           submittedAt={weekly.submission?.submittedAt}
           onOpen={() => onOpenReport('weekly')}

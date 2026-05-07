@@ -12,6 +12,7 @@ export interface Submission {
   submittedAt: string;
   photos: string[];
   storeName: string;
+  checks?: Record<string, string>;
 }
 
 export type Screen = 'login' | 'store-top' | 'upload' | 'admin';

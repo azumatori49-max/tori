@@ -23,7 +23,7 @@
             ".write": "auth != null",
             ".validate": "newData.hasChildren(['count', 'submittedAt', 'photos', 'storeName'])",
             "count": {
-              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 14"
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16"
             },
             "submittedAt": {
               ".validate": "newData.isString() && newData.val().length <= 40"
@@ -35,6 +35,12 @@
               ".validate": "newData.hasChildren()",
               "$idx": {
                 ".validate": "newData.isString() && newData.val().length <= 2048 && newData.val().beginsWith('https://')"
+              }
+            },
+            "checks": {
+              ".validate": "newData.hasChildren()",
+              "$idx": {
+                ".validate": "newData.isString() && newData.val().length <= 40"
               }
             },
             "$other": { ".validate": false }

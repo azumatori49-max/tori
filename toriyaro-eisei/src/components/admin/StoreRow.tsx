@@ -6,15 +6,15 @@ interface Props {
   storeName: string;
   submission: Submission | null;
   loading?: boolean;
+  required: number;
   onClick: () => void;
 }
 
-const PLACEHOLDERS = Array.from({ length: 7 });
-
-export const StoreRow = ({ storeName, submission, loading, onClick }: Props) => {
+export const StoreRow = ({ storeName, submission, loading, required, onClick }: Props) => {
   const count = submission?.count ?? 0;
-  const status = statusFromCount(count, 7);
+  const status = statusFromCount(count, required);
   const photos = submission?.photos ?? [];
+  const PLACEHOLDERS = Array.from({ length: Math.max(7, photos.length) });
 
   return (
     <button
@@ -32,7 +32,7 @@ export const StoreRow = ({ storeName, submission, loading, onClick }: Props) => 
             読込中
           </span>
         ) : (
-          <StatusChip status={status} label={`${count}/7`} />
+          <StatusChip status={status} label={`${count}/${required}`} />
         )}
       </div>
 

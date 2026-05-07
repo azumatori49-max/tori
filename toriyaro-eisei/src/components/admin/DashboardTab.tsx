@@ -14,6 +14,7 @@ import {
   oldestVisibleDate,
   weekKeyToMonday,
 } from '../../lib/dateUtils';
+import { slotCountFor } from '../../data/slotLabels';
 import type { FilterMode, ReportTab, Store, StoreKey } from '../../types';
 import { StoreRow } from './StoreRow';
 import { StoreDetailModal } from './StoreDetailModal';
@@ -65,6 +66,8 @@ export const DashboardTab = ({ stores }: Props) => {
     };
   }, [storeKeys, reportTab, periodKey]);
 
+  const required = slotCountFor(reportTab);
+
   const summary = useMemo(() => {
     let ok = 0;
     let warn = 0;
@@ -72,12 +75,12 @@ export const DashboardTab = ({ stores }: Props) => {
     for (const [key] of entries) {
       const s = submissions[key];
       const c = s?.count ?? 0;
-      if (c >= 7) ok += 1;
+      if (c >= required) ok += 1;
       else if (c > 0) warn += 1;
       else ng += 1;
     }
     return { ok, warn, ng };
-  }, [entries, submissions]);
+  }, [entries, submissions, required]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -85,11 +88,11 @@ export const DashboardTab = ({ stores }: Props) => {
       if (q && !store.name.toLowerCase().includes(q)) return false;
       if (filter === 'ng') {
         const c = submissions[key]?.count ?? 0;
-        if (c >= 7) return false;
+        if (c >= required) return false;
       }
       return true;
     });
-  }, [entries, submissions, search, filter]);
+  }, [entries, submissions, search, filter, required]);
 
   const shiftCursor = (deltaDays: number) => {
     const next = new Date(cursor);
@@ -207,6 +210,7 @@ export const DashboardTab = ({ stores }: Props) => {
               key={key}
               storeName={store.name}
               submission={submissions[key] ?? null}
+              required={required}
               onClick={() => setSelected({ key, name: store.name })}
             />
           ))

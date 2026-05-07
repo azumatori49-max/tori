@@ -3,8 +3,8 @@ import { Lightbox } from '../ui/Lightbox';
 import { StatusChip, statusFromCount } from '../ui/StatusChip';
 import { formatTimestampJa, getWeekKeyFromDate, dateKeyToDate } from '../../lib/dateUtils';
 import { useSubmissionFor } from '../../hooks/useSubmissions';
-import { slotLabelFor } from '../../data/slotLabels';
-import type { ReportType, StoreKey } from '../../types';
+import { slotCountFor, slotIsPhoto, slotLabelFor } from '../../data/slotLabels';
+import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
   open: boolean;
@@ -16,48 +16,67 @@ interface Props {
 
 const PHOTO_GRID = 'grid grid-cols-4 gap-2';
 
-const PhotoGrid = ({
+const SlotGrid = ({
   type,
-  photos,
+  submission,
   onSelect,
 }: {
   type: ReportType;
-  photos: string[];
+  submission: Submission | null;
   onSelect: (url: string) => void;
 }) => {
-  // Always show 7 cells so missing photos are obvious.
-  const cells = Array.from({ length: Math.max(7, photos.length) });
-  if (cells.length === 0) {
-    return <p className="text-xs text-text-muted py-4 text-center">写真はまだ提出されていません</p>;
+  const total = slotCountFor(type);
+  const photos = submission?.photos ?? [];
+  const checks = submission?.checks ?? {};
+  if (!submission) {
+    return <p className="text-xs text-text-muted py-4 text-center">提出はまだありません</p>;
   }
   return (
     <div className={PHOTO_GRID}>
-      {cells.map((_, i) => {
-        const url = photos[i];
+      {Array.from({ length: total }).map((_, i) => {
         const label = slotLabelFor(type, i);
+        const isPhoto = slotIsPhoto(type, i);
+        const url = photos[i];
+        const checkedAt = checks[String(i)];
         return (
           <div key={i} className="flex flex-col gap-1">
-            {url ? (
-              <button
-                type="button"
-                onClick={() => onSelect(url)}
-                className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
-              >
-                <img
-                  src={url}
-                  alt={label}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                />
-              </button>
+            {isPhoto ? (
+              url ? (
+                <button
+                  type="button"
+                  onClick={() => onSelect(url)}
+                  className="aspect-square rounded-lg overflow-hidden bg-surface2 active:scale-[0.97] transition"
+                >
+                  <img
+                    src={url}
+                    alt={label}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ) : (
+                <div className="aspect-square rounded-lg bg-surface2 border border-dashed border-border flex items-center justify-center text-text-muted text-[10px]">
+                  未提出
+                </div>
+              )
+            ) : checkedAt ? (
+              <div className="aspect-square rounded-lg bg-ok-bg border border-ok/30 flex flex-col items-center justify-center text-ok gap-0.5">
+                <svg viewBox="0 0 24 24" className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="5 12.5 10 17.5 19 7.5" />
+                </svg>
+                <span className="text-[9px] font-bold tracking-wider">確認済み</span>
+              </div>
             ) : (
               <div className="aspect-square rounded-lg bg-surface2 border border-dashed border-border flex items-center justify-center text-text-muted text-[10px]">
-                未提出
+                未確認
               </div>
             )}
-            {label ? (
-              <span className="text-[9px] leading-tight font-bold text-text-muted text-center break-keep">
-                {label}
+            <span className="text-[9px] leading-tight font-bold text-text-muted text-center break-keep">
+              {label}
+            </span>
+            {!isPhoto && checkedAt ? (
+              <span className="text-[8px] leading-tight text-text-muted text-center font-mono">
+                {formatTimestampJa(checkedAt)}
               </span>
             ) : null}
           </div>
@@ -86,6 +105,8 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
 
   const dailyCount = daily.submission?.count ?? 0;
   const weeklyCount = weekly.submission?.count ?? 0;
+  const dailyTotal = slotCountFor('daily');
+  const weeklyTotal = slotCountFor('weekly');
 
   return (
     <div className="fixed inset-0 z-40 flex items-end animate-fadeIn">
@@ -124,10 +145,13 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
               {daily.loading ? (
                 <span className="chip bg-surface2 text-text-muted">読込中</span>
               ) : (
-                <StatusChip status={statusFromCount(dailyCount, 7)} label={`${dailyCount}/7`} />
+                <StatusChip
+                  status={statusFromCount(dailyCount, dailyTotal)}
+                  label={`${dailyCount}/${dailyTotal}`}
+                />
               )}
             </header>
-            <PhotoGrid type="daily" photos={daily.submission?.photos ?? []} onSelect={setLightboxSrc} />
+            <SlotGrid type="daily" submission={daily.submission} onSelect={setLightboxSrc} />
             {daily.submission?.submittedAt ? (
               <p className="text-[11px] text-text-muted mt-2">
                 提出: {formatTimestampJa(daily.submission.submittedAt)}
@@ -146,10 +170,13 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
               {weekly.loading ? (
                 <span className="chip bg-surface2 text-text-muted">読込中</span>
               ) : (
-                <StatusChip status={statusFromCount(weeklyCount, 7)} label={`${weeklyCount}/7`} />
+                <StatusChip
+                  status={statusFromCount(weeklyCount, weeklyTotal)}
+                  label={`${weeklyCount}/${weeklyTotal}`}
+                />
               )}
             </header>
-            <PhotoGrid type="weekly" photos={weekly.submission?.photos ?? []} onSelect={setLightboxSrc} />
+            <SlotGrid type="weekly" submission={weekly.submission} onSelect={setLightboxSrc} />
             {weekly.submission?.submittedAt ? (
               <p className="text-[11px] text-text-muted mt-2">
                 提出: {formatTimestampJa(weekly.submission.submittedAt)}

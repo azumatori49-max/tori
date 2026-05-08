@@ -17,6 +17,25 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 過去にデプロイされていた別アプリの Service Worker / Cache を完全に消去する
+      (function () {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) {
+              r.unregister();
+            });
+          });
+        }
+        if (typeof caches !== 'undefined' && caches.keys) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) {
+              caches.delete(k);
+            });
+          });
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

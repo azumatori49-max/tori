@@ -13,19 +13,34 @@ const generateStoreKey = (): StoreKey => {
 export const useStores = () => {
   const [stores, setStores] = useState<Record<StoreKey, Store>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const storesRef = ref(db, 'stores');
+    // Firebase RTDB がハングした場合に UI をロックさせないための保険。
+    const timeout = window.setTimeout(() => {
+      setLoading(false);
+      setError('店舗データの取得に時間がかかっています。通信状況を確認してください。');
+    }, 10_000);
     const unsub = onValue(
       storesRef,
       (snap) => {
+        window.clearTimeout(timeout);
         const value = snap.val() as Record<StoreKey, Store> | null;
         setStores(value ?? {});
+        setError(null);
         setLoading(false);
       },
-      () => setLoading(false),
+      (err) => {
+        window.clearTimeout(timeout);
+        setError(err.message ?? '店舗データの取得に失敗しました。');
+        setLoading(false);
+      },
     );
-    return () => unsub();
+    return () => {
+      window.clearTimeout(timeout);
+      unsub();
+    };
   }, []);
 
   const seedInitialStores = useCallback(async () => {
@@ -65,5 +80,13 @@ export const useStores = () => {
     await remove(ref(db, `stores/${key}`));
   }, []);
 
-  return { stores, loading, seedInitialStores, addStore, addStoresBulk, deleteStore };
+  return {
+    stores,
+    loading,
+    error,
+    seedInitialStores,
+    addStore,
+    addStoresBulk,
+    deleteStore,
+  };
 };

@@ -6,11 +6,18 @@ import type { Store, StoreKey } from '../../types';
 interface Props {
   stores: Record<StoreKey, Store>;
   loading: boolean;
+  loadError?: string | null;
   onLoginStore: (storeKey: StoreKey) => void;
   onLoginAdmin: () => void;
 }
 
-export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginAdmin }) => {
+export const LoginScreen: FC<Props> = ({
+  stores,
+  loading,
+  loadError,
+  onLoginStore,
+  onLoginAdmin,
+}) => {
   const [selected, setSelected] = useState<string>('');
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -107,12 +114,15 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
                 setQuery('');
                 setOpen(true);
               }}
-              placeholder={loading ? '店舗を読み込み中…' : '店舗名で検索 / 選択'}
+              placeholder={
+                loading
+                  ? '店舗を読み込み中…（管理者は選択できます）'
+                  : '店舗名で検索 / 選択'
+              }
               className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
-              disabled={loading}
               autoComplete="off"
             />
-            {open && !loading && (
+            {open && (
               <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
                 <button
                   type="button"
@@ -122,19 +132,30 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
                   ＊ 管理者
                 </button>
                 <div className="border-t border-border" />
-                {filteredKeys.length === 0 && (
+                {loading && (
+                  <div className="px-3 py-3 text-xs text-text-muted">店舗を読み込み中…</div>
+                )}
+                {!loading && sortedStoreKeys.length === 0 && (
+                  <div className="px-3 py-3 text-xs text-text-muted">
+                    店舗がまだ登録されていません。
+                    <br />
+                    管理者でログイン → 店舗管理 → 「Firebaseに50店舗を一括登録」を実行してください。
+                  </div>
+                )}
+                {!loading && sortedStoreKeys.length > 0 && filteredKeys.length === 0 && (
                   <div className="px-3 py-3 text-xs text-text-muted">該当する店舗がありません</div>
                 )}
-                {filteredKeys.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => pickStore(k)}
-                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-surface2"
-                  >
-                    {stores[k].name}
-                  </button>
-                ))}
+                {!loading &&
+                  filteredKeys.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => pickStore(k)}
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-surface2"
+                    >
+                      {stores[k].name}
+                    </button>
+                  ))}
               </div>
             )}
             {open && (
@@ -146,6 +167,12 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
               />
             )}
           </div>
+
+          {loadError && (
+            <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+              {loadError}
+            </p>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-bold text-text-muted">パスワード</label>

@@ -19,7 +19,7 @@ const VersionBadge = () => (
 
 const App = () => {
   const { auth, loginAsStore, loginAsAdmin, logout } = useAuth();
-  const { stores, loading } = useStores();
+  const { stores, loading, error: storesError } = useStores();
   const [screen, setScreen] = useState<Screen>(() =>
     auth.isAdmin ? 'admin' : auth.storeKey ? 'store-top' : 'login',
   );
@@ -37,6 +37,7 @@ const App = () => {
       <LoginScreen
         stores={stores}
         loading={loading}
+        loadError={storesError}
         onLoginStore={(k) => {
           loginAsStore(k);
           setScreen('store-top');

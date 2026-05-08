@@ -26,11 +26,28 @@ const AppInner = () => {
   );
   const [reportType, setReportType] = useState<ReportType>('daily');
 
+  // 認証状態と画面の同期（レンダー中に setState しない）
   useEffect(() => {
-    if (auth.isAdmin) setScreen('admin');
-    else if (auth.storeKey) setScreen((s) => (s === 'login' ? 'store-top' : s));
-    else setScreen('login');
+    if (auth.isAdmin) {
+      setScreen('admin');
+    } else if (auth.storeKey) {
+      setScreen((s) => (s === 'login' || s === 'admin' ? 'store-top' : s));
+    } else {
+      setScreen('login');
+    }
   }, [auth.isAdmin, auth.storeKey]);
+
+  // 保存されているログインが DB に存在しない店舗を指している → 自動ログアウト
+  useEffect(() => {
+    if (
+      !loading &&
+      auth.storeKey &&
+      auth.storeKey !== '__admin__' &&
+      !stores[auth.storeKey]
+    ) {
+      logout();
+    }
+  }, [loading, auth.storeKey, stores, logout]);
 
   if (screen === 'login') {
     return (
@@ -56,15 +73,15 @@ const AppInner = () => {
 
   const storeKey = auth.storeKey;
   if (!storeKey || storeKey === '__admin__') {
-    logout();
-    return null;
+    // useEffect が次フレームで screen='login' に切り替えるまで待つ
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-text-muted">
+        ログイン画面に戻ります…
+      </div>
+    );
   }
+
   const store = stores[storeKey];
-  // ロードが終わっていて該当店舗が無い = 保存済みのログインが古い／DBに無い
-  if (!loading && !store) {
-    logout();
-    return null;
-  }
   if (!store) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">

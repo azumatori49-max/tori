@@ -9,6 +9,7 @@ export type ReportType = 'daily' | 'weekly';
 
 export interface Submission {
   count: number;
+  total?: number;
   submittedAt: string;
   photos: string[];
   storeName: string;

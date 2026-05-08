@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AdminNav } from '../layout/AdminNav';
 import { DashboardTab } from './DashboardTab';
 import { StoreManageTab } from './StoreManageTab';
 import { formatDateJa } from '../../lib/dateUtils';
+import { runRetentionCleanup } from '../../lib/cleanup';
 import type { AdminTab } from '../../types';
 import type { StoreMap } from '../../hooks/useStores';
 
@@ -14,6 +15,12 @@ interface Props {
 export const AdminScreen = ({ stores, onLogout }: Props) => {
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const today = useMemo(() => formatDateJa(new Date()), []);
+
+  useEffect(() => {
+    void runRetentionCleanup().catch(() => {
+      // silently ignore — admin can still use the app
+    });
+  }, []);
 
   return (
     <div className="min-h-full flex flex-col pb-20">

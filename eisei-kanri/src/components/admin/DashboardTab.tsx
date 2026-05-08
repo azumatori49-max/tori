@@ -13,6 +13,7 @@ import {
 import type { FilterMode, ReportTab, StoreKey } from '../../types';
 import type { StoreMap } from '../../hooks/useStores';
 import { computeStatus } from '../ui/StatusChip';
+import { getSlotCount } from '../../data/reportItems';
 import { StoreRow } from './StoreRow';
 import { StoreDetailModal } from './StoreDetailModal';
 
@@ -29,6 +30,7 @@ export const DashboardTab = ({ stores }: Props) => {
   const [detailKey, setDetailKey] = useState<StoreKey | null>(null);
 
   const periodKey = reportTab === 'daily' ? dateKey : weekKey;
+  const total = getSlotCount(reportTab);
   const sortedKeys = useMemo(
     () =>
       Object.keys(stores).sort((a, b) =>
@@ -44,13 +46,13 @@ export const DashboardTab = ({ stores }: Props) => {
     let partial = 0;
     let none = 0;
     for (const k of sortedKeys) {
-      const s = computeStatus(submissions[k]?.count ?? 0);
+      const s = computeStatus(submissions[k]?.count ?? 0, total);
       if (s === 'submitted') submitted++;
       else if (s === 'partial') partial++;
       else none++;
     }
     return { submitted, partial, none };
-  }, [sortedKeys, submissions]);
+  }, [sortedKeys, submissions, total]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -59,12 +61,12 @@ export const DashboardTab = ({ stores }: Props) => {
       if (!store) return false;
       if (q && !store.name.toLowerCase().includes(q)) return false;
       if (filter === 'ng') {
-        const status = computeStatus(submissions[key]?.count ?? 0);
+        const status = computeStatus(submissions[key]?.count ?? 0, total);
         if (status === 'submitted') return false;
       }
       return true;
     });
-  }, [sortedKeys, stores, submissions, search, filter]);
+  }, [sortedKeys, stores, submissions, search, filter, total]);
 
   const shift = (delta: number) => {
     if (reportTab === 'daily') {
@@ -173,6 +175,8 @@ export const DashboardTab = ({ stores }: Props) => {
             key={key}
             storeName={stores[key]?.name ?? '(不明)'}
             submission={submissions[key] ?? null}
+            reportType={reportTab}
+            total={total}
             onClick={() => setDetailKey(key)}
           />
         ))}

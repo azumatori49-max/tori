@@ -7,6 +7,28 @@ import type { ReportType, StoreKey, Submission } from '../types';
 
 export type SubmissionMap = Record<StoreKey, Submission | null>;
 
+export const normalizePhotos = (
+  raw: Submission['photos'] | undefined,
+  total: number,
+): string[] => {
+  const result = Array.from({ length: total }, () => '');
+  if (!raw) return result;
+  if (Array.isArray(raw)) {
+    for (let i = 0; i < total; i++) result[i] = raw[i] ?? '';
+  } else if (typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, string>)) {
+      const idx = Number(k);
+      if (!Number.isNaN(idx) && idx >= 0 && idx < total && typeof v === 'string') {
+        result[idx] = v;
+      }
+    }
+  }
+  return result;
+};
+
+export const countPhotos = (photos: string[]): number =>
+  photos.filter((p) => p && p.length > 0).length;
+
 export const useStoreSubmission = (
   storeKey: StoreKey | null,
   reportType: ReportType,
@@ -68,8 +90,10 @@ interface SubmitArgs {
   storeName: string;
   reportType: ReportType;
   periodKey: string;
-  files: File[];
-  onProgress?: (done: number, total: number) => void;
+  total: number;
+  files: (File | null)[];
+  existingPhotos?: string[];
+  onProgress?: (done: number, totalToUpload: number) => void;
 }
 
 export const submitReport = async ({
@@ -77,26 +101,33 @@ export const submitReport = async ({
   storeName,
   reportType,
   periodKey,
+  total,
   files,
+  existingPhotos = [],
   onProgress,
 }: SubmitArgs): Promise<Submission> => {
-  const urls: string[] = [];
-  const total = files.length;
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+  const photos = Array.from({ length: total }, (_, i) => existingPhotos[i] ?? '');
+  const toUpload = files
+    .map((file, idx) => (file ? { file, idx } : null))
+    .filter((x): x is { file: File; idx: number } => x != null);
+  const totalUpload = toUpload.length;
+
+  for (let i = 0; i < toUpload.length; i++) {
+    const { file, idx } = toUpload[i];
     const blob = await compressImage(file);
-    const path = `photos/${storeKey}/${reportType}/${periodKey}/${i}_${Date.now()}.jpg`;
+    const path = `photos/${storeKey}/${reportType}/${periodKey}/${idx}_${Date.now()}.jpg`;
     const sref = storageRef(storage, path);
     await uploadBytes(sref, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(sref);
-    urls.push(url);
-    onProgress?.(i + 1, total);
+    photos[idx] = url;
+    onProgress?.(i + 1, totalUpload);
   }
 
   const submission: Submission = {
-    count: urls.length,
+    count: countPhotos(photos),
+    total,
     submittedAt: new Date().toISOString(),
-    photos: urls,
+    photos,
     storeName,
   };
 

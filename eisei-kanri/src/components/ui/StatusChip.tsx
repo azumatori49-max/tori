@@ -25,8 +25,8 @@ export const StatusChip = ({ status, className = '' }: Props) => (
   </span>
 );
 
-export const computeStatus = (count: number): SubmissionStatus => {
-  if (count >= 7) return 'submitted';
+export const computeStatus = (count: number, total = 7): SubmissionStatus => {
+  if (count >= total) return 'submitted';
   if (count > 0) return 'partial';
   return 'none';
 };

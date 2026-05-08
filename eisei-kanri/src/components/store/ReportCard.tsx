@@ -6,7 +6,7 @@ interface Props {
   title: string;
   description: string;
   count: number;
-  total?: number;
+  total: number;
   loading: boolean;
   onOpen: () => void;
 }
@@ -34,11 +34,11 @@ export const ReportCard = ({
   title,
   description,
   count,
-  total = 7,
+  total,
   loading,
   onOpen,
 }: Props) => {
-  const status = computeStatus(count);
+  const status = computeStatus(count, total);
   const c = COLORS[type];
   const ratio = Math.min(count / total, 1);
 

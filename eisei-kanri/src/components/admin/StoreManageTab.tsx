@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { StoreMap } from '../../hooks/useStores';
 import { useStores } from '../../hooks/useStores';
+import { runRetentionCleanup, RETENTION_DAYS } from '../../lib/cleanup';
 
 interface Props {
   stores: StoreMap;
@@ -172,6 +173,39 @@ export const StoreManageTab = ({ stores }: Props) => {
           🔥 Firebaseに51店舗を一括登録
         </button>
       )}
+
+      <div className="bg-surface border border-border rounded-xl p-3 space-y-2">
+        <div>
+          <p className="text-sm font-bold">写真の保存期間</p>
+          <p className="text-[11px] text-text-muted">
+            提出から {RETENTION_DAYS} 日経過した写真は管理画面を開いた際に自動削除されます。
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            if (!confirm(`${RETENTION_DAYS}日より古い写真を今すぐ削除しますか？`)) return;
+            setBusy(true);
+            setError(null);
+            try {
+              const result = await runRetentionCleanup({ force: true });
+              if (result) {
+                alert(
+                  `削除完了：${result.removed}件の提出を削除しました（スキャン ${result.scanned}件 / 失敗 ${result.photoErrors}件）`,
+                );
+              }
+            } catch (err) {
+              setError(err instanceof Error ? err.message : '削除に失敗しました');
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="w-full text-sm font-bold bg-surface2 rounded-xl py-2 disabled:opacity-50"
+        >
+          🗑 今すぐ古い写真を削除
+        </button>
+      </div>
 
       {error && (
         <div className="bg-ng-bg text-ng text-xs font-bold rounded-lg px-3 py-2">{error}</div>

@@ -3,6 +3,7 @@ import { AppHeader } from '../layout/AppHeader';
 import { ReportCard } from './ReportCard';
 import { useStoreSubmission } from '../../hooks/useSubmissions';
 import { formatDateJa, getDateKey, getWeekKey } from '../../lib/dateUtils';
+import { getSlotCount } from '../../data/reportItems';
 import type { ReportType, StoreKey } from '../../types';
 
 interface Props {
@@ -34,6 +35,7 @@ export const StoreTopScreen = ({ storeKey, storeName, onLogout, onOpenUpload }: 
           title="デイリー衛生チェック"
           description="毎日決められた7か所の衛生管理写真を撮影してください。"
           count={daily.submission?.count ?? 0}
+          total={getSlotCount('daily')}
           loading={daily.loading}
           onOpen={() => onOpenUpload('daily')}
         />
@@ -41,8 +43,9 @@ export const StoreTopScreen = ({ storeKey, storeName, onLogout, onOpenUpload }: 
         <ReportCard
           type="weekly"
           title="ウィークリー衛生チェック"
-          description="週に1回（月曜起算）、7か所の衛生管理写真を撮影してください。"
+          description="週に1回（月曜起算）、8項目の衛生管理写真を提出してください。"
           count={weekly.submission?.count ?? 0}
+          total={getSlotCount('weekly')}
           loading={weekly.loading}
           onOpen={() => onOpenUpload('weekly')}
         />

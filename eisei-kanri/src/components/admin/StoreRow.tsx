@@ -1,17 +1,20 @@
 import { computeStatus, StatusChip } from '../ui/StatusChip';
 import { formatSubmittedAt } from '../../lib/dateUtils';
-import type { Submission } from '../../types';
+import { normalizePhotos } from '../../hooks/useSubmissions';
+import type { ReportType, Submission } from '../../types';
 
 interface Props {
   storeName: string;
   submission: Submission | null;
+  reportType: ReportType;
+  total: number;
   onClick: () => void;
 }
 
-export const StoreRow = ({ storeName, submission, onClick }: Props) => {
-  const count = submission?.count ?? 0;
-  const status = computeStatus(count);
-  const photos = submission?.photos ?? [];
+export const StoreRow = ({ storeName, submission, total, onClick }: Props) => {
+  const photos = normalizePhotos(submission?.photos, total);
+  const count = submission?.count ?? photos.filter(Boolean).length;
+  const status = computeStatus(count, total);
 
   return (
     <button
@@ -23,8 +26,11 @@ export const StoreRow = ({ storeName, submission, onClick }: Props) => {
         <h3 className="font-bold text-sm truncate">{storeName}</h3>
         <StatusChip status={status} />
       </div>
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {Array.from({ length: 7 }).map((_, i) => {
+      <div
+        className="grid gap-1 mb-2"
+        style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: total }).map((_, i) => {
           const url = photos[i];
           return (
             <div
@@ -43,7 +49,9 @@ export const StoreRow = ({ storeName, submission, onClick }: Props) => {
         })}
       </div>
       <p className="text-[11px] text-text-muted">
-        {submission?.submittedAt ? `提出: ${formatSubmittedAt(submission.submittedAt)}` : '未提出'}
+        {submission?.submittedAt
+          ? `提出: ${formatSubmittedAt(submission.submittedAt)}（${count}/${total}）`
+          : '未提出'}
       </p>
     </button>
   );

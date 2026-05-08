@@ -2,12 +2,21 @@ import { useRef } from 'react';
 
 interface Props {
   index: number;
+  label?: string;
   previewUrl: string | null;
+  galleryAllowed?: boolean;
   onSelect: (file: File) => void;
   disabled?: boolean;
 }
 
-export const PhotoSlot = ({ index, previewUrl, onSelect, disabled }: Props) => {
+export const PhotoSlot = ({
+  index,
+  label,
+  previewUrl,
+  galleryAllowed,
+  onSelect,
+  disabled,
+}: Props) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleClick = () => {
@@ -21,42 +30,59 @@ export const PhotoSlot = ({ index, previewUrl, onSelect, disabled }: Props) => {
     e.target.value = '';
   };
 
+  const captureProp = galleryAllowed
+    ? {}
+    : { capture: 'camera' as unknown as 'environment' };
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={disabled}
-      className={`relative aspect-square w-full rounded-xl overflow-hidden border-2 transition active:scale-95 ${
-        previewUrl
-          ? 'border-accent'
-          : 'border-dashed border-border bg-surface2 hover:border-accent/60'
-      } ${disabled ? 'opacity-60 pointer-events-none' : ''}`}
-    >
-      {previewUrl ? (
-        <>
-          <img src={previewUrl} alt={`photo-${index + 1}`} className="w-full h-full object-cover" />
-          <span className="absolute top-1 left-1 bg-accent text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow">
-            {index + 1}
-          </span>
-          <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-            再撮影
-          </span>
-        </>
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center text-text-muted gap-1">
-          <span className="text-3xl">📸</span>
-          <span className="text-[11px] font-bold">タップして撮影</span>
-          <span className="text-[10px] text-text-muted/80">{index + 1}枚目</span>
-        </div>
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={disabled}
+        className={`relative aspect-square w-full rounded-xl overflow-hidden border-2 transition active:scale-95 ${
+          previewUrl
+            ? 'border-accent'
+            : 'border-dashed border-border bg-surface2 hover:border-accent/60'
+        } ${disabled ? 'opacity-60 pointer-events-none' : ''}`}
+      >
+        {previewUrl ? (
+          <>
+            <img
+              src={previewUrl}
+              alt={label ?? `photo-${index + 1}`}
+              className="w-full h-full object-cover"
+            />
+            <span className="absolute top-1 left-1 bg-accent text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center shadow">
+              {index + 1}
+            </span>
+            <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+              {galleryAllowed ? '選び直す' : '再撮影'}
+            </span>
+          </>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-text-muted gap-1 px-1">
+            <span className="text-2xl">{galleryAllowed ? '🖼️' : '📸'}</span>
+            <span className="text-[10px] font-bold">
+              {galleryAllowed ? 'タップして選択' : 'タップして撮影'}
+            </span>
+            <span className="text-[10px] text-text-muted/80">{index + 1}枚目</span>
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          {...captureProp}
+          onChange={handleChange}
+          className="hidden"
+        />
+      </button>
+      {label && (
+        <p className="text-[11px] font-bold text-center leading-tight px-0.5 break-keep">
+          {label}
+        </p>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture={'camera' as unknown as 'environment'}
-        onChange={handleChange}
-        className="hidden"
-      />
-    </button>
+    </div>
   );
 };

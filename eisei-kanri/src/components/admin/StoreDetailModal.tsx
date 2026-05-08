@@ -3,6 +3,8 @@ import { get, ref } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { Lightbox } from '../ui/Lightbox';
 import { dateKeyToDate, formatSubmittedAt, getWeekKey } from '../../lib/dateUtils';
+import { DAILY_SLOTS, WEEKLY_SLOTS } from '../../data/reportItems';
+import { normalizePhotos } from '../../hooks/useSubmissions';
 import type { StoreKey, Submission } from '../../types';
 
 interface Props {
@@ -69,6 +71,7 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
                 label="DAILY"
                 accent="text-accent"
                 title="デイリー"
+                slots={DAILY_SLOTS.map((s) => s.label)}
                 submission={daily}
                 onPhoto={setLightbox}
               />
@@ -76,6 +79,7 @@ export const StoreDetailModal = ({ open, storeKey, storeName, dateKey, onClose }
                 label="WEEKLY"
                 accent="text-blue-700"
                 title={`ウィークリー（${weekKeyLabel}）`}
+                slots={WEEKLY_SLOTS.map((s) => s.label)}
                 submission={weekly}
                 onPhoto={setLightbox}
               />
@@ -93,12 +97,16 @@ interface SectionProps {
   label: string;
   accent: string;
   title: string;
+  slots: string[];
   submission: Submission | null;
   onPhoto: (url: string) => void;
 }
 
-const Section = ({ label, accent, title, submission, onPhoto }: SectionProps) => {
-  const photos = submission?.photos ?? [];
+const Section = ({ label, accent, title, slots, submission, onPhoto }: SectionProps) => {
+  const total = slots.length;
+  const photos = normalizePhotos(submission?.photos, total);
+  const count = submission?.count ?? photos.filter(Boolean).length;
+
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
@@ -106,37 +114,48 @@ const Section = ({ label, accent, title, submission, onPhoto }: SectionProps) =>
           <span className={`text-[10px] font-black tracking-wider ${accent}`}>{label}</span>
           <h3 className="font-bold text-sm">{title}</h3>
         </div>
-        {submission?.submittedAt && (
-          <span className="text-[11px] text-text-muted">
-            {formatSubmittedAt(submission.submittedAt)}
-          </span>
-        )}
+        <div className="text-right">
+          {submission?.submittedAt ? (
+            <>
+              <span className="text-[11px] text-text-muted block">
+                {formatSubmittedAt(submission.submittedAt)}
+              </span>
+              <span className="text-[11px] font-bold tabular-nums">
+                {count} / {total}
+              </span>
+            </>
+          ) : (
+            <span className="text-[11px] text-text-muted">未提出</span>
+          )}
+        </div>
       </div>
 
-      {photos.length === 0 ? (
+      {count === 0 ? (
         <div className="bg-surface2 rounded-xl py-6 text-center text-text-muted text-sm">
           未提出
         </div>
       ) : (
         <div className="grid grid-cols-4 gap-2">
-          {Array.from({ length: 7 }).map((_, i) => {
+          {slots.map((slotLabel, i) => {
             const url = photos[i];
             return (
-              <button
-                type="button"
-                key={i}
-                onClick={() => url && onPhoto(url)}
-                className="aspect-square rounded-lg overflow-hidden bg-surface2 border border-border active:scale-95"
-                disabled={!url}
-              >
-                {url ? (
-                  <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                ) : (
-                  <span className="w-full h-full flex items-center justify-center text-text-muted/60 text-[10px]">
-                    —
-                  </span>
-                )}
-              </button>
+              <div key={i} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => url && onPhoto(url)}
+                  className="aspect-square rounded-lg overflow-hidden bg-surface2 border border-border active:scale-95 disabled:active:scale-100"
+                  disabled={!url}
+                >
+                  {url ? (
+                    <img src={url} alt={slotLabel} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <span className="w-full h-full flex items-center justify-center text-text-muted/60 text-xs">
+                      未
+                    </span>
+                  )}
+                </button>
+                <p className="text-[10px] text-center leading-tight">{slotLabel}</p>
+              </div>
             );
           })}
         </div>

@@ -1,8 +1,17 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // 写真パス: photos/{storeKey}/{type}/{key}/{filename}
+    match /photos/{storeKey}/{type}/{key}/{filename} {
+      allow read: if true;
+      allow write: if storeKey.matches('^store_[a-z0-9]{8}$')
+                   && (type == 'daily' || type == 'weekly')
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+    // それ以外のパスは拒否
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

@@ -1,8 +1,9 @@
 export type StoreKey = string;
 
+/** Stored shape in Firebase. */
 export interface Store {
   name: string;
-  password: string;
+  passwordHash: string;
 }
 
 export type ReportType = 'daily' | 'weekly';

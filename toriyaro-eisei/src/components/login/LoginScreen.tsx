@@ -1,5 +1,6 @@
 import { useMemo, useState, type FC } from 'react';
 import { ADMIN_PASSWORD } from '../../lib/firebase';
+import { verifyPassword } from '../../lib/crypto';
 import type { Store, StoreKey } from '../../types';
 
 interface Props {
@@ -13,6 +14,7 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
   const [selected, setSelected] = useState<string>('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const sortedStoreKeys = useMemo(() => {
     return Object.keys(stores).sort((a, b) =>
@@ -20,7 +22,7 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
     );
   }, [stores]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!selected) {
@@ -36,14 +38,17 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
       return;
     }
     const store = stores[selected];
-    if (!store) {
-      setError('店舗が見つかりません');
+    if (!store || !store.passwordHash) {
+      setError('店舗情報が不正です');
       return;
     }
-    if (store.password === password) {
-      onLoginStore(selected);
-    } else {
-      setError('パスワードが違います');
+    setBusy(true);
+    try {
+      const ok = await verifyPassword(password, selected, store.passwordHash);
+      if (ok) onLoginStore(selected);
+      else setError('パスワードが違います');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -100,9 +105,9 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
           <button
             type="submit"
             className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
-            disabled={loading}
+            disabled={loading || busy}
           >
-            ログイン
+            {busy ? '確認中…' : 'ログイン'}
           </button>
         </form>
       </div>

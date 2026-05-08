@@ -1,6 +1,34 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "stores": {
+      ".read": true,
+      ".write": true,
+      "$storeKey": {
+        ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/) && (!newData.exists() || newData.hasChildren(['name', 'passwordHash']))",
+        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
+        "passwordHash": { ".validate": "newData.isString() && newData.val().length === 64" },
+        "$other": { ".validate": false }
+      }
+    },
+    "submissions": {
+      ".read": true,
+      "$storeKey": {
+        ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/)",
+        "$type": {
+          ".validate": "$type === 'daily' || $type === 'weekly'",
+          "$key": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['count', 'submittedAt', 'storeName', 'photos'])",
+            "count": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
+            "submittedAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "storeName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
+            "photos": {
+              ".validate": "newData.hasChildren()",
+              "$idx": { ".validate": "newData.isString() && newData.val().length < 1024" }
+            }
+          }
+        }
+      }
+    }
   }
 }

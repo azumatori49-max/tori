@@ -1,6 +1,5 @@
-import type { Store } from '../types';
-
-export const INITIAL_STORES: Record<string, Store> = {
+/** Seed data — passwords are plaintext here and hashed at write-time. */
+export const INITIAL_STORES: Record<string, { name: string; password: string }> = {
   store_2e97ebfc: { name: '新宿西口店', password: 'Toriyaro1' },
   store_bcfcdf5a: { name: '京都三条店', password: 'Toriyaro1' },
   store_71503e92: { name: 'なんば千日前店', password: 'Toriyaro1' },

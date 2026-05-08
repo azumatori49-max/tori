@@ -7,6 +7,15 @@ import { useAuth } from './hooks/useAuth';
 import { useStores } from './hooks/useStores';
 import type { ReportType, Screen } from './types';
 
+declare const __BUILD_TIME__: string;
+const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
+
+const VersionBadge = () => (
+  <div className="pointer-events-none fixed bottom-1 right-1 z-50 select-none rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-mono text-white/80">
+    v {BUILD_TIME}
+  </div>
+);
+
 const App = () => {
   const { auth, loginAsStore, loginAsAdmin, logout } = useAuth();
   const { stores, loading } = useStores();
@@ -21,8 +30,9 @@ const App = () => {
     else setScreen('login');
   }, [auth.isAdmin, auth.storeKey]);
 
+  let body: JSX.Element;
   if (screen === 'login') {
-    return (
+    body = (
       <LoginScreen
         stores={stores}
         loading={loading}
@@ -36,47 +46,50 @@ const App = () => {
         }}
       />
     );
-  }
-
-  if (screen === 'admin') {
-    return <AdminScreen stores={stores} onLogout={logout} />;
-  }
-
-  const storeKey = auth.storeKey;
-  if (!storeKey || storeKey === '__admin__') {
-    logout();
-    return null;
-  }
-  const store = stores[storeKey];
-  if (!store) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-text-muted">
-        店舗情報を読み込み中…
-      </div>
-    );
-  }
-
-  if (screen === 'upload') {
-    return (
-      <UploadScreen
-        storeKey={storeKey}
-        storeName={store.name}
-        type={reportType}
-        onBack={() => setScreen('store-top')}
-      />
-    );
+  } else if (screen === 'admin') {
+    body = <AdminScreen stores={stores} onLogout={logout} />;
+  } else {
+    const storeKey = auth.storeKey;
+    if (!storeKey || storeKey === '__admin__') {
+      logout();
+      return null;
+    }
+    const store = stores[storeKey];
+    if (!store) {
+      body = (
+        <div className="min-h-screen flex items-center justify-center text-sm text-text-muted">
+          店舗情報を読み込み中…
+        </div>
+      );
+    } else if (screen === 'upload') {
+      body = (
+        <UploadScreen
+          storeKey={storeKey}
+          storeName={store.name}
+          type={reportType}
+          onBack={() => setScreen('store-top')}
+        />
+      );
+    } else {
+      body = (
+        <StoreTopScreen
+          storeKey={storeKey}
+          storeName={store.name}
+          onLogout={logout}
+          onOpenReport={(t) => {
+            setReportType(t);
+            setScreen('upload');
+          }}
+        />
+      );
+    }
   }
 
   return (
-    <StoreTopScreen
-      storeKey={storeKey}
-      storeName={store.name}
-      onLogout={logout}
-      onOpenReport={(t) => {
-        setReportType(t);
-        setScreen('upload');
-      }}
-    />
+    <>
+      {body}
+      <VersionBadge />
+    </>
   );
 };
 

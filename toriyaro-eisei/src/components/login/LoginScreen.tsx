@@ -57,9 +57,9 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="/logo.svg"
+            src="/logo.png"
             alt="鶏ヤロー まる助"
-            className="h-28 w-28 rounded-full shadow-md"
+            className="h-28 w-28 rounded-full object-cover shadow-md"
           />
           <h1 className="mt-4 text-xl font-black tracking-tight">鶏ヤロー・まる助 衛生管理</h1>
           <p className="mt-1 text-sm text-text-muted">毎日のクリーンを、写真でかんたん。</p>

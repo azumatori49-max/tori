@@ -14,7 +14,7 @@ export const AppHeader: FC<Props> = ({ title, subtitle, left, right, showLogo })
       <div className="flex w-10 items-center">{left}</div>
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-center">
         {showLogo && (
-          <img src="/logo.svg" alt="鶏ヤロー" className="h-8 w-8 shrink-0 rounded-full" />
+          <img src="/logo.png" alt="鶏ヤロー" className="h-8 w-8 shrink-0 rounded-full object-cover" />
         )}
         <div className="min-w-0">
           <h1 className="truncate text-sm font-bold leading-tight">{title}</h1>

@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
-import {
-  submitPhotos,
-  TARGET_PHOTOS,
-  useStoreSubmissionStatus,
-} from '../../hooks/useSubmissions';
+import { submitPhotos, useStoreSubmissionStatus } from '../../hooks/useSubmissions';
+import { itemsForType, targetForType } from '../../data/checkItems';
 import { getDateKey, getWeekKey } from '../../lib/dateUtils';
 import type { ReportType, StoreKey } from '../../types';
 
@@ -17,11 +14,12 @@ interface Props {
   onBack: () => void;
 }
 
-const TARGET = TARGET_PHOTOS;
-
 export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) => {
   const dateOrWeekKey = type === 'daily' ? getDateKey() : getWeekKey();
   const { submission: existing } = useStoreSubmissionStatus(storeKey, type, dateOrWeekKey);
+
+  const TARGET = targetForType(type);
+  const ITEMS = itemsForType(type);
 
   const existingCount = useMemo(() => {
     const p = existing?.photos as unknown;
@@ -41,6 +39,11 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
   const [progress, setProgress] = useState<{ uploaded: number; total: number } | null>(null);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // type 切替時に枚数が変わるのでスロットを揃える
+  useEffect(() => {
+    setFiles(Array(TARGET).fill(null));
+  }, [TARGET]);
 
   useEffect(() => {
     if (success) {
@@ -89,6 +92,9 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
     }
   };
 
+  // 残り枚数分のスロットを表示。ラベルは既存枚数の次から割り当て。
+  const visibleSlots = files.slice(0, Math.max(remaining, 1));
+
   return (
     <div className="min-h-screen bg-bg pb-32">
       <AppHeader
@@ -109,8 +115,8 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
       <main className="mx-auto w-full max-w-app px-4 py-5">
         <p className="text-sm text-text-muted">
           {type === 'daily'
-            ? '本日分の衛生チェック写真を 7枚撮影してください。'
-            : '今週分の衛生チェック写真を 7枚撮影してください。'}
+            ? `本日分の衛生チェック写真を ${TARGET}枚撮影してください。`
+            : `今週分の衛生チェック写真を ${TARGET}枚撮影してください。`}
           <br />
           まとめても、何回かに分けて送信してもOKです。
         </p>
@@ -122,7 +128,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
         )}
         {existingCount >= TARGET && (
           <div className="mt-3 rounded-xl border border-warn-bg bg-warn-bg/60 px-3 py-2 text-xs font-bold text-warn">
-            この期間はすでに7枚提出済みです。これ以上は送信できません。
+            この期間はすでに {TARGET} 枚提出済みです。これ以上は送信できません。
           </div>
         )}
 
@@ -134,16 +140,22 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-3">
-          {files.slice(0, Math.max(remaining, 1)).map((file, i) => (
-            <PhotoSlot
-              key={i}
-              index={existingCount + i}
-              file={file}
-              onPick={(f) => setFileAt(i, f)}
-              disabled={submitting || remaining === 0}
-            />
-          ))}
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {visibleSlots.map((file, i) => {
+            const slotIndex = existingCount + i;
+            const item = ITEMS[slotIndex];
+            return (
+              <PhotoSlot
+                key={i}
+                index={slotIndex}
+                file={file}
+                onPick={(f) => setFileAt(i, f)}
+                disabled={submitting || remaining === 0}
+                label={item?.label}
+                source={item?.source ?? 'camera'}
+              />
+            );
+          })}
         </div>
 
         {error && (

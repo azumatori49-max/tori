@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { get, onValue, ref, set } from 'firebase/database';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
+import { targetForType } from '../data/checkItems';
 import type { ReportType, StoreKey, Submission } from '../types';
 
 export const useStoreSubmissionStatus = (
@@ -80,6 +81,7 @@ export interface SubmitArgs {
   onProgress?: (uploaded: number, total: number) => void;
 }
 
+/** @deprecated use targetForType(type) from data/checkItems */
 export const TARGET_PHOTOS = 7;
 
 const normalisePhotos = (raw: unknown): string[] => {
@@ -134,8 +136,9 @@ export const submitPhotos = async ({
     onProgress?.(i + 1, total);
   }
 
-  // Merge existing + new, cap at TARGET_PHOTOS (latest submissions win on overflow).
-  const merged = [...existingPhotos, ...newUrls].slice(0, TARGET_PHOTOS);
+  // Merge existing + new, cap at the target for this report type.
+  const target = targetForType(type);
+  const merged = [...existingPhotos, ...newUrls].slice(0, target);
 
   const photosObj: Record<string, string> = {};
   merged.forEach((u, i) => {

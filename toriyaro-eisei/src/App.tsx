@@ -3,6 +3,7 @@ import { LoginScreen } from './components/login/LoginScreen';
 import { StoreTopScreen } from './components/store/StoreTopScreen';
 import { UploadScreen } from './components/store/UploadScreen';
 import { AdminScreen } from './components/admin/AdminScreen';
+import { InAppBrowserGate } from './components/system/InAppBrowserGate';
 import { useAuth } from './hooks/useAuth';
 import { useStores } from './hooks/useStores';
 import type { ReportType, Screen } from './types';
@@ -89,6 +90,7 @@ const App = () => {
     <>
       {body}
       <VersionBadge />
+      <InAppBrowserGate />
     </>
   );
 };

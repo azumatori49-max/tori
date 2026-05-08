@@ -1,8 +1,9 @@
-import { useState, type FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { DashboardTab } from './DashboardTab';
 import { StoreManageTab } from './StoreManageTab';
 import { formatDateJa } from '../../lib/dateUtils';
+import { maybeRunDailyCleanup } from '../../lib/cleanup';
 import type { AdminTab, Store, StoreKey } from '../../types';
 
 interface Props {
@@ -12,6 +13,11 @@ interface Props {
 
 export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
   const [tab, setTab] = useState<AdminTab>('dashboard');
+
+  // 90日経過した提出データを1日1回まとめて削除（管理者ログイン時に走る）
+  useEffect(() => {
+    void maybeRunDailyCleanup();
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg pb-20">

@@ -4,12 +4,14 @@ service firebase.storage {
     // 写真パス: photos/{storeKey}/{type}/{key}/{filename}
     match /photos/{storeKey}/{type}/{key}/{filename} {
       allow read: if true;
-      allow write: if storeKey.matches('^store_[a-z0-9]{8}$')
-                   && (type == 'daily' || type == 'weekly')
-                   && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+      allow create, update:
+        if storeKey.matches('^store_[a-z0-9]{8}$')
+        && (type == 'daily' || type == 'weekly')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      // 90日経過後の自動クリーンアップ用
+      allow delete: if true;
     }
-    // それ以外のパスは拒否
     match /{allPaths=**} {
       allow read, write: if false;
     }

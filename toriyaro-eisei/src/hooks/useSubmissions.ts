@@ -92,11 +92,15 @@ export const submitPhotos = async ({
   const urls: string[] = [];
   for (let i = 0; i < files.length; i += 1) {
     const original = files[i];
+    if (!original) {
+      throw new Error(`photo ${i + 1} is missing`);
+    }
     const blob = await compressImage(original);
     const path = `photos/${storeKey}/${type}/${dateOrWeekKey}/${i}_${Date.now()}.jpg`;
     const ref0 = storageRef(storage, path);
     await uploadBytes(ref0, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(ref0);
+    console.log(`[submitPhotos] uploaded ${i + 1}/${total}`, { url });
     if (typeof url !== 'string' || url.length === 0) {
       throw new Error(`download URL missing for photo ${i + 1}`);
     }
@@ -104,21 +108,39 @@ export const submitPhotos = async ({
     onProgress?.(i + 1, total);
   }
 
-  // RTDB rejects undefined values; ensure the array is dense and string-only.
-  const cleanPhotos = urls.filter((u): u is string => typeof u === 'string' && u.length > 0);
+  // Re-build array from explicit indices to defeat any possibility of holes.
+  const cleanPhotos: string[] = [];
+  for (let i = 0; i < urls.length; i += 1) {
+    const u = urls[i];
+    if (typeof u !== 'string' || u.length === 0) {
+      throw new Error(`photo URL invalid at index ${i}`);
+    }
+    cleanPhotos.push(u);
+  }
   if (cleanPhotos.length !== files.length) {
     throw new Error(
       `photo upload incomplete: expected ${files.length}, got ${cleanPhotos.length}`,
     );
   }
 
-  const submission: Submission = {
+  // RTDB serialises arrays as numeric-keyed objects; pre-build that shape so a
+  // sparse JS array can never reach the SDK validator.
+  const photosObj: Record<string, string> = {};
+  cleanPhotos.forEach((u, i) => {
+    photosObj[String(i)] = u;
+  });
+
+  const submission = {
     count: cleanPhotos.length,
     submittedAt: new Date().toISOString(),
-    photos: cleanPhotos,
+    photos: photosObj,
     storeName,
   };
 
+  console.log('[submitPhotos] writing submission', {
+    path: `submissions/${storeKey}/${type}/${dateOrWeekKey}`,
+    submission,
+  });
   await set(ref(db, `submissions/${storeKey}/${type}/${dateOrWeekKey}`), submission);
   return cleanPhotos;
 };

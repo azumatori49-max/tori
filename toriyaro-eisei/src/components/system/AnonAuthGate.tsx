@@ -33,21 +33,25 @@ export const AnonAuthGate: FC<Props> = ({ children }) => {
       <img
         src="/logo.png"
         alt=""
-        className="h-16 w-16 rounded-full object-cover opacity-60"
+        className="h-20 w-20 rounded-full object-cover shadow"
       />
       {error ? (
         <>
-          <p className="max-w-xs text-xs font-bold leading-relaxed text-ng">{error}</p>
+          <h2 className="text-base font-black text-ng">接続できませんでした</h2>
+          <p className="max-w-xs text-xs font-bold leading-relaxed text-text">{error}</p>
           <button
             type="button"
             onClick={() => setRetryToken((n) => n + 1)}
-            className="rounded-xl bg-accent px-4 py-2 text-xs font-bold text-white"
+            className="rounded-xl bg-accent px-6 py-3 text-sm font-bold text-white shadow"
           >
             もう一度試す
           </button>
         </>
       ) : (
-        <p className="text-xs text-text-muted">セキュア接続を確立しています…</p>
+        <>
+          <p className="text-base font-bold text-text">セキュア接続を確立しています…</p>
+          <p className="text-[11px] text-text-muted">10秒以上かかる場合は通信状況をご確認ください</p>
+        </>
       )}
     </div>
   );

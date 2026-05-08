@@ -97,19 +97,30 @@ export const submitPhotos = async ({
     const ref0 = storageRef(storage, path);
     await uploadBytes(ref0, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(ref0);
+    if (typeof url !== 'string' || url.length === 0) {
+      throw new Error(`download URL missing for photo ${i + 1}`);
+    }
     urls.push(url);
     onProgress?.(i + 1, total);
   }
 
+  // RTDB rejects undefined values; ensure the array is dense and string-only.
+  const cleanPhotos = urls.filter((u): u is string => typeof u === 'string' && u.length > 0);
+  if (cleanPhotos.length !== files.length) {
+    throw new Error(
+      `photo upload incomplete: expected ${files.length}, got ${cleanPhotos.length}`,
+    );
+  }
+
   const submission: Submission = {
-    count: urls.length,
+    count: cleanPhotos.length,
     submittedAt: new Date().toISOString(),
-    photos: urls,
+    photos: cleanPhotos,
     storeName,
   };
 
   await set(ref(db, `submissions/${storeKey}/${type}/${dateOrWeekKey}`), submission);
-  return urls;
+  return cleanPhotos;
 };
 
 export const fetchSubmissionsForKey = async (

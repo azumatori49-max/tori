@@ -62,7 +62,7 @@ export const LoginScreen: FC<Props> = ({ stores, loading, onLoginStore, onLoginA
             className="h-28 w-28 rounded-full object-cover shadow-md"
           />
           <h1 className="mt-4 text-xl font-black tracking-tight">鶏ヤロー・まる助 衛生管理</h1>
-          <p className="mt-1 text-sm text-text-muted">毎日のクリーンを、写真でかんたん。</p>
+          <p className="mt-1 text-sm text-text-muted">店舗の毎日・毎週の衛生チェック写真を投稿し、本部がまとめて確認できる業務アプリ。</p>
         </div>
 
         <form

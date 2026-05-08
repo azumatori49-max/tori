@@ -59,7 +59,7 @@ export const StoreTopScreen: FC<Props> = ({ storeKey, storeName, onLogout, onOpe
         </div>
 
         <p className="mt-8 text-center text-[11px] text-text-muted">
-          毎日のクリーンを、写真でかんたん。
+          店舗の毎日・毎週の衛生チェック写真を投稿し、本部がまとめて確認できる業務アプリ。
         </p>
       </main>
     </div>

@@ -80,6 +80,23 @@ export interface SubmitArgs {
   onProgress?: (uploaded: number, total: number) => void;
 }
 
+export const TARGET_PHOTOS = 7;
+
+const normalisePhotos = (raw: unknown): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    return Object.keys(obj)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => obj[k])
+      .filter((x): x is string => typeof x === 'string' && x.length > 0);
+  }
+  return [];
+};
+
 export const submitPhotos = async ({
   storeKey,
   storeName,
@@ -89,60 +106,55 @@ export const submitPhotos = async ({
   onProgress,
 }: SubmitArgs): Promise<string[]> => {
   const total = files.length;
-  const urls: string[] = [];
+  if (total === 0) throw new Error('no photos selected');
+
+  const path = `submissions/${storeKey}/${type}/${dateOrWeekKey}`;
+
+  // Read existing submission so partial batches accumulate up to the target.
+  const existingSnap = await get(ref(db, path));
+  const existingPhotos = normalisePhotos(
+    (existingSnap.val() as { photos?: unknown } | null)?.photos,
+  );
+
+  const newUrls: string[] = [];
   for (let i = 0; i < files.length; i += 1) {
     const original = files[i];
-    if (!original) {
-      throw new Error(`photo ${i + 1} is missing`);
-    }
+    if (!original) throw new Error(`photo ${i + 1} is missing`);
     const blob = await compressImage(original);
-    const path = `photos/${storeKey}/${type}/${dateOrWeekKey}/${i}_${Date.now()}.jpg`;
-    const ref0 = storageRef(storage, path);
+    const slot = existingPhotos.length + i;
+    const objectPath = `photos/${storeKey}/${type}/${dateOrWeekKey}/${slot}_${Date.now()}.jpg`;
+    const ref0 = storageRef(storage, objectPath);
     await uploadBytes(ref0, blob, { contentType: 'image/jpeg' });
     const url = await getDownloadURL(ref0);
-    console.log(`[submitPhotos] uploaded ${i + 1}/${total}`, { url });
     if (typeof url !== 'string' || url.length === 0) {
       throw new Error(`download URL missing for photo ${i + 1}`);
     }
-    urls.push(url);
+    console.log(`[submitPhotos] uploaded ${i + 1}/${total}`, { url, slot });
+    newUrls.push(url);
     onProgress?.(i + 1, total);
   }
 
-  // Re-build array from explicit indices to defeat any possibility of holes.
-  const cleanPhotos: string[] = [];
-  for (let i = 0; i < urls.length; i += 1) {
-    const u = urls[i];
-    if (typeof u !== 'string' || u.length === 0) {
-      throw new Error(`photo URL invalid at index ${i}`);
-    }
-    cleanPhotos.push(u);
-  }
-  if (cleanPhotos.length !== files.length) {
-    throw new Error(
-      `photo upload incomplete: expected ${files.length}, got ${cleanPhotos.length}`,
-    );
-  }
+  // Merge existing + new, cap at TARGET_PHOTOS (latest submissions win on overflow).
+  const merged = [...existingPhotos, ...newUrls].slice(0, TARGET_PHOTOS);
 
-  // RTDB serialises arrays as numeric-keyed objects; pre-build that shape so a
-  // sparse JS array can never reach the SDK validator.
   const photosObj: Record<string, string> = {};
-  cleanPhotos.forEach((u, i) => {
+  merged.forEach((u, i) => {
+    if (typeof u !== 'string' || u.length === 0) {
+      throw new Error(`merged photo URL invalid at index ${i}`);
+    }
     photosObj[String(i)] = u;
   });
 
   const submission = {
-    count: cleanPhotos.length,
+    count: merged.length,
     submittedAt: new Date().toISOString(),
     photos: photosObj,
     storeName,
   };
 
-  console.log('[submitPhotos] writing submission', {
-    path: `submissions/${storeKey}/${type}/${dateOrWeekKey}`,
-    submission,
-  });
-  await set(ref(db, `submissions/${storeKey}/${type}/${dateOrWeekKey}`), submission);
-  return cleanPhotos;
+  console.log('[submitPhotos] writing submission', { path, submission });
+  await set(ref(db, path), submission);
+  return merged;
 };
 
 export const fetchSubmissionsForKey = async (

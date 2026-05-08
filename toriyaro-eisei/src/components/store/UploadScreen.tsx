@@ -1,8 +1,12 @@
-import { useEffect, useState, type FC } from 'react';
+import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
-import { submitPhotos, useStoreSubmissionStatus } from '../../hooks/useSubmissions';
+import {
+  submitPhotos,
+  TARGET_PHOTOS,
+  useStoreSubmissionStatus,
+} from '../../hooks/useSubmissions';
 import { getDateKey, getWeekKey } from '../../lib/dateUtils';
 import type { ReportType, StoreKey } from '../../types';
 
@@ -13,11 +17,24 @@ interface Props {
   onBack: () => void;
 }
 
-const TARGET = 7;
+const TARGET = TARGET_PHOTOS;
 
 export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) => {
   const dateOrWeekKey = type === 'daily' ? getDateKey() : getWeekKey();
   const { submission: existing } = useStoreSubmissionStatus(storeKey, type, dateOrWeekKey);
+
+  const existingCount = useMemo(() => {
+    const p = existing?.photos as unknown;
+    if (!p) return 0;
+    if (Array.isArray(p)) return p.filter((x) => typeof x === 'string' && x).length;
+    if (typeof p === 'object')
+      return Object.values(p as Record<string, unknown>).filter(
+        (x) => typeof x === 'string' && x,
+      ).length;
+    return 0;
+  }, [existing]);
+
+  const remaining = Math.max(0, TARGET - existingCount);
 
   const [files, setFiles] = useState<Array<File | null>>(() => Array(TARGET).fill(null));
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +53,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
   }, [success, onBack]);
 
   const filledCount = files.filter(Boolean).length;
-  const canSubmit = filledCount === TARGET && !submitting;
+  const canSubmit = filledCount > 0 && filledCount <= remaining && !submitting;
 
   const setFileAt = (idx: number, file: File) => {
     setFiles((prev) => {
@@ -48,18 +65,20 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
 
   const onSubmit = async () => {
     if (!canSubmit) return;
+    const filesToSend = files.filter((f): f is File => !!f);
     setError(null);
     setSubmitting(true);
-    setProgress({ uploaded: 0, total: TARGET });
+    setProgress({ uploaded: 0, total: filesToSend.length });
     try {
       await submitPhotos({
         storeKey,
         storeName,
         type,
         dateOrWeekKey,
-        files: files.filter((f): f is File => !!f),
+        files: filesToSend,
         onProgress: (uploaded, total) => setProgress({ uploaded, total }),
       });
+      setFiles(Array(TARGET).fill(null));
       setSuccess(true);
     } catch (err) {
       console.error(err);
@@ -92,29 +111,37 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
           {type === 'daily'
             ? '本日分の衛生チェック写真を 7枚撮影してください。'
             : '今週分の衛生チェック写真を 7枚撮影してください。'}
+          <br />
+          まとめても、何回かに分けて送信してもOKです。
         </p>
 
-        {existing && (
+        {existingCount > 0 && existingCount < TARGET && (
+          <div className="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-bold text-accent">
+            すでに {existingCount} 枚 提出済み。あと {remaining} 枚で完了します。
+          </div>
+        )}
+        {existingCount >= TARGET && (
           <div className="mt-3 rounded-xl border border-warn-bg bg-warn-bg/60 px-3 py-2 text-xs font-bold text-warn">
-            この期間はすでに提出済みです。再提出すると上書きされます。
+            この期間はすでに7枚提出済みです。これ以上は送信できません。
           </div>
         )}
 
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs font-bold text-text-muted">選択枚数</span>
+          <span className="text-xs font-bold text-text-muted">今回の追加分</span>
           <span className="text-sm font-bold">
-            <span className="text-lg text-accent">{filledCount}</span> / {TARGET}枚
+            <span className="text-lg text-accent">{filledCount}</span> /{' '}
+            {remaining > 0 ? remaining : 0}枚
           </span>
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-3">
-          {files.map((file, i) => (
+          {files.slice(0, Math.max(remaining, 1)).map((file, i) => (
             <PhotoSlot
               key={i}
-              index={i}
+              index={existingCount + i}
               file={file}
               onPick={(f) => setFileAt(i, f)}
-              disabled={submitting}
+              disabled={submitting || remaining === 0}
             />
           ))}
         </div>
@@ -148,7 +175,13 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
             disabled={!canSubmit}
             className="w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-border disabled:text-text-muted"
           >
-            {submitting ? '送信中…' : `${TARGET}枚を提出する`}
+            {submitting
+              ? '送信中…'
+              : remaining === 0
+                ? '提出済み'
+                : filledCount === 0
+                  ? '写真を選択してください'
+                  : `${filledCount}枚を提出する`}
           </button>
         </div>
       </div>

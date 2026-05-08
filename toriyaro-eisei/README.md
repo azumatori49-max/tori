@@ -27,16 +27,27 @@ npm install -g firebase-tools
 firebase login                  # ブラウザでGoogleログイン
 ```
 
-### 2. ルールとアプリをデプロイ
+### 2. （初回のみ）新しい Hosting サイトを作成
+
+旧アプリの Service Worker キャッシュ干渉を避けるため、サブドメイン
+`eisei-tori` に独立した Hosting サイトを使います。
+
+1. https://console.firebase.google.com/ → `toriyaro-eisei-faf2e` プロジェクト
+2. 左メニュー → **Hosting**
+3. ページ下部 **「別のサイトを追加」** をクリック
+4. サイト ID に `eisei-tori` を入力 → 作成
+
+### 3. ルールとアプリをデプロイ
 
 ```bash
 cd toriyaro-eisei
-npm run build                   # dist/ を生成
-firebase deploy                 # Hosting + Realtime DB ルール + Storage ルール
+npm run build
+firebase deploy
 ```
 
-デプロイ後、`https://toriyaro-eisei-faf2e.web.app` のような URL が発行されます。
+完了後、URL は **`https://eisei-tori.web.app`** になります。
 このURLを店舗スタッフ・管理者だけに配布してください。
+（旧 `toriyaro-eisei-faf2e.web.app` は放置しても問題ありません）
 
 ### 3. 初回のみ：50店舗を一括登録
 

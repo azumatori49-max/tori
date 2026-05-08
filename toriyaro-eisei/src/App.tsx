@@ -57,10 +57,27 @@ const App = () => {
       return null;
     }
     const store = stores[storeKey];
+    // ロードが終わっていて該当店舗が無い = 保存済みのログインが古い／DBに無い
+    if (!loading && !store) {
+      logout();
+      return null;
+    }
     if (!store) {
       body = (
-        <div className="min-h-screen flex items-center justify-center text-sm text-text-muted">
-          店舗情報を読み込み中…
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <p className="text-sm text-text-muted">店舗情報を読み込み中…</p>
+          {storesError && (
+            <p className="max-w-xs rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+              {storesError}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-text-muted hover:text-accent"
+          >
+            ログイン画面に戻る
+          </button>
         </div>
       );
     } else if (screen === 'upload') {

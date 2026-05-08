@@ -1,8 +1,8 @@
 {
   "rules": {
     "stores": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
+      ".write": "auth != null",
       "$storeKey": {
         ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/) && (!newData.exists() || newData.hasChildren(['name', 'passwordHash']))",
         "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
@@ -11,15 +11,15 @@
       }
     },
     "submissions": {
-      ".read": true,
+      ".read": "auth != null",
       "$storeKey": {
         ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/)",
         "$type": {
           ".validate": "$type === 'daily' || $type === 'weekly'",
           "$key": {
-            ".write": true,
+            ".write": "auth != null",
             ".validate": "newData.hasChildren(['count', 'submittedAt', 'storeName', 'photos'])",
-            "count": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
+            "count": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8" },
             "submittedAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
             "storeName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
             "photos": {

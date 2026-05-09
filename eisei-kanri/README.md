@@ -19,6 +19,53 @@ npm run preview
 npm run typecheck
 ```
 
+## Firebase Hosting でデプロイ
+
+### 初回のみ
+
+```bash
+# Firebase CLI をインストール（未インストールなら）
+npm install -g firebase-tools
+
+# Google アカウントでログイン
+firebase login
+
+# プロジェクトに紐づいているか確認（.firebaserc に設定済み）
+firebase projects:list
+firebase use toriyaro-eisei-faf2e
+```
+
+### デプロイ
+
+```bash
+# 本体（Hosting + DB ルール + Storage ルール）まとめて
+npm run deploy
+
+# Hosting のみ更新
+npm run deploy:hosting
+
+# DB / Storage のセキュリティルールのみ更新
+npm run deploy:rules
+```
+
+公開 URL は `https://toriyaro-eisei-faf2e.web.app` および `https://toriyaro-eisei-faf2e.firebaseapp.com`。
+
+### ローカルエミュレータ（任意）
+
+```bash
+npm run emulate
+```
+
+### 設定ファイル
+
+- `firebase.json` — Hosting / DB / Storage の設定
+- `.firebaserc` — デフォルトプロジェクト ID
+- `database.rules.json` — Realtime Database のルール
+- `storage.rules` — Cloud Storage のルール
+
+> SPA 用に `**` → `/index.html` にリライト。
+> JS / CSS / フォントは 1年 immutable キャッシュ、`index.html` はキャッシュ無効。
+
 ## 初回デプロイ後の手順
 
 1. 管理者でログイン（パスワード: `admin2024`）

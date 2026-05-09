@@ -9,3 +9,12 @@ dist-ssr/
 .vite/
 *.tsbuildinfo
 
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+database-debug.log
+storage-debug.log
+ui-debug.log
+*.log
+

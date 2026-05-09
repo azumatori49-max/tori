@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="鶏ヤロー・まる助">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#ffd84d"/>
+      <stop offset="60%" stop-color="#f5b300"/>
+      <stop offset="100%" stop-color="#e89000"/>
+    </radialGradient>
+  </defs>
+  <circle cx="100" cy="100" r="96" fill="#c0211c"/>
+  <circle cx="100" cy="100" r="78" fill="url(#g)"/>
+  <g fill="#1a1a1a">
+    <path d="M100 36c-16 0-30 7-30 22 0 6 3 11 9 14-9 4-15 14-15 27 0 17 13 30 36 30s36-13 36-30c0-13-6-23-15-27 6-3 9-8 9-14 0-15-14-22-30-22z"/>
+    <path d="M120 60c0-7-5-13-12-13-3 0-6 1-8 3 5 2 8 6 8 11 0 4-2 7-5 9 4 0 8-1 11-3 4-2 6-4 6-7z" fill="#c0211c"/>
+    <path d="M138 84c-3 0-6 1-9 3l-1-3c4-3 7-7 8-12l-12 4c-3-2-6-3-10-3l3 8 9 6c-2 3-3 7-3 11h22v-8c0-3-3-6-7-6z" fill="#c0211c"/>
+  </g>
+  <text x="100" y="180" text-anchor="middle" font-family="'Noto Sans JP', sans-serif" font-weight="900" font-size="22" fill="#1a1a1a">鶏ヤロー</text>
+</svg>

@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+  background: #f5f4f0;
+  color: #1a1a1a;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Hide number input spinners on iOS */
+input[type="file"]::-webkit-file-upload-button {
+  display: none;
+}

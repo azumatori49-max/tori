@@ -52,4 +52,4 @@ export const INITIAL_STORES: Record<string, { name: string; password: string }> 
   store_c2b9cb8e: { name: '梅田茶屋町店', password: 'Toriyaro1' },
 };
 
-export const ADMIN_PASSWORD = 'admin2024';
+export const ADMIN_PASSWORD = 'toriyaro2026';

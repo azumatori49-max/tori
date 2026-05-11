@@ -106,16 +106,25 @@ export const useAllSubmissions = (
   return { submissions, loading, reload: load };
 };
 
+export type SubmitSlot =
+  | { kind: 'new'; file: File }
+  | { kind: 'existing'; url: string };
+
 export const submitReport = async (
   storeKey: StoreKey,
   storeName: string,
   type: ReportType,
   key: string,
-  files: File[]
+  slots: SubmitSlot[]
 ): Promise<void> => {
   const urls: string[] = [];
-  for (let i = 0; i < files.length; i++) {
-    const blob = await compressImage(files[i]);
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    if (slot.kind === 'existing') {
+      urls.push(slot.url);
+      continue;
+    }
+    const blob = await compressImage(slot.file);
     const path = `photos/${storeKey}/${type}/${key}/${i}_${Date.now()}.jpg`;
     const sref = sRef(storage, path);
     await uploadBytes(sref, blob, { contentType: 'image/jpeg' });

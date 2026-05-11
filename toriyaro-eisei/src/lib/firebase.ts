@@ -3,14 +3,14 @@ import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyAb88OQsOQupIatDR8TlDPeTACymyPYKRQ',
-  authDomain: 'toriyaro-eisei-faf2e.firebaseapp.com',
+  apiKey: 'AIzaSyD1xffqVr8Eir6IxJKF2PkgdCfYL2VUcQ8',
+  authDomain: 'toriyaro-eisei-v2.firebaseapp.com',
   databaseURL:
-    'https://toriyaro-eisei-faf2e-default-rtdb.asia-southeast1.firebasedatabase.app',
-  projectId: 'toriyaro-eisei-faf2e',
-  storageBucket: 'toriyaro-eisei-faf2e.firebasestorage.app',
-  messagingSenderId: '120041502005',
-  appId: '1:120041502005:web:8a86f8d161e114db7bc87c',
+    'https://toriyaro-eisei-v2-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'toriyaro-eisei-v2',
+  storageBucket: 'toriyaro-eisei-v2.firebasestorage.app',
+  messagingSenderId: '135163583805',
+  appId: '1:135163583805:web:05d3bb3d553aeea452b954',
 };
 
 export const app = initializeApp(firebaseConfig);

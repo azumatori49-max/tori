@@ -313,6 +313,66 @@ ul{list-style:none}
 .voice-card p{font-size:14px;line-height:1.8}
 @media(max-width:900px){.voices{grid-template-columns:1fr}}
 
+/* STORES */
+.store-controls{
+  display:flex;flex-direction:column;gap:14px;
+  margin-bottom:28px;
+}
+.store-filters{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.chip{
+  background:#fff;border:2px solid var(--line);
+  padding:8px 18px;border-radius:999px;
+  font-weight:700;font-size:13px;cursor:pointer;
+  transition:.15s;font-family:inherit;
+}
+.chip:hover{border-color:var(--red)}
+.chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+.chip .cnt{margin-left:4px;font-size:11px;opacity:.8}
+.store-search{
+  width:100%;max-width:480px;margin:0 auto;
+  padding:12px 18px;
+  border:2px solid var(--line);border-radius:999px;
+  font-size:14px;font-family:inherit;background:#fff;
+}
+.store-search:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(230,0,18,.1)}
+
+.stores{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));
+  gap:14px;
+}
+.store-card{
+  background:#fff;border:1px solid var(--line);
+  border-left:4px solid var(--red);
+  border-radius:8px;padding:18px 20px;
+  transition:.2s;
+  display:flex;flex-direction:column;gap:6px;
+}
+.store-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.06)}
+.store-card.brand-maruke{border-left-color:var(--black)}
+.store-name{font-weight:700;font-size:14px;line-height:1.4}
+.store-badge{
+  display:inline-block;
+  background:var(--yellow);color:var(--black);
+  font-size:10px;font-weight:900;
+  padding:2px 8px;border-radius:4px;
+  margin-right:6px;border:1px solid var(--red);
+}
+.brand-maruke .store-badge{background:#fff;border-color:var(--black)}
+.store-addr{font-size:12px;color:var(--gray);line-height:1.6}
+.store-tel{
+  font-size:13px;color:var(--red);font-weight:700;
+  text-decoration:none;
+}
+.store-tel:hover{text-decoration:underline}
+.store-count{
+  text-align:center;margin-top:24px;
+  font-size:13px;color:var(--gray);
+}
+.store-empty{
+  grid-column:1/-1;text-align:center;
+  padding:40px;color:var(--gray);
+}
+
 /* FAQ */
 .faq details{
   background:#fff;border:1px solid var(--line);

@@ -23,6 +23,7 @@
       <a href="#jobs">募集職種</a>
       <a href="#benefits">待遇</a>
       <a href="#requirements">募集要項</a>
+      <a href="#stores">店舗一覧</a>
       <a href="#voice">先輩の声</a>
       <a href="#faq">FAQ</a>
     </nav>
@@ -57,7 +58,7 @@
 
 <section class="strip">
   <div class="strip-inner">
-    <div><span class="num">130</span><span class="lbl">店舗以上</span></div>
+    <div><span class="num">50</span><span class="lbl">店舗以上</span></div>
     <div><span class="num">95<small>%</small></span><span class="lbl">未経験スタート</span></div>
     <div><span class="num">3<small>年</small></span><span class="lbl">最短で店長</span></div>
     <div><span class="num">400<small>万〜</small></span><span class="lbl">店長年収</span></div>
@@ -177,7 +178,32 @@
   </div>
 </section>
 
-<section id="voice" class="section section-cream">
+<section id="stores" class="section section-cream">
+  <div class="container">
+    <h2 class="section-title"><span>STORES</span>店舗一覧</h2>
+    <p class="section-lead">全国50店舗以上で仲間を募集中。お近くの店舗を探してみてください。</p>
+
+    <div class="store-controls">
+      <div class="store-filters" id="storeFilters">
+        <button class="chip active" data-region="all">すべて <span class="cnt"></span></button>
+        <button class="chip" data-region="tohoku">東北</button>
+        <button class="chip" data-region="kanto">関東</button>
+        <button class="chip" data-region="tokyo">東京</button>
+        <button class="chip" data-region="saitama">埼玉</button>
+        <button class="chip" data-region="chiba">千葉</button>
+        <button class="chip" data-region="kanagawa">神奈川</button>
+        <button class="chip" data-region="tokai">東海</button>
+        <button class="chip" data-region="kansai">関西</button>
+      </div>
+      <input type="search" id="storeSearch" placeholder="🔍 店舗名・住所で検索（例：渋谷、大阪）" class="store-search">
+    </div>
+
+    <div class="stores" id="stores"></div>
+    <p class="store-count" id="storeCount"></p>
+  </div>
+</section>
+
+<section id="voice" class="section">
   <div class="container">
     <h2 class="section-title"><span>VOICE</span>先輩スタッフの声</h2>
 
@@ -265,8 +291,10 @@
         </select>
       </div>
       <div class="form-row">
-        <label>希望勤務地</label>
-        <input type="text" name="area" placeholder="例：東京都新宿区">
+        <label>希望勤務店舗</label>
+        <select name="store" id="storeSelect">
+          <option value="">選択してください（任意）</option>
+        </select>
       </div>
       <div class="form-row">
         <label>ひとこと</label>
@@ -288,7 +316,7 @@
     <div class="footer-grid">
       <div>
         <p class="logo-text"><span class="logo-mark"><span class="logo-mark-main">鶏</span></span> それゆけ！鶏ヤロー！</p>
-        <p class="small">居酒屋 それゆけ！鶏ヤロー！｜全国130店舗以上</p>
+        <p class="small">居酒屋 それゆけ！鶏ヤロー！｜全国50店舗以上</p>
       </div>
       <div>
         <p class="ft-h">採用について</p>

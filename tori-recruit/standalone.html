@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="居酒屋「それゆけ！鶏ヤロー！」の公式求人サイト。ホール・キッチン・店長候補を全国で大募集！未経験OK、社員登用あり、まかない付き。">
+<title>それゆけ！鶏ヤロー！求人サイト | アツく、楽しく、それゆけ！</title>
+<style>
+:root{
+  --red:#e60012;
+  --red-dark:#a8000d;
+  --yellow:#ffd900;
+  --yellow-dark:#f5c800;
+  --black:#111;
+  --gold:#d4af37;
+  --cream:#fff8e1;
+  --gray:#555;
+  --line:#e5e5e5;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Noto Sans JP",-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;
+  color:var(--black);
+  line-height:1.7;
+  background:#fff;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+ul{list-style:none}
+
+/* HEADER */
+.header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(26,26,26,.95);
+  backdrop-filter:blur(8px);
+  color:#fff;
+  border-bottom:2px solid var(--gold);
+}
+.header-inner{
+  max-width:1200px;margin:0 auto;
+  padding:10px 20px;
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-mark{
+  position:relative;
+  display:inline-flex;align-items:center;justify-content:center;
+  width:54px;height:54px;border-radius:50%;
+  background:var(--yellow);
+  border:3px solid var(--red);
+  box-shadow:0 2px 0 var(--black);
+  flex-shrink:0;
+}
+.logo-mark-main{
+  font-family:"Yuji Syuku",serif;
+  font-size:26px;font-weight:900;color:var(--black);
+  transform:rotate(-5deg);
+  text-shadow:1px 1px 0 var(--red);
+}
+.logo-mark-sub{
+  position:absolute;top:-6px;left:50%;transform:translateX(-50%) rotate(-8deg);
+  font-size:8px;color:var(--red);font-weight:900;
+  background:#fff;padding:1px 4px;border-radius:3px;
+  border:1px solid var(--red);white-space:nowrap;
+}
+.logo-text{font-weight:900;font-size:16px;line-height:1.15;color:#fff}
+.logo-text small{display:block;font-size:10px;color:var(--yellow);letter-spacing:.2em;margin-top:2px}
+.nav{display:flex;gap:24px;font-size:14px;font-weight:500}
+.nav a:hover{color:var(--gold)}
+.btn-entry-sm{
+  background:var(--red);color:#fff;
+  padding:10px 18px;border-radius:999px;
+  font-weight:700;font-size:14px;
+  transition:.2s;
+}
+.btn-entry-sm:hover{background:var(--red-dark);transform:translateY(-1px)}
+
+@media(max-width:780px){
+  .nav{display:none}
+}
+
+/* HERO */
+.hero{position:relative;color:#fff;overflow:hidden;min-height:88vh;display:flex;align-items:center}
+.hero-bg{
+  position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255,217,0,.35), transparent 55%),
+    radial-gradient(ellipse at 80% 80%, rgba(230,0,18,.45), transparent 55%),
+    linear-gradient(180deg,#0c0c0c 0%, #1a1a1a 50%, #2a0d0d 100%);
+}
+.hero-bg::after{
+  content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 15% 20%, var(--yellow) 0, var(--yellow) 60px, transparent 62px),
+    radial-gradient(circle at 85% 70%, var(--red) 0, var(--red) 80px, transparent 82px);
+  opacity:.12;filter:blur(2px);
+}
+.hero-bg::before{
+  content:"";position:absolute;inset:0;
+  background-image:
+    repeating-linear-gradient(45deg, transparent 0 18px, rgba(255,255,255,.02) 18px 19px);
+  opacity:.6;
+}
+.hero-inner{
+  position:relative;z-index:1;
+  max-width:1100px;margin:0 auto;
+  padding:80px 24px;
+  text-align:center;
+}
+.hero-sub{
+  display:inline-block;
+  font-size:13px;letter-spacing:.2em;
+  color:var(--black);
+  background:var(--yellow);
+  padding:8px 22px;border-radius:999px;
+  margin-bottom:28px;
+  font-weight:900;
+  box-shadow:0 4px 0 var(--red-dark);
+}
+.hero-title{
+  font-family:"Yuji Syuku","Noto Sans JP",serif;
+  font-size:clamp(36px,7vw,84px);
+  font-weight:900;
+  line-height:1.2;
+  margin-bottom:24px;
+  text-shadow:4px 4px 0 var(--red-dark), 0 2px 30px rgba(0,0,0,.5);
+}
+.hero-title span{display:block}
+.hero-title .kakejiku{
+  color:var(--yellow);
+  font-size:1.2em;
+  transform:rotate(-3deg);
+  display:inline-block;
+}
+.hero-title .accent{color:#fff;font-size:.55em;margin-top:14px;letter-spacing:.05em}
+.hero-lead{font-size:clamp(15px,2vw,18px);margin-bottom:36px;color:#f0e6d6}
+.hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:48px}
+.btn-primary{
+  background:var(--yellow);color:var(--black);
+  padding:18px 42px;border-radius:999px;
+  font-weight:900;font-size:17px;
+  box-shadow:0 6px 0 var(--red-dark), 0 12px 30px rgba(230,0,18,.4);
+  transition:.15s;
+  border:3px solid var(--red);
+}
+.btn-primary:hover{transform:translateY(2px);box-shadow:0 2px 0 var(--red-dark), 0 8px 20px rgba(230,0,18,.5)}
+.btn-secondary{
+  background:transparent;color:#fff;
+  padding:18px 36px;border-radius:999px;
+  border:2px solid #fff;
+  font-weight:700;
+  transition:.2s;
+}
+.btn-secondary:hover{background:#fff;color:var(--black)}
+
+.hero-points{
+  display:flex;justify-content:center;gap:14px;flex-wrap:wrap;
+}
+.hero-points li{
+  background:rgba(255,255,255,.1);
+  border:2px solid var(--yellow);
+  padding:10px 18px;border-radius:8px;
+  font-size:14px;font-weight:700;
+}
+.hero-points strong{color:var(--yellow);margin-right:6px;font-size:1.15em}
+
+/* STRIP */
+.strip{background:var(--black);color:#fff;border-top:4px solid var(--yellow);border-bottom:4px solid var(--red);
+  background-image:repeating-linear-gradient(45deg,transparent 0 22px,rgba(255,217,0,.04) 22px 23px)}
+.strip-inner{
+  max-width:1100px;margin:0 auto;padding:28px 24px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:20px;text-align:center;
+}
+.strip-inner > div{display:flex;flex-direction:column;gap:4px}
+.num{font-family:"Yuji Syuku",serif;font-size:clamp(28px,5vw,46px);color:var(--yellow);font-weight:900;line-height:1}
+.num small{font-size:.5em;margin-left:2px}
+.lbl{font-size:12px;letter-spacing:.15em;color:#ccc}
+@media(max-width:600px){.strip-inner{grid-template-columns:repeat(2,1fr)}}
+
+/* SECTION COMMON */
+.section{padding:96px 24px}
+.container{max-width:1100px;margin:0 auto}
+.container.narrow{max-width:760px}
+.section-title{
+  font-size:clamp(26px,4vw,36px);
+  font-weight:900;
+  text-align:center;
+  margin-bottom:14px;
+  line-height:1.3;
+}
+.section-title span{
+  display:inline-block;
+  font-family:"Yuji Syuku",serif;
+  color:var(--black);
+  background:var(--yellow);
+  font-size:.4em;letter-spacing:.3em;
+  margin-bottom:14px;
+  padding:4px 16px;border-radius:4px;
+  border:2px solid var(--red);
+}
+.section-title.light{color:#fff}
+.section-title.light span{background:var(--yellow);color:var(--black);border-color:var(--yellow)}
+.section-title.center{text-align:center}
+.section-lead{text-align:center;color:var(--gray);margin-bottom:56px}
+
+.section-dark{background:var(--black);color:#fff}
+.section-cream{background:var(--cream)}
+.section-red{background:linear-gradient(180deg,var(--red) 0%,var(--red-dark) 100%);color:#fff}
+
+/* JOBS */
+.jobs{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.job-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:32px 26px;
+  transition:.25s;
+  display:flex;flex-direction:column;
+}
+.job-card:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(0,0,0,.08)}
+.job-card.featured{
+  border:2px solid var(--red);
+  position:relative;
+  background:linear-gradient(180deg,#fff 0%,#fff8f6 100%);
+}
+.job-card.featured::before{
+  content:"人気No.1";position:absolute;top:-14px;right:20px;
+  background:var(--yellow);color:var(--black);
+  padding:6px 16px;border-radius:999px;font-size:12px;font-weight:900;
+  border:2px solid var(--red);
+}
+.job-tag{
+  display:inline-block;background:var(--black);color:#fff;
+  padding:4px 12px;border-radius:4px;font-size:12px;
+  font-weight:700;align-self:flex-start;margin-bottom:14px;
+}
+.job-card h3{font-size:24px;margin-bottom:10px}
+.job-wage{color:var(--red);font-weight:900;font-size:18px;margin-bottom:18px}
+.job-card ul{margin-bottom:24px;flex-grow:1}
+.job-card li{
+  position:relative;padding-left:22px;margin-bottom:8px;font-size:14px;
+}
+.job-card li::before{
+  content:"●";position:absolute;left:0;color:var(--red);font-size:10px;top:5px;
+}
+.btn-text{
+  color:var(--red);font-weight:700;font-size:14px;
+  border-bottom:2px solid var(--red);padding-bottom:2px;align-self:flex-start;
+}
+.btn-text:hover{color:var(--red-dark)}
+@media(max-width:900px){.jobs{grid-template-columns:1fr}}
+
+/* BENEFITS */
+.benefits{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.benefit{
+  background:rgba(255,255,255,.06);
+  border:2px solid var(--yellow);
+  border-radius:10px;
+  padding:24px 18px;text-align:center;
+  transition:.2s;
+}
+.benefit:hover{background:rgba(255,217,0,.1);transform:translateY(-3px)}
+.bn-ico{font-size:34px;margin-bottom:10px}
+.benefit h4{color:var(--yellow);font-size:16px;margin-bottom:8px}
+.benefit p{font-size:13px;color:#ddd;line-height:1.6}
+@media(max-width:900px){.benefits{grid-template-columns:repeat(2,1fr)}}
+
+/* REQUIREMENTS TABS */
+.req-tabs{display:flex;gap:8px;justify-content:center;margin-bottom:28px;flex-wrap:wrap}
+.tab{
+  background:#fff;border:2px solid var(--line);
+  padding:10px 26px;border-radius:999px;
+  font-weight:700;font-size:14px;cursor:pointer;
+  transition:.2s;font-family:inherit;
+}
+.tab:hover{border-color:var(--red)}
+.tab.active{background:var(--red);color:#fff;border-color:var(--red)}
+.req-table{
+  width:100%;border-collapse:collapse;
+  background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+}
+.req-table th,.req-table td{
+  padding:18px 20px;text-align:left;border-bottom:1px solid var(--line);
+  vertical-align:top;font-size:15px;
+}
+.req-table th{
+  background:#faf6f0;width:160px;color:var(--red);font-weight:700;
+}
+.req-table tr:last-child th,.req-table tr:last-child td{border-bottom:0}
+.req-table small{color:var(--gray);font-size:12px;display:inline-block;margin-top:4px}
+.hidden{display:none}
+@media(max-width:600px){
+  .req-table th{width:auto;display:block;border-bottom:0;padding-bottom:0}
+  .req-table td{display:block;padding-top:6px}
+}
+
+/* VOICE */
+.voices{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.voice-card{
+  background:#fff;border-radius:12px;padding:28px;
+  border:1px solid var(--line);
+  position:relative;
+}
+.voice-card::before{
+  content:"“";position:absolute;top:-8px;left:18px;
+  font-family:Georgia,serif;font-size:80px;color:var(--red);opacity:.2;line-height:1;
+}
+.voice-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.avatar{
+  width:54px;height:54px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:900;font-size:22px;
+}
+.av-1{background:var(--red)}
+.av-2{background:var(--yellow);color:var(--black);border:2px solid var(--red)}
+.av-3{background:var(--black);border:2px solid var(--yellow);color:var(--yellow)}
+.voice-name{font-weight:700;font-size:16px}
+.voice-role{font-size:12px;color:var(--gray)}
+.voice-card p{font-size:14px;line-height:1.8}
+@media(max-width:900px){.voices{grid-template-columns:1fr}}
+
+/* STORES */
+.store-controls{
+  display:flex;flex-direction:column;gap:14px;
+  margin-bottom:28px;
+}
+.store-filters{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.chip{
+  background:#fff;border:2px solid var(--line);
+  padding:8px 18px;border-radius:999px;
+  font-weight:700;font-size:13px;cursor:pointer;
+  transition:.15s;font-family:inherit;
+}
+.chip:hover{border-color:var(--red)}
+.chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+.chip .cnt{margin-left:4px;font-size:11px;opacity:.8}
+.store-search{
+  width:100%;max-width:480px;margin:0 auto;
+  padding:12px 18px;
+  border:2px solid var(--line);border-radius:999px;
+  font-size:14px;font-family:inherit;background:#fff;
+}
+.store-search:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px rgba(230,0,18,.1)}
+
+.stores{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));
+  gap:14px;
+}
+.store-card{
+  background:#fff;border:1px solid var(--line);
+  border-left:4px solid var(--red);
+  border-radius:8px;padding:18px 20px;
+  transition:.2s;
+  display:flex;flex-direction:column;gap:6px;
+}
+.store-card:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.06)}
+.store-card.brand-maruke{border-left-color:var(--black)}
+.store-name{font-weight:700;font-size:14px;line-height:1.4}
+.store-badge{
+  display:inline-block;
+  background:var(--yellow);color:var(--black);
+  font-size:10px;font-weight:900;
+  padding:2px 8px;border-radius:4px;
+  margin-right:6px;border:1px solid var(--red);
+}
+.brand-maruke .store-badge{background:#fff;border-color:var(--black)}
+.store-addr{font-size:12px;color:var(--gray);line-height:1.6}
+.store-tel{
+  font-size:13px;color:var(--red);font-weight:700;
+  text-decoration:none;
+}
+.store-tel:hover{text-decoration:underline}
+.store-count{
+  text-align:center;margin-top:24px;
+  font-size:13px;color:var(--gray);
+}
+.store-empty{
+  grid-column:1/-1;text-align:center;
+  padding:40px;color:var(--gray);
+}
+
+/* FAQ */
+.faq details{
+  background:#fff;border:1px solid var(--line);
+  border-radius:10px;margin-bottom:12px;
+  overflow:hidden;
+}
+.faq summary{
+  padding:18px 22px;cursor:pointer;font-weight:700;
+  position:relative;list-style:none;padding-right:50px;
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{
+  content:"+";position:absolute;right:20px;top:50%;transform:translateY(-50%);
+  font-size:22px;color:var(--red);font-weight:900;transition:.2s;
+}
+.faq details[open] summary::after{transform:translateY(-50%) rotate(45deg)}
+.faq details p{padding:0 22px 18px;color:var(--gray);font-size:14px}
+
+/* ENTRY FORM */
+.entry-lead{text-align:center;margin-bottom:36px;color:#fff;opacity:.9}
+.entry-form{
+  background:#fff;color:var(--black);
+  padding:36px;border-radius:14px;
+  box-shadow:0 20px 50px rgba(0,0,0,.25);
+}
+.form-row{margin-bottom:20px}
+.form-row label{
+  display:block;font-weight:700;font-size:14px;margin-bottom:8px;
+}
+.form-row label span{
+  background:var(--red);color:#fff;font-size:11px;
+  padding:2px 8px;border-radius:4px;margin-left:6px;vertical-align:middle;font-weight:700;
+}
+.form-row input,.form-row select,.form-row textarea{
+  width:100%;padding:14px 16px;
+  border:1px solid var(--line);border-radius:8px;
+  font-size:15px;font-family:inherit;
+  background:#faf9f7;
+  transition:.2s;
+}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{
+  outline:none;border-color:var(--red);background:#fff;
+  box-shadow:0 0 0 3px rgba(200,16,46,.1);
+}
+.btn-submit{
+  width:100%;padding:18px;
+  background:var(--yellow);color:var(--black);
+  border:3px solid var(--red);border-radius:999px;
+  font-size:18px;font-weight:900;font-family:inherit;
+  cursor:pointer;transition:.15s;
+  margin-top:8px;
+  box-shadow:0 6px 0 var(--red-dark);
+}
+.btn-submit:hover{transform:translateY(3px);box-shadow:0 3px 0 var(--red-dark)}
+.form-note{text-align:center;font-size:12px;color:var(--gray);margin-top:14px}
+
+.entry-done{
+  background:#fff;color:var(--black);
+  padding:48px 36px;border-radius:14px;text-align:center;
+}
+.entry-done h3{color:var(--red);font-size:24px;margin-bottom:14px}
+
+/* FOOTER */
+.footer{background:#0a0a0a;color:#aaa;padding:60px 24px 30px}
+.footer-grid{
+  display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:40px;
+  padding-bottom:40px;border-bottom:1px solid #222;margin-bottom:24px;
+}
+.footer .logo-text{color:#fff;margin-bottom:12px;font-size:20px}
+.footer .ft-h{color:#fff;font-weight:700;margin-bottom:14px;font-size:14px}
+.footer a{display:block;font-size:13px;padding:4px 0;color:#aaa}
+.footer a:hover{color:var(--yellow)}
+.footer .small{font-size:13px;line-height:1.8}
+.footer strong{color:var(--yellow);font-size:22px;letter-spacing:.05em}
+.copy{text-align:center;font-size:12px;color:#666}
+@media(max-width:780px){
+  .footer-grid{grid-template-columns:1fr}
+}</style>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Yuji+Syuku&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="#" class="logo">
+      <span class="logo-mark">
+        <span class="logo-mark-sub">それゆけ！</span>
+        <span class="logo-mark-main">鶏</span>
+      </span>
+      <span class="logo-text">それゆけ！鶏ヤロー！<small>RECRUIT 採用情報</small></span>
+    </a>
+    <nav class="nav">
+      <a href="#jobs">募集職種</a>
+      <a href="#benefits">待遇</a>
+      <a href="#requirements">募集要項</a>
+      <a href="#stores">店舗一覧</a>
+      <a href="#voice">先輩の声</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a href="#entry" class="btn-entry-sm">応募する</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-inner">
+    <p class="hero-sub">居酒屋 それゆけ！鶏ヤロー！｜全国スタッフ大募集</p>
+    <h1 class="hero-title">
+      <span class="kakejiku">それゆけ！</span>
+      <span class="accent">アツく、楽しく、それゆけ！</span>
+    </h1>
+    <p class="hero-lead">
+      未経験スタートが9割。<br>
+      串と笑い声で、街をアツくする仲間を募集中！
+    </p>
+    <div class="hero-cta">
+      <a href="#entry" class="btn-primary">かんたん30秒応募</a>
+      <a href="#jobs" class="btn-secondary">仕事を見る</a>
+    </div>
+    <ul class="hero-points">
+      <li><strong>時給</strong>1,200円〜</li>
+      <li><strong>正社員月給</strong>28万円〜</li>
+      <li><strong>まかない</strong>毎日無料</li>
+      <li><strong>未経験</strong>OK</li>
+    </ul>
+  </div>
+</section>
+
+<section class="strip">
+  <div class="strip-inner">
+    <div><span class="num">50</span><span class="lbl">店舗以上</span></div>
+    <div><span class="num">95<small>%</small></span><span class="lbl">未経験スタート</span></div>
+    <div><span class="num">3<small>年</small></span><span class="lbl">最短で店長</span></div>
+    <div><span class="num">400<small>万〜</small></span><span class="lbl">店長年収</span></div>
+  </div>
+</section>
+
+<section id="jobs" class="section">
+  <div class="container">
+    <h2 class="section-title"><span>JOBS</span>募集職種</h2>
+    <p class="section-lead">あなたの「やりたい」に合わせて選べる3つの働き方。</p>
+
+    <div class="jobs">
+      <article class="job-card">
+        <div class="job-tag">アルバイト</div>
+        <h3>ホール／キッチン</h3>
+        <p class="job-wage">時給 1,200円〜1,800円</p>
+        <ul>
+          <li>週1日／1日3h〜OK</li>
+          <li>シフト自己申告制</li>
+          <li>22時以降 時給25%UP</li>
+          <li>まかない毎日無料</li>
+        </ul>
+        <a href="#entry" class="btn-text">この職種に応募 →</a>
+      </article>
+
+      <article class="job-card featured">
+        <div class="job-tag">正社員</div>
+        <h3>店長候補</h3>
+        <p class="job-wage">月給 280,000円〜450,000円</p>
+        <ul>
+          <li>未経験から最短3年で店長</li>
+          <li>独立支援制度あり</li>
+          <li>完全週休2日制も選択可</li>
+          <li>賞与年2回／昇給年1回</li>
+        </ul>
+        <a href="#entry" class="btn-text">この職種に応募 →</a>
+      </article>
+
+      <article class="job-card">
+        <div class="job-tag">業務委託</div>
+        <h3>焼き場職人</h3>
+        <p class="job-wage">日給 15,000円〜</p>
+        <ul>
+          <li>炭火経験者歓迎</li>
+          <li>1日単位の勤務OK</li>
+          <li>道具・ユニフォーム支給</li>
+          <li>技術指導あり</li>
+        </ul>
+        <a href="#entry" class="btn-text">この職種に応募 →</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="benefits" class="section section-dark">
+  <div class="container">
+    <h2 class="section-title light"><span>BENEFITS</span>働きやすさ・待遇</h2>
+
+    <div class="benefits">
+      <div class="benefit"><div class="bn-ico">🍗</div><h4>まかない無料</h4><p>串・丼・限定メニューも食べ放題。</p></div>
+      <div class="benefit"><div class="bn-ico">📅</div><h4>シフト自由</h4><p>週1・3時間からOK。学業や家庭と両立。</p></div>
+      <div class="benefit"><div class="bn-ico">🚇</div><h4>交通費全額</h4><p>1日上限なし。遠方からの通勤も安心。</p></div>
+      <div class="benefit"><div class="bn-ico">📈</div><h4>昇給随時</h4><p>3ヶ月ごとに評価。頑張りは時給に。</p></div>
+      <div class="benefit"><div class="bn-ico">🏠</div><h4>社宅・寮あり</h4><p>正社員は家賃半額補助制度あり。</p></div>
+      <div class="benefit"><div class="bn-ico">🎓</div><h4>独立支援</h4><p>のれん分け制度で自分の店を持てる。</p></div>
+      <div class="benefit"><div class="bn-ico">💴</div><h4>賞与年2回</h4><p>正社員は夏冬の賞与＋業績賞与あり。</p></div>
+      <div class="benefit"><div class="bn-ico">🧑‍🤝‍🧑</div><h4>仲間最高</h4><p>同年代の仲間が多くワイワイ働ける。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="requirements" class="section">
+  <div class="container">
+    <h2 class="section-title"><span>REQUIREMENTS</span>募集要項</h2>
+
+    <div class="req-tabs">
+      <button class="tab active" data-tab="part">アルバイト</button>
+      <button class="tab" data-tab="full">正社員</button>
+      <button class="tab" data-tab="pro">業務委託</button>
+    </div>
+
+    <table class="req-table" data-pane="part">
+      <tbody>
+        <tr><th>職種</th><td>ホールスタッフ／キッチンスタッフ</td></tr>
+        <tr><th>給与</th><td>時給 1,200円〜1,800円<br><small>※22時以降は25%UP（時給1,500円〜）</small></td></tr>
+        <tr><th>勤務時間</th><td>16:00〜翌1:00 の間で1日3h〜／週1日〜</td></tr>
+        <tr><th>勤務地</th><td>全国の鶏ヤロー各店舗（希望勤務地考慮）</td></tr>
+        <tr><th>応募資格</th><td>高校生不可／未経験OK／学生・フリーター・主婦(夫)歓迎</td></tr>
+        <tr><th>待遇</th><td>まかない無料／交通費全額／制服貸与／昇給随時／社員登用あり</td></tr>
+        <tr><th>休日休暇</th><td>シフト自己申告制</td></tr>
+      </tbody>
+    </table>
+
+    <table class="req-table hidden" data-pane="full">
+      <tbody>
+        <tr><th>職種</th><td>店長候補（店舗マネジメント／調理／接客）</td></tr>
+        <tr><th>給与</th><td>月給 280,000円〜450,000円<br><small>※経験・能力により決定／賞与年2回</small></td></tr>
+        <tr><th>勤務時間</th><td>変形労働時間制（実働8時間／休憩1.5h）</td></tr>
+        <tr><th>勤務地</th><td>全国の鶏ヤロー各店舗（U・Iターン応援）</td></tr>
+        <tr><th>応募資格</th><td>学歴不問／未経験OK／18歳以上（深夜業務のため）</td></tr>
+        <tr><th>待遇</th><td>各種社保完備／社宅制度／独立支援／退職金制度／健康診断</td></tr>
+        <tr><th>休日休暇</th><td>月8〜10日／有給／慶弔／産休・育休</td></tr>
+      </tbody>
+    </table>
+
+    <table class="req-table hidden" data-pane="pro">
+      <tbody>
+        <tr><th>職種</th><td>焼き場職人（業務委託）</td></tr>
+        <tr><th>報酬</th><td>日給 15,000円〜25,000円<br><small>※スキル・店舗規模により</small></td></tr>
+        <tr><th>勤務時間</th><td>1日6h〜／シフト相談</td></tr>
+        <tr><th>勤務地</th><td>全国の鶏ヤロー各店舗</td></tr>
+        <tr><th>応募資格</th><td>炭火焼経験1年以上、または同等のスキル</td></tr>
+        <tr><th>待遇</th><td>道具・ユニフォーム支給／技術指導／交通費別途</td></tr>
+        <tr><th>契約</th><td>業務委託契約（個人事業主）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="stores" class="section section-cream">
+  <div class="container">
+    <h2 class="section-title"><span>STORES</span>店舗一覧</h2>
+    <p class="section-lead">全国50店舗以上で仲間を募集中。お近くの店舗を探してみてください。</p>
+
+    <div class="store-controls">
+      <div class="store-filters" id="storeFilters">
+        <button class="chip active" data-region="all">すべて <span class="cnt"></span></button>
+        <button class="chip" data-region="tohoku">東北</button>
+        <button class="chip" data-region="kanto">関東</button>
+        <button class="chip" data-region="tokyo">東京</button>
+        <button class="chip" data-region="saitama">埼玉</button>
+        <button class="chip" data-region="chiba">千葉</button>
+        <button class="chip" data-region="kanagawa">神奈川</button>
+        <button class="chip" data-region="tokai">東海</button>
+        <button class="chip" data-region="kansai">関西</button>
+      </div>
+      <input type="search" id="storeSearch" placeholder="🔍 店舗名・住所で検索（例：渋谷、大阪）" class="store-search">
+    </div>
+
+    <div class="stores" id="stores"></div>
+    <p class="store-count" id="storeCount"></p>
+  </div>
+</section>
+
+<section id="voice" class="section">
+  <div class="container">
+    <h2 class="section-title"><span>VOICE</span>先輩スタッフの声</h2>
+
+    <div class="voices">
+      <article class="voice-card">
+        <div class="voice-head">
+          <div class="avatar av-1">T</div>
+          <div>
+            <p class="voice-name">タカシ さん</p>
+            <p class="voice-role">店長／入社4年目</p>
+          </div>
+        </div>
+        <p>「最初はバイトから。気づいたら店を任されてました。年収もバイト時代の3倍に。鶏ヤローは仲間と本気で楽しめる、それゆけ精神の現場です！」</p>
+      </article>
+
+      <article class="voice-card">
+        <div class="voice-head">
+          <div class="avatar av-2">M</div>
+          <div>
+            <p class="voice-name">ミナミ さん</p>
+            <p class="voice-role">ホール／大学2年</p>
+          </div>
+        </div>
+        <p>「シフトの融通が神。テスト前は週0、夏休みはガッツリ稼げる。お客さんと話すのが楽しくて続いてます。」</p>
+      </article>
+
+      <article class="voice-card">
+        <div class="voice-head">
+          <div class="avatar av-3">K</div>
+          <div>
+            <p class="voice-name">ケン さん</p>
+            <p class="voice-role">焼き場／入社2年目</p>
+          </div>
+        </div>
+        <p>「炭火の前は無心になれる。焼き方を覚えて、お客さんから『美味しい』と言われた瞬間は忘れられないです。」</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="faq" class="section">
+  <div class="container narrow">
+    <h2 class="section-title"><span>FAQ</span>よくある質問</h2>
+
+    <div class="faq">
+      <details><summary>本当に未経験でも大丈夫ですか？</summary>
+        <p>はい、新規入社の95%が未経験スタートです。3日間の研修と先輩のフォローで、安心して仕事を覚えられます。</p></details>
+      <details><summary>髪型・髪色・ピアスは自由ですか？</summary>
+        <p>清潔感があればOK。明るめの髪色やピアスをしているスタッフも多いです。</p></details>
+      <details><summary>掛け持ち（Wワーク）は可能ですか？</summary>
+        <p>可能です。シフト自己申告制なので、もう一つのお仕事と両立しやすい環境です。</p></details>
+      <details><summary>面接はどんな服装で行けばいいですか？</summary>
+        <p>私服でOKです。スーツでなくても問題ありません。リラックスしてお越しください。</p></details>
+      <details><summary>採用までどのくらいかかりますか？</summary>
+        <p>応募から面接まで最短2日、最短即日勤務スタートも可能です。</p></details>
+    </div>
+  </div>
+</section>
+
+<section id="entry" class="section section-red">
+  <div class="container narrow">
+    <h2 class="section-title light center"><span>ENTRY</span>30秒でかんたん応募</h2>
+    <p class="entry-lead">ご記入いただいた内容で、担当者から24時間以内にご連絡します。</p>
+
+    <form class="entry-form" id="entryForm" novalidate>
+      <div class="form-row">
+        <label>お名前 <span>必須</span></label>
+        <input type="text" name="name" required placeholder="鶏山 太郎">
+      </div>
+      <div class="form-row">
+        <label>電話番号 <span>必須</span></label>
+        <input type="tel" name="tel" required placeholder="090-0000-0000">
+      </div>
+      <div class="form-row">
+        <label>メールアドレス</label>
+        <input type="email" name="email" placeholder="example@example.com">
+      </div>
+      <div class="form-row">
+        <label>応募職種 <span>必須</span></label>
+        <select name="job" required>
+          <option value="">選択してください</option>
+          <option>アルバイト（ホール／キッチン）</option>
+          <option>正社員（店長候補）</option>
+          <option>業務委託（焼き場職人）</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>希望勤務店舗</label>
+        <select name="store" id="storeSelect">
+          <option value="">選択してください（任意）</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>ひとこと</label>
+        <textarea name="memo" rows="4" placeholder="希望シフトやご質問などあればご記入ください"></textarea>
+      </div>
+      <button type="submit" class="btn-submit">この内容で応募する</button>
+      <p class="form-note">送信いただいた情報は採用選考の目的のみに利用します。</p>
+    </form>
+
+    <div class="entry-done" id="entryDone" hidden>
+      <h3>🎉 応募ありがとうございます！</h3>
+      <p>24時間以内に担当者よりご連絡いたします。<br>鶏ヤローでお会いできるのを楽しみにしています。</p>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <p class="logo-text"><span class="logo-mark"><span class="logo-mark-main">鶏</span></span> それゆけ！鶏ヤロー！</p>
+        <p class="small">居酒屋 それゆけ！鶏ヤロー！｜全国50店舗以上</p>
+      </div>
+      <div>
+        <p class="ft-h">採用について</p>
+        <a href="#jobs">募集職種</a>
+        <a href="#requirements">募集要項</a>
+        <a href="#entry">応募フォーム</a>
+      </div>
+      <div>
+        <p class="ft-h">お問い合わせ</p>
+        <p class="small">採用専用ダイヤル<br><strong>0120-000-000</strong><br>受付：10:00〜19:00（年中無休）</p>
+      </div>
+    </div>
+    <p class="copy">© それゆけ！鶏ヤロー！RECRUIT. All Rights Reserved.</p>
+  </div>
+</footer>
+
+<script>
+// =====================
+// 店舗データ
+// =====================
+const STORES = [
+  // 東北
+  { region:"tohoku", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 八戸店", addr:"〒031-0033 青森県八戸市六日町8−１ やま正ビル 1階", tel:"0178-38-3226" },
+  { region:"tohoku", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 盛岡大通り店", addr:"〒020-0022 岩手県盛岡市大通２丁目７−２６ 杉山ビル 1階", tel:"019-656-6161" },
+  { region:"tohoku", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 仙台国分町店", addr:"〒980-0811 宮城県仙台市青葉区一番町４丁目２−１０ 2F", tel:"022-398-6246" },
+  { region:"tohoku", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 福島いわき店", addr:"〒970-8026 福島県いわき市平三町目29番２９ ベルツリ 2階", tel:"0246-88-9088" },
+  { region:"tohoku", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 福島栄町店", addr:"〒960-8031 福島県福島市栄町１１−１０ 栄町ビル 2階", tel:"024-563-1331" },
+
+  // 関東（茨城・栃木・群馬）
+  { region:"kanto", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 土浦店", addr:"〒300-0036 茨城県土浦市大和町３−１", tel:"029-828-7135" },
+  { region:"kanto", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 東武宇都宮店", addr:"〒320-0801 栃木県宇都宮市池上町２−１ プラチナビル 1.2F", tel:"028-612-6479" },
+  { region:"kanto", brand:"maruke", name:"秩父ホルモン焼肉まる助 高崎駅前店", addr:"〒370-0826 群馬県高崎市連雀町１３６", tel:"027-387-0049" },
+
+  // 埼玉
+  { region:"saitama", brand:"maruke", name:"秩父焼肉ホルモン酒場 まる助 大宮一番街店", addr:"〒330-0802 埼玉県さいたま市大宮区宮町１丁目５３ ラック大宮一番街 1F", tel:"048-780-2260" },
+  { region:"saitama", brand:"maruke", name:"秩父焼肉ホルモン酒場 まる助 東松山駅前店", addr:"〒355-0028 埼玉県東松山市箭弓町１丁目１２−８ 大谷ビル 1F", tel:"0493-53-4777" },
+  { region:"saitama", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 大宮店", addr:"〒330-0802 埼玉県さいたま市大宮区宮町１丁目９７−２", tel:"048-662-9352" },
+  { region:"saitama", brand:"maruke", name:"秩父ホルモン酒場 まる助 川越クレアモール店", addr:"〒350-0043 埼玉県川越市新富町２丁目９−１７", tel:"049-227-9844" },
+  { region:"saitama", brand:"maruke", name:"秩父焼肉ホルモン酒場 まる助 熊谷駅前店", addr:"〒360-0037 埼玉県熊谷市筑波２丁目４９−１ 熊谷駅前ビル B1", tel:"048-577-8477" },
+  { region:"saitama", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 志木店", addr:"〒352-0001 埼玉県新座市東北２丁目３７−１０ 高野ビル １階", tel:"048-423-4232" },
+  { region:"saitama", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 南越谷店", addr:"〒343-0845 埼玉県越谷市南越谷1-20-6 高木ビル 2F", tel:"048-971-9993" },
+  { region:"saitama", brand:"tori", name:"居酒屋 魚と焼鳥 鶏ヤロー！ 草加店", addr:"〒340-0015 埼玉県草加市高砂２丁目１２−１０ ２階", tel:"048-950-8861" },
+  { region:"saitama", brand:"maruke", name:"秩父焼肉ホルモン酒場 まる助 西武秩父駅前店", addr:"〒368-0032 埼玉県秩父市熊木町９−５ 1F", tel:"0494-26-6989" },
+  { region:"saitama", brand:"maruke", name:"秩父焼肉ホルモンまる助 みやのかわ本店", addr:"〒368-0046 埼玉県秩父市宮側町１５−１０", tel:"0494-24-0707" },
+
+  // 千葉
+  { region:"chiba", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 津田沼店", addr:"〒274-0825 千葉県船橋市前原西２丁目１５−２０", tel:"047-406-5379" },
+  { region:"chiba", brand:"tori", name:"居酒屋 魚と焼鳥 鶏ヤロー！ 柏店", addr:"〒277-0005 千葉県柏市柏２丁目５−４ TMビル ２F", tel:"04-7137-7764" },
+  { region:"chiba", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 千葉駅東口店", addr:"〒260-0015 千葉県千葉市中央区富士見２丁目４−１６ 金子ビル ２階", tel:"043-216-4998" },
+  { region:"chiba", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 柏店", addr:"〒277-0005 千葉県柏市柏３丁目７−２１", tel:"04-7189-8887" },
+  { region:"chiba", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 松戸店", addr:"〒271-0091 千葉県松戸市本町4−８ 芳風 建物", tel:"047-701-5535" },
+  { region:"chiba", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 船橋店", addr:"〒273-0005 千葉県船橋市本町４丁目５−２６ 2F", tel:"047-409-5513" },
+
+  // 東京
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 新宿西口店", addr:"〒160-0023 東京都新宿区西新宿１丁目１２−９ 田畑ビル ２F", tel:"03-6302-0929" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 北千住店", addr:"〒120-0026 東京都足立区千住旭町３−８ ウイングビル ２階", tel:"03-6806-1445" },
+  { region:"tokyo", brand:"tori", name:"居酒屋 魚と焼鳥鶏ヤロー！ 秋葉原店", addr:"〒101-0025 東京都千代田区神田佐久間町１丁目２４ Gato 秋葉原ビル 地下1F", tel:"03-6384-0369" },
+  { region:"tokyo", brand:"tori", name:"居酒屋 魚鶏ヤロー！ 立川駅北口店", addr:"〒190-0012 東京都立川市曙町２丁目６−５ 地下一階", tel:"042-506-0100" },
+  { region:"tokyo", brand:"tori", name:"酒場 魚と鶏ヤロー 御徒町店", addr:"〒110-0005 東京都台東区上野５丁目２０−１５", tel:"03-6803-0029" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 東小金井店", addr:"〒184-0011 東京都小金井市東町４丁目４２−２０ 2F", tel:"050-5456-0992" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 池袋店", addr:"〒171-0022 東京都豊島区南池袋１丁目２３−１ 富士ビル 1階", tel:"03-5944-8188" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 錦糸町店", addr:"〒130-0022 東京都墨田区江東橋３丁目１１−３ ソシアル錦糸町ビル 2F", tel:"03-5669-0885" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 高田馬場店", addr:"〒169-0075 東京都新宿区高田馬場１丁目２７−１", tel:"03-6233-8644" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 新橋店", addr:"〒105-0004 東京都港区新橋２丁目９−１ 青葉ビル 2階", tel:"03-6457-9578" },
+  { region:"tokyo", brand:"tori", name:"カラオケ付き居酒屋鶏ヤロー！ 池袋東口店", addr:"〒171-0022 東京都豊島区南池袋１丁目２７−８ サンパレス 4F", tel:"03-5810-3666" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 渋谷駅前店", addr:"〒150-0043 東京都渋谷区道玄坂２丁目３−１ 渋谷駅前ビル １F", tel:"03-6416-3336" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 渋谷道玄坂店", addr:"〒150-0043 東京都渋谷区道玄坂２丁目２５−１４ カネダイビル 2・3階", tel:"03-6455-2939" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 町田店", addr:"〒194-0013 東京都町田市原町田６丁目１１−１１ T-wingmachida 4F", tel:"042-851-8480" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 立川店", addr:"〒190-0022 東京都立川市錦町１丁目２−１８ 澤田ビル 1階", tel:"042-512-8668" },
+  { region:"tokyo", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 新宿歌舞伎町店", addr:"〒160-0021 東京都新宿区歌舞伎町１丁目１７−４ ポケットビル", tel:"03-6380-3951" },
+
+  // 神奈川
+  { region:"kanagawa", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 川崎駅東口店", addr:"〒210-0007 神奈川県川崎市川崎区駅前本町３−３ ムラタヤビル ４階", tel:"044-589-4494" },
+  { region:"kanagawa", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 溝の口店", addr:"〒213-0001 神奈川県川崎市高津区溝口１丁目１１−２３ タイムワンビル ２階", tel:"044-455-4944" },
+  { region:"kanagawa", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 藤沢店", addr:"〒251-0025 神奈川県藤沢市鵠沼石上１丁目３−３ 相模プラザ第5ビル 3階", tel:"0466-52-8466" },
+
+  // 東海
+  { region:"tokai", brand:"tori", name:"居酒屋鶏ヤロー 名古屋栄2号店", addr:"〒460-0008 愛知県名古屋市中区栄３丁目９−２７", tel:"052-228-4655" },
+  { region:"tokai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 名古屋駅前店", addr:"〒450-0002 愛知県名古屋市中村区名駅３丁目１８−９ Mizunoビル 1F", tel:"052-433-6733" },
+  { region:"tokai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 名古屋栄1号店", addr:"〒460-0008 愛知県名古屋市中区栄３丁目２−２９ 長谷川ビル 1F", tel:"052-253-9949" },
+
+  // 関西
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 京都三条店", addr:"〒604-8004 京都府京都市中京区中島町４４９−１ Aune京都三条 4階", tel:"075-708-8776" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ なんば千日前店", addr:"〒542-0075 大阪府大阪市中央区難波千日前11-20 遊企画ビル 2F", tel:"06-6626-9985" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 京都西院店", addr:"〒615-0014 京都府京都市右京区西院巽町-2-2", tel:"075-950-0470" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 心斎橋店", addr:"〒542-0083 大阪府大阪市中央区東心斎橋１丁目１８−６ ギャラリービル B1階", tel:"06-4963-3574" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 梅田茶屋町店", addr:"〒530-0013 大阪府大阪市北区茶屋町３−４ チロル茶屋町ビル 5階", tel:"06-4256-8107" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 三宮2F店", addr:"〒650-0012 兵庫県神戸市中央区北長狭通１丁目１０−６ ムーンライトビル 2F", tel:"078-381-5842" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 三宮B1F店", addr:"〒650-0012 兵庫県神戸市中央区北長狭通１丁目７−６ ホワイトローズタワ Ｂ１Ｆ", tel:"078-954-7448" },
+  { region:"kansai", brand:"tori", name:"居酒屋それゆけ！鶏ヤロー！ 姫路店", addr:"〒670-0927 兵庫県姫路市駅前町３１７ 冨貴駅前ビル ４F", tel:"079-240-7058" },
+];
+
+const REGION_MATCH = {
+  all: () => true,
+  tohoku: s => s.region === "tohoku",
+  tokyo: s => s.region === "tokyo",
+  saitama: s => s.region === "saitama",
+  chiba: s => s.region === "chiba",
+  kanagawa: s => s.region === "kanagawa",
+  kanto: s => ["kanto","tokyo","saitama","chiba","kanagawa"].includes(s.region),
+  tokai: s => s.region === "tokai",
+  kansai: s => s.region === "kansai",
+};
+
+// =====================
+// 店舗描画
+// =====================
+const storesEl = document.getElementById('stores');
+const countEl = document.getElementById('storeCount');
+const searchEl = document.getElementById('storeSearch');
+const filtersEl = document.getElementById('storeFilters');
+let currentRegion = 'all';
+
+function renderStores() {
+  if (!storesEl) return;
+  const kw = (searchEl?.value || '').trim().toLowerCase();
+  const list = STORES.filter(REGION_MATCH[currentRegion] || REGION_MATCH.all).filter(s => {
+    if (!kw) return true;
+    return (s.name + s.addr).toLowerCase().includes(kw);
+  });
+
+  if (list.length === 0) {
+    storesEl.innerHTML = '<p class="store-empty">該当する店舗が見つかりませんでした。</p>';
+    countEl.textContent = '';
+    return;
+  }
+
+  storesEl.innerHTML = list.map(s => `
+    <article class="store-card brand-${s.brand}">
+      <p class="store-name">
+        <span class="store-badge">${s.brand === 'tori' ? '鶏ヤロー' : 'まる助'}</span>
+        ${s.name}
+      </p>
+      <p class="store-addr">${s.addr}</p>
+      <a class="store-tel" href="tel:${s.tel.replace(/[^0-9]/g,'')}">📞 ${s.tel}</a>
+    </article>
+  `).join('');
+  countEl.textContent = `${list.length}店舗を表示中（全${STORES.length}店舗）`;
+}
+
+if (filtersEl) {
+  // 件数表示
+  const allCntEl = filtersEl.querySelector('[data-region="all"] .cnt');
+  if (allCntEl) allCntEl.textContent = `(${STORES.length})`;
+
+  filtersEl.querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => {
+      filtersEl.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      currentRegion = c.dataset.region;
+      renderStores();
+    });
+  });
+}
+if (searchEl) searchEl.addEventListener('input', renderStores);
+renderStores();
+
+// 応募フォームの店舗プルダウン生成
+const storeSelect = document.getElementById('storeSelect');
+if (storeSelect) {
+  STORES.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = s.name;
+    storeSelect.appendChild(opt);
+  });
+}
+
+// =====================
+// 募集要項タブ
+// =====================
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.req-table').forEach(t => {
+      t.classList.toggle('hidden', t.dataset.pane !== target);
+    });
+  });
+});
+
+// =====================
+// 応募フォーム
+// =====================
+const form = document.getElementById('entryForm');
+const done = document.getElementById('entryDone');
+if (form) {
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (!data.name || !data.tel || !data.job) {
+      alert('お名前・電話番号・応募職種は必須です。');
+      return;
+    }
+    const list = JSON.parse(localStorage.getItem('tori_entries') || '[]');
+    list.push({ ...data, at: new Date().toISOString() });
+    localStorage.setItem('tori_entries', JSON.stringify(list));
+    form.hidden = true;
+    done.hidden = false;
+    done.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+// ヘッダー影
+const header = document.querySelector('.header');
+window.addEventListener('scroll', () => {
+  if (header) header.style.boxShadow = window.scrollY > 20 ? '0 6px 20px rgba(0,0,0,.3)' : 'none';
+}, { passive: true });
+</script>
+</body>
+</html>

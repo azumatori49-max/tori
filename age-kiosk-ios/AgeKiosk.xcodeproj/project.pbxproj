@@ -1,0 +1,340 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001000000000000A001 /* AgeKioskApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000001000000000000B001 /* AgeKioskApp.swift */; };
+		A1000002000000000000A001 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000B001 /* CameraManager.swift */; };
+		A1000003000000000000A001 /* FaceDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000003000000000000B001 /* FaceDetector.swift */; };
+		A1000004000000000000A001 /* AgeEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004000000000000B001 /* AgeEstimator.swift */; };
+		A1000005000000000000A001 /* JapaneseCalibrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000005000000000000B001 /* JapaneseCalibrator.swift */; };
+		A1000006000000000000A001 /* KioskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000006000000000000B001 /* KioskViewModel.swift */; };
+		A1000007000000000000A001 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000007000000000000B001 /* CameraPreviewView.swift */; };
+		A1000008000000000000A001 /* KioskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008000000000000B001 /* KioskView.swift */; };
+		A1000009000000000000A001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000009000000000000B001 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1000000000000000000C001 /* AgeKiosk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AgeKiosk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000001000000000000B001 /* AgeKioskApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeKioskApp.swift; sourceTree = "<group>"; };
+		A1000002000000000000B001 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
+		A1000003000000000000B001 /* FaceDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceDetector.swift; sourceTree = "<group>"; };
+		A1000004000000000000B001 /* AgeEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgeEstimator.swift; sourceTree = "<group>"; };
+		A1000005000000000000B001 /* JapaneseCalibrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JapaneseCalibrator.swift; sourceTree = "<group>"; };
+		A1000006000000000000B001 /* KioskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KioskViewModel.swift; sourceTree = "<group>"; };
+		A1000007000000000000B001 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		A1000008000000000000B001 /* KioskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KioskView.swift; sourceTree = "<group>"; };
+		A1000009000000000000B001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A100000A000000000000B001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1000000000000000000D001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1000000000000000000E001 = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000E002 /* AgeKiosk */,
+				A1000000000000000000E099 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E002 /* AgeKiosk */ = {
+			isa = PBXGroup;
+			children = (
+				A1000001000000000000B001 /* AgeKioskApp.swift */,
+				A1000000000000000000E003 /* Camera */,
+				A1000000000000000000E004 /* Vision */,
+				A1000000000000000000E005 /* Models */,
+				A1000000000000000000E006 /* Views */,
+				A1000000000000000000E007 /* Resources */,
+			);
+			path = AgeKiosk;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E003 /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				A1000002000000000000B001 /* CameraManager.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E004 /* Vision */ = {
+			isa = PBXGroup;
+			children = (
+				A1000003000000000000B001 /* FaceDetector.swift */,
+				A1000004000000000000B001 /* AgeEstimator.swift */,
+				A1000005000000000000B001 /* JapaneseCalibrator.swift */,
+			);
+			path = Vision;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1000006000000000000B001 /* KioskViewModel.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A1000007000000000000B001 /* CameraPreviewView.swift */,
+				A1000008000000000000B001 /* KioskView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E007 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A1000009000000000000B001 /* Assets.xcassets */,
+				A100000A000000000000B001 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000E099 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000C001 /* AgeKiosk.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1000000000000000000F001 /* AgeKiosk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000001F001 /* Build configuration list for PBXNativeTarget "AgeKiosk" */;
+			buildPhases = (
+				A1000000000000000000F101 /* Sources */,
+				A1000000000000000000D001 /* Frameworks */,
+				A1000000000000000000F201 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AgeKiosk;
+			productName = AgeKiosk;
+			productReference = A1000000000000000000C001 /* AgeKiosk.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1000000000000000000G001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					A1000000000000000000F001 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+				};
+			};
+			buildConfigurationList = A1000000000000000001G001 /* Build configuration list for PBXProject "AgeKiosk" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"ja-JP",
+			);
+			mainGroup = A1000000000000000000E001;
+			productRefGroup = A1000000000000000000E099 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1000000000000000000F001 /* AgeKiosk */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1000000000000000000F201 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000009000000000000A001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1000000000000000000F101 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000001000000000000A001 /* AgeKioskApp.swift in Sources */,
+				A1000002000000000000A001 /* CameraManager.swift in Sources */,
+				A1000003000000000000A001 /* FaceDetector.swift in Sources */,
+				A1000004000000000000A001 /* AgeEstimator.swift in Sources */,
+				A1000005000000000000A001 /* JapaneseCalibrator.swift in Sources */,
+				A1000006000000000000A001 /* KioskViewModel.swift in Sources */,
+				A1000007000000000000A001 /* CameraPreviewView.swift in Sources */,
+				A1000008000000000000A001 /* KioskView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1000000000000000001H001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A1000000000000000001H002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1000000000000000001H101 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AgeKiosk/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.agekiosk;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1000000000000000001H102 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AgeKiosk/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.agekiosk;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1000000000000000001G001 /* Build configuration list for PBXProject "AgeKiosk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000001H001 /* Debug */,
+				A1000000000000000001H002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000001F001 /* Build configuration list for PBXNativeTarget "AgeKiosk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000001H101 /* Debug */,
+				A1000000000000000001H102 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1000000000000000000G001 /* Project object */;
+}

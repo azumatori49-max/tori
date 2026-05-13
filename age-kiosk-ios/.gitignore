@@ -1,0 +1,29 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods / Carthage (使う場合)
+Pods/
+Carthage/Build/
+
+# macOS
+.DS_Store
+
+# Python (tools/)
+tools/.venv/
+tools/__pycache__/
+*.pyc
+
+# Models (ライセンス上同梱しない)
+AgeKiosk/Resources/AgeNet.mlmodel
+AgeKiosk/Resources/AgeNet.mlmodelc/

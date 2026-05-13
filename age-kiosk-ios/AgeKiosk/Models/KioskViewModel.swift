@@ -7,16 +7,16 @@ import UIKit
 @MainActor
 final class KioskViewModel: ObservableObject {
     enum State: Equatable {
-        case waiting              // 顔がフレームに入っていない
-        case scanning(Float)      // スキャン中 (進捗 0...1)
-        case result(Int)          // 推定確定 (表示年齢)
+        case waiting                                  // 顔がフレームに入っていない
+        case scanning(Float)                          // スキャン中 (進捗 0...1)
+        case decided(EntryDecision, estimatedAge: Int) // 入店判定確定
         case noPermission
         case noModel
     }
 
     @Published private(set) var state: State = .waiting
-    @Published private(set) var faceBox: CGRect? = nil          // プレビュー座標系
-    @Published private(set) var lastDisplayAge: Int? = nil
+    @Published private(set) var faceBox: CGRect? = nil
+    @Published var policy: GatePolicy = .default      // スタッフ画面から書き換える
 
     let camera = CameraManager()
     private let detector = FaceDetector()
@@ -24,9 +24,9 @@ final class KioskViewModel: ObservableObject {
     private let smoother = AgeSmoother(alpha: 0.35)
 
     private var lastInferenceAt: CFTimeInterval = 0
-    private let inferenceInterval: CFTimeInterval = 1.0 / 6.0   // 6 fps で推論
+    private let inferenceInterval: CFTimeInterval = 1.0 / 6.0
     private var resultHoldStart: Date?
-    private let resultHoldDuration: TimeInterval = 4.0          // 確定後に表示する秒数
+    private let resultHoldDuration: TimeInterval = 4.0
 
     init() {
         camera.delegate = self
@@ -64,7 +64,7 @@ extension KioskViewModel: CameraManagerDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            if case .result = self.state,
+            if case .decided = self.state,
                let start = self.resultHoldStart,
                Date().timeIntervalSince(start) > self.resultHoldDuration {
                 self.resetToWaiting()
@@ -86,11 +86,11 @@ extension KioskViewModel: CameraManagerDelegate {
         }
 
         guard let face = faces
-            .filter({ $0.boundingBox.width > 0.18 })           // 小さすぎる顔は捨てる
+            .filter({ $0.boundingBox.width > 0.18 })
             .max(by: { $0.boundingBox.width < $1.boundingBox.width })
         else {
             faceBox = nil
-            if case .result = state { return }
+            if case .decided = state { return }
             smoother.reset()
             state = .waiting
             return
@@ -98,7 +98,7 @@ extension KioskViewModel: CameraManagerDelegate {
 
         faceBox = Self.previewRect(from: face.boundingBox)
 
-        if case .result = state { return }
+        if case .decided = state { return }
 
         do {
             let raw = try estimator.estimate(
@@ -117,9 +117,9 @@ extension KioskViewModel: CameraManagerDelegate {
 
             if smoother.isStable {
                 let display = Int(smoothed.rounded())
-                lastDisplayAge = display
+                let decision = GateDecider.decide(displayAge: smoothed, policy: policy)
                 resultHoldStart = Date()
-                state = .result(display)
+                state = .decided(decision, estimatedAge: display)
             } else {
                 let progress = min(1.0, Float(smoother.smoothed ?? 0 > 0 ? 0.7 : 0.3))
                 state = .scanning(progress)
@@ -129,7 +129,6 @@ extension KioskViewModel: CameraManagerDelegate {
         }
     }
 
-    /// Vision の左下原点・正規化矩形を SwiftUI 用の左上原点・正規化矩形へ反転。
     private static func previewRect(from visionRect: CGRect) -> CGRect {
         CGRect(
             x: visionRect.minX,

@@ -31,6 +31,7 @@ final class CameraManager: NSObject {
                 return
             }
             self.session.addInput(input)
+            Self.configureForDimEnvironment(device)
 
             self.videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -68,6 +69,43 @@ final class CameraManager: NSObject {
             guard let self, self.session.isRunning else { return }
             self.session.stopRunning()
             self.isRunning = false
+        }
+    }
+
+    /// 居酒屋入口は薄暗いことが多いので、低照度向けの設定を有効化する。
+    /// - 連続オートフォーカス / 露出 / WB
+    /// - 低照度ブースト (対応端末)
+    /// - 最低フレームレートを 24fps に落としてシャッターを長くする
+    private static func configureForDimEnvironment(_ device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            if device.isLowLightBoostSupported {
+                device.automaticallyEnablesLowLightBoostWhenAvailable = true
+            }
+            // 顔の側を優先して露出 / フォーカス
+            if device.isAutoFocusRangeRestrictionSupported {
+                device.autoFocusRangeRestriction = .near
+            }
+            // 24-30fps レンジに固定 (低照度時にシャッタを長く取らせる)
+            let target = CMTime(value: 1, timescale: 24)
+            if device.activeFormat.videoSupportedFrameRateRanges
+                .contains(where: { $0.minFrameRate <= 24 && $0.maxFrameRate >= 24 }) {
+                device.activeVideoMinFrameDuration = target
+                device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
+            }
+        } catch {
+            // 設定に失敗しても致命的ではないので無視。
         }
     }
 

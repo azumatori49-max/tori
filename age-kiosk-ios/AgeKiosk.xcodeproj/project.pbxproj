@@ -16,6 +16,8 @@
 		A1000007000000000000A001 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000007000000000000B001 /* CameraPreviewView.swift */; };
 		A1000008000000000000A001 /* KioskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008000000000000B001 /* KioskView.swift */; };
 		A1000009000000000000A001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000009000000000000B001 /* Assets.xcassets */; };
+		A100000B000000000000A001 /* EntryGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000B000000000000B001 /* EntryGate.swift */; };
+		A100000C000000000000A001 /* StaffSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C000000000000B001 /* StaffSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +32,8 @@
 		A1000008000000000000B001 /* KioskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KioskView.swift; sourceTree = "<group>"; };
 		A1000009000000000000B001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A100000A000000000000B001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A100000B000000000000B001 /* EntryGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryGate.swift; sourceTree = "<group>"; };
+		A100000C000000000000B001 /* StaffSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaffSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +82,7 @@
 				A1000003000000000000B001 /* FaceDetector.swift */,
 				A1000004000000000000B001 /* AgeEstimator.swift */,
 				A1000005000000000000B001 /* JapaneseCalibrator.swift */,
+				A100000B000000000000B001 /* EntryGate.swift */,
 			);
 			path = Vision;
 			sourceTree = "<group>";
@@ -95,6 +100,7 @@
 			children = (
 				A1000007000000000000B001 /* CameraPreviewView.swift */,
 				A1000008000000000000B001 /* KioskView.swift */,
+				A100000C000000000000B001 /* StaffSettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -194,6 +200,8 @@
 				A1000006000000000000A001 /* KioskViewModel.swift in Sources */,
 				A1000007000000000000A001 /* CameraPreviewView.swift in Sources */,
 				A1000008000000000000A001 /* KioskView.swift in Sources */,
+				A100000B000000000000A001 /* EntryGate.swift in Sources */,
+				A100000C000000000000A001 /* StaffSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

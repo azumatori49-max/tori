@@ -7,18 +7,25 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #0f1115;
-        --panel: #171a21;
-        --panel-2: #1f232c;
-        --text: #e7ecf3;
-        --muted: #99a3b3;
-        --accent: #5b8def;
-        --accent-2: #7c5cff;
-        --ok: #3ecf8e;
-        --warn: #ffb454;
-        --err: #ff6a6a;
-        --border: #2a2f3a;
+        --bg: #f3f6fb;
+        --hero-from: #8fb3ff;
+        --hero-to: #6f8cff;
+        --text: #2b3346;
+        --muted: #6b7488;
+        --card: #ffffff;
+        --border: #e3e8f2;
+        --soft: #f7f9fd;
+        --row-pink: #ffd7e1;
+        --row-pink-2: #ffe6ec;
+        --row-green: #b6f0a7;
+        --row-green-2: #d1f5c7;
+        --header-yellow: #fff35a;
+        --foot-peach: #ffe4b8;
+        --accent: #ff7aa2;
+        --accent-2: #6f8cff;
+        --ok: #2ea96b;
+        --warn: #c97a13;
+        --err: #d6364c;
       }
       * {
         box-sizing: border-box;
@@ -27,183 +34,294 @@
       body {
         margin: 0;
         padding: 0;
-        background: radial-gradient(1200px 800px at 20% -10%, #1a2240 0%, var(--bg) 50%) fixed;
+        background: var(--bg);
         color: var(--text);
         font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-          "Noto Sans JP", sans-serif;
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP",
+          "Yu Gothic UI", Meiryo, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .hero {
+        background: linear-gradient(180deg, var(--hero-from), var(--hero-to));
+        color: #fff;
+        padding: 56px 20px 120px;
+        text-align: center;
+        position: relative;
+      }
+      .hero h1 {
+        margin: 0;
+        font-size: 36px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+      .hero .sub {
+        margin-top: 12px;
+        font-size: 18px;
+        opacity: 0.95;
+        letter-spacing: 0.06em;
       }
       .wrap {
-        max-width: 980px;
-        margin: 0 auto;
-        padding: 32px 20px 80px;
+        max-width: 920px;
+        margin: -88px auto 0;
+        padding: 0 16px 80px;
+        position: relative;
+        z-index: 1;
       }
-      header {
+      .panel {
+        background: var(--card);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(60, 80, 130, 0.12);
+        overflow: hidden;
         margin-bottom: 24px;
       }
-      h1 {
-        font-size: 24px;
-        margin: 0 0 6px;
-        letter-spacing: 0.02em;
-      }
-      .sub {
-        color: var(--muted);
-        font-size: 13px;
-        line-height: 1.6;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-      }
-      @media (max-width: 760px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
-      }
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 18px;
-      }
-      .drop {
-        border: 2px dashed var(--border);
-        border-radius: 12px;
-        padding: 28px;
+      .panel-head {
+        background: var(--header-yellow);
         text-align: center;
-        background: var(--panel-2);
-        cursor: pointer;
-        transition: border-color 0.15s ease, background 0.15s ease;
-      }
-      .drop:hover,
-      .drop.drag {
-        border-color: var(--accent);
-        background: #1c2333;
-      }
-      .drop p {
-        margin: 6px 0 0;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .drop strong {
+        font-weight: 700;
+        padding: 10px 14px;
         font-size: 15px;
+        color: #2b3346;
       }
-      input[type="file"] {
-        display: none;
-      }
-      .preview {
-        margin-top: 14px;
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-      }
-      .preview img {
-        width: 96px;
-        height: 96px;
-        object-fit: cover;
-        border-radius: 8px;
-        background: #000;
+      .rows {
         border: 1px solid var(--border);
-      }
-      .preview .meta {
-        font-size: 13px;
-        color: var(--muted);
-        line-height: 1.6;
-        flex: 1;
-        min-width: 0;
-      }
-      .preview .meta .name {
-        color: var(--text);
-        word-break: break-all;
-      }
-      .controls {
-        margin-top: 18px;
-        display: grid;
-        gap: 12px;
+        border-top: 0;
       }
       .row {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 56px;
+        align-items: center;
+        gap: 0;
+        border-top: 1px solid var(--border);
+      }
+      .row:first-child {
+        border-top: 0;
+      }
+      .row.pink {
+        background: var(--row-pink);
+      }
+      .row.pink-2 {
+        background: var(--row-pink-2);
+      }
+      .row.green {
+        background: var(--row-green);
+      }
+      .row.green-2 {
+        background: var(--row-green-2);
+      }
+      .row .label {
+        padding: 10px 14px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 14px;
+      }
+      .row .value {
+        padding: 10px 14px;
+        font-size: 14px;
+        background: rgba(255, 255, 255, 0.5);
+        min-height: 40px;
         display: flex;
         align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        color: var(--muted);
+        gap: 8px;
       }
-      .row label {
-        flex: 0 0 110px;
+      .row .check {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.7);
+        height: 100%;
+        min-height: 40px;
       }
-      .row input[type="range"] {
-        flex: 1;
-      }
-      .row .val {
-        flex: 0 0 56px;
-        text-align: right;
-        color: var(--text);
-        font-variant-numeric: tabular-nums;
-      }
-      select {
-        background: var(--panel-2);
-        color: var(--text);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 6px 8px;
-        font-size: 13px;
-      }
-      .btn {
+      .check-box {
+        width: 22px;
+        height: 22px;
+        border: 2px solid var(--err);
+        border-radius: 3px;
+        background: #fff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        padding: 10px 16px;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
-        color: #fff;
-        font-weight: 600;
+        position: relative;
+      }
+      .check-box.done {
+        border-color: var(--ok);
+      }
+      .check-box.done::after {
+        content: "";
+        width: 6px;
+        height: 12px;
+        border-right: 3px solid var(--ok);
+        border-bottom: 3px solid var(--ok);
+        transform: rotate(45deg) translate(-1px, -1px);
+      }
+      .panel-foot {
+        background: var(--foot-peach);
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 1fr;
+        align-items: center;
+        padding: 10px 14px;
+        font-weight: 700;
         font-size: 14px;
-        cursor: pointer;
-        transition: transform 0.05s ease, opacity 0.15s ease;
       }
-      .btn:active {
-        transform: translateY(1px);
+      .panel-foot .right {
+        text-align: right;
       }
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+
+      /* form controls inside table cells */
+      input[type="file"] {
+        display: none;
       }
-      .btn.secondary {
-        background: var(--panel-2);
-        color: var(--text);
-      }
-      .actions {
+      .drop {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+        padding: 14px;
+        border: 2px dashed #b8c3d9;
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .drop:hover,
+      .drop.drag {
+        border-color: var(--accent-2);
+        background: #f4f7ff;
+      }
+      .drop strong {
+        color: var(--text);
+        font-size: 14px;
+      }
+      .preview {
+        display: flex;
+        align-items: center;
         gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 14px;
+        width: 100%;
+      }
+      .preview img {
+        width: 48px;
+        height: 48px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: #fff;
+      }
+      .preview .meta {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+        min-width: 0;
+        word-break: break-all;
+      }
+      .preview .meta .name {
+        color: var(--text);
+        font-weight: 600;
+      }
+      input[type="range"] {
+        width: 100%;
+      }
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+      }
+      .range-row .val {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        min-width: 52px;
+        text-align: right;
+      }
+      select,
+      input[type="url"] {
+        width: 100%;
+        padding: 7px 10px;
+        border-radius: 7px;
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+        font-size: 13px;
+      }
+      label.cb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .mode-tabs {
+        display: inline-flex;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px;
+        gap: 4px;
+      }
+      .mode-tabs button {
+        background: transparent;
+        color: var(--muted);
+        border: 0;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .mode-tabs button.active {
+        background: linear-gradient(180deg, var(--accent-2), #5a78ec);
+        color: #fff;
+      }
+      .mode-bar {
+        display: flex;
+        justify-content: center;
+        padding: 12px;
+        background: #fff;
+        border-bottom: 1px solid var(--border);
+      }
+
+      /* QR result panel */
+      .result {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 20px;
+        padding: 18px;
+        align-items: center;
+      }
+      @media (max-width: 640px) {
+        .result {
+          grid-template-columns: 1fr;
+        }
+        .row {
+          grid-template-columns: 1fr 1.1fr 48px;
+        }
       }
       .qr-box {
         display: flex;
         align-items: center;
         justify-content: center;
         background: #fff;
-        border-radius: 12px;
-        padding: 16px;
-        min-height: 280px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        width: 260px;
+        height: 260px;
       }
       .qr-box canvas {
-        display: block;
         max-width: 100%;
         height: auto;
         image-rendering: pixelated;
       }
       .qr-empty {
-        color: #666;
+        color: #98a1b5;
         font-size: 13px;
+        text-align: center;
       }
       .status {
-        margin-top: 12px;
         font-size: 13px;
-        line-height: 1.6;
+        line-height: 1.7;
         color: var(--muted);
       }
       .status .pill {
@@ -211,168 +329,230 @@
         padding: 2px 8px;
         border-radius: 999px;
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 700;
         margin-right: 6px;
+        background: #eef2fa;
+        color: var(--muted);
       }
       .pill.ok {
-        background: rgba(62, 207, 142, 0.15);
+        background: #d8f4e3;
         color: var(--ok);
       }
       .pill.warn {
-        background: rgba(255, 180, 84, 0.15);
+        background: #ffeccc;
         color: var(--warn);
       }
       .pill.err {
-        background: rgba(255, 106, 106, 0.15);
+        background: #ffd5dc;
         color: var(--err);
       }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 9px 16px;
+        border-radius: 999px;
+        border: 0;
+        background: linear-gradient(180deg, var(--accent), #ed5e8b);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(255, 122, 162, 0.3);
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+      .btn.secondary {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+        box-shadow: none;
+      }
+      .btn.primary-blue {
+        background: linear-gradient(180deg, var(--accent-2), #5a78ec);
+        box-shadow: 0 4px 10px rgba(111, 140, 255, 0.3);
+      }
+      footer {
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 8px;
+      }
       details {
-        margin-top: 14px;
         font-size: 13px;
         color: var(--muted);
+        padding: 12px 16px;
+        background: var(--soft);
+        border-top: 1px solid var(--border);
       }
       details summary {
         cursor: pointer;
         color: var(--text);
+        font-weight: 600;
       }
-      .mode-tabs {
-        display: inline-flex;
-        background: var(--panel-2);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 4px;
-        gap: 4px;
-        margin-bottom: 14px;
-      }
-      .mode-tabs button {
-        background: transparent;
-        color: var(--muted);
-        border: 0;
-        padding: 6px 12px;
-        border-radius: 7px;
-        font-size: 13px;
-        cursor: pointer;
-      }
-      .mode-tabs button.active {
-        background: var(--accent);
-        color: #fff;
-      }
-      footer {
-        margin-top: 28px;
-        text-align: center;
-        color: var(--muted);
-        font-size: 12px;
+      details p {
+        margin: 8px 0 0;
+        line-height: 1.7;
       }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header>
-        <h1>画像 → QRコード ジェネレーター</h1>
-        <p class="sub">
-          画像をアップロードしてQRコードに変換します。QRコードの容量（最大約3KB）に収まるよう自動でリサイズ・圧縮します。
-        </p>
-      </header>
+    <div class="hero">
+      <h1>QRコンバーター</h1>
+      <div class="sub">画像 → QRコード</div>
+    </div>
 
-      <div class="grid">
-        <section class="card">
+    <div class="wrap">
+      <div class="panel">
+        <div class="mode-bar">
           <div class="mode-tabs" role="tablist">
             <button id="modeData" class="active" type="button">画像を埋め込む</button>
             <button id="modeUrl" type="button">画像URLを使う</button>
           </div>
+        </div>
 
-          <div id="panelData">
-            <label class="drop" id="drop">
-              <strong>画像を選択 / ドラッグ&ドロップ</strong>
-              <p>PNG / JPEG / WebP など</p>
-              <input id="file" type="file" accept="image/*" />
-            </label>
+        <div class="panel-head">入力</div>
+        <div class="rows" id="rowsInput">
+          <!-- data mode rows -->
+          <div class="row pink" data-mode="data">
+            <div class="label">画像ファイル</div>
+            <div class="value">
+              <label class="drop" id="drop">
+                <strong>画像を選択 / ドラッグ&ドロップ</strong>
+                <span>PNG / JPEG / WebP</span>
+                <input id="file" type="file" accept="image/*" />
+              </label>
+            </div>
+            <div class="check"><span class="check-box" id="cbFile"></span></div>
+          </div>
 
-            <div class="preview" id="preview" hidden>
-              <img id="thumb" alt="" />
-              <div class="meta">
-                <div class="name" id="fname">—</div>
-                <div id="finfo">—</div>
+          <div class="row pink-2" data-mode="data" id="rowPreview" hidden>
+            <div class="label">プレビュー</div>
+            <div class="value">
+              <div class="preview" id="preview">
+                <img id="thumb" alt="" />
+                <div class="meta">
+                  <div class="name" id="fname">—</div>
+                  <div id="finfo">—</div>
+                </div>
               </div>
             </div>
+            <div class="check"><span class="check-box done"></span></div>
+          </div>
 
-            <div class="controls">
-              <div class="row">
-                <label for="maxDim">最大サイズ</label>
+          <div class="row pink" data-mode="data">
+            <div class="label">最大サイズ</div>
+            <div class="value">
+              <div class="range-row">
                 <input id="maxDim" type="range" min="32" max="512" step="8" value="128" />
                 <span class="val"><span id="maxDimVal">128</span>px</span>
               </div>
-              <div class="row">
-                <label for="quality">画質</label>
+            </div>
+            <div class="check"><span class="check-box done"></span></div>
+          </div>
+
+          <div class="row pink-2" data-mode="data">
+            <div class="label">画質</div>
+            <div class="value">
+              <div class="range-row">
                 <input id="quality" type="range" min="20" max="95" step="5" value="60" />
                 <span class="val"><span id="qualityVal">60</span>%</span>
               </div>
-              <div class="row">
-                <label for="format">フォーマット</label>
-                <select id="format">
-                  <option value="image/jpeg">JPEG</option>
-                  <option value="image/webp">WebP</option>
-                  <option value="image/png">PNG</option>
-                </select>
-              </div>
-              <div class="row">
-                <label for="ecc">誤り訂正</label>
-                <select id="ecc">
-                  <option value="L">L (低・容量大)</option>
-                  <option value="M" selected>M (標準)</option>
-                  <option value="Q">Q</option>
-                  <option value="H">H (高・容量小)</option>
-                </select>
-              </div>
-              <div class="row">
-                <label><input id="autoFit" type="checkbox" checked /> 自動で収まるよう調整</label>
-              </div>
             </div>
+            <div class="check"><span class="check-box done"></span></div>
           </div>
 
-          <div id="panelUrl" hidden>
-            <p class="sub" style="margin-top: 0">
-              画像のURLをQRに変換します。読み取り側ではURL先の画像が表示されます（こちらは容量制限がほぼありません）。
-            </p>
-            <input
-              id="urlInput"
-              type="url"
-              placeholder="https://example.com/photo.jpg"
-              style="
-                width: 100%;
-                padding: 10px 12px;
-                border-radius: 8px;
-                border: 1px solid var(--border);
-                background: var(--panel-2);
-                color: var(--text);
-                font-size: 14px;
-              "
-            />
+          <div class="row green" data-mode="data">
+            <div class="label">フォーマット</div>
+            <div class="value">
+              <select id="format">
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/webp">WebP</option>
+                <option value="image/png">PNG</option>
+              </select>
+            </div>
+            <div class="check"><span class="check-box done"></span></div>
           </div>
 
-          <div class="actions">
-            <button id="generate" class="btn" type="button" disabled>QRコードを生成</button>
+          <div class="row green-2" data-mode="data">
+            <div class="label">誤り訂正</div>
+            <div class="value">
+              <select id="ecc">
+                <option value="L">L (低・容量大)</option>
+                <option value="M" selected>M (標準)</option>
+                <option value="Q">Q</option>
+                <option value="H">H (高・容量小)</option>
+              </select>
+            </div>
+            <div class="check"><span class="check-box done"></span></div>
+          </div>
+
+          <div class="row green" data-mode="data">
+            <div class="label">自動調整</div>
+            <div class="value">
+              <label class="cb"
+                ><input id="autoFit" type="checkbox" checked />
+                QRに収まるよう画質・サイズを自動調整</label
+              >
+            </div>
+            <div class="check"><span class="check-box done"></span></div>
+          </div>
+
+          <!-- url mode row -->
+          <div class="row pink" data-mode="url" hidden>
+            <div class="label">画像URL</div>
+            <div class="value">
+              <input id="urlInput" type="url" placeholder="https://example.com/photo.jpg" />
+            </div>
+            <div class="check"><span class="check-box" id="cbUrl"></span></div>
+          </div>
+        </div>
+
+        <div class="panel-foot">
+          <div>操作</div>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap">
+            <button id="generate" class="btn primary-blue" type="button" disabled>
+              QRコードを生成
+            </button>
             <button id="reset" class="btn secondary" type="button">リセット</button>
           </div>
+          <div class="right" id="footRate">—</div>
+        </div>
 
-          <details>
-            <summary>仕組みについて</summary>
-            <p>
-              「画像を埋め込む」モードでは画像をBase64データURLに変換しQRに格納します。QRの最大容量は約2,953バイト（バイナリ・誤り訂正L）なので、大きい画像はQRで読み取れません。アプリは指定したサイズ・画質でリサイズ＆圧縮を行い、可能な限り収めます。「自動で収まるよう調整」をONにすると、収まらない場合に自動的に画質を下げて再試行します。
-            </p>
-          </details>
-        </section>
+        <details>
+          <summary>仕組みについて</summary>
+          <p>
+            「画像を埋め込む」モードでは画像をBase64データURLに変換しQRに格納します。QRの最大容量は約2,953バイト（バイナリ・誤り訂正L）なので、大きい画像はQR化できません。指定したサイズ・画質でリサイズ＆圧縮を行い、可能な限り収めます。「自動調整」がONの場合、収まらない時に画質とサイズを自動で下げて再試行します。
+          </p>
+        </details>
+      </div>
 
-        <section class="card">
+      <div class="panel">
+        <div class="panel-head">QRコード</div>
+        <div class="result">
           <div class="qr-box" id="qrBox">
-            <span class="qr-empty">ここにQRコードが表示されます</span>
+            <span class="qr-empty">ここに<br />QRコードが<br />表示されます</span>
           </div>
-          <div class="status" id="status"></div>
-          <div class="actions">
-            <button id="download" class="btn" type="button" disabled>PNGをダウンロード</button>
-            <button id="copy" class="btn secondary" type="button" disabled>クリップボードにコピー</button>
+          <div>
+            <div class="status" id="status">画像をアップロードして「QRコードを生成」を押してください。</div>
+            <div class="actions">
+              <button id="download" class="btn" type="button" disabled>PNGをダウンロード</button>
+              <button id="copy" class="btn secondary" type="button" disabled>クリップボードにコピー</button>
+            </div>
           </div>
-        </section>
+        </div>
       </div>
 
       <footer>Built with qrcode.js · 画像はブラウザ内のみで処理されます</footer>
@@ -384,6 +564,7 @@
       const fileInput = $("file");
       const drop = $("drop");
       const preview = $("preview");
+      const rowPreview = $("rowPreview");
       const thumb = $("thumb");
       const fname = $("fname");
       const finfo = $("finfo");
@@ -402,12 +583,12 @@
       const copyBtn = $("copy");
       const modeData = $("modeData");
       const modeUrl = $("modeUrl");
-      const panelData = $("panelData");
-      const panelUrl = $("panelUrl");
       const urlInput = $("urlInput");
+      const cbFile = $("cbFile");
+      const cbUrl = $("cbUrl");
+      const footRate = $("footRate");
 
       let currentImage = null;
-      let currentFile = null;
       let currentMode = "data";
 
       const QR_BYTE_LIMITS = { L: 2953, M: 2331, Q: 1663, H: 1273 };
@@ -416,8 +597,17 @@
         currentMode = mode;
         modeData.classList.toggle("active", mode === "data");
         modeUrl.classList.toggle("active", mode === "url");
-        panelData.hidden = mode !== "data";
-        panelUrl.hidden = mode !== "url";
+        document.querySelectorAll('[data-mode]').forEach((el) => {
+          if (el.dataset.mode === mode) {
+            if (el.id === "rowPreview") {
+              el.hidden = !currentImage;
+            } else {
+              el.hidden = false;
+            }
+          } else {
+            el.hidden = true;
+          }
+        });
         updateGenerateState();
       }
       modeData.addEventListener("click", () => setMode("data"));
@@ -442,7 +632,10 @@
         const f = e.target.files?.[0];
         if (f) handleFile(f);
       });
-      urlInput.addEventListener("input", updateGenerateState);
+      urlInput.addEventListener("input", () => {
+        cbUrl.classList.toggle("done", !!urlInput.value.trim());
+        updateGenerateState();
+      });
 
       function updateGenerateState() {
         if (currentMode === "data") {
@@ -457,7 +650,6 @@
           alert("画像ファイルを選択してください");
           return;
         }
-        currentFile = file;
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onload = () => {
@@ -465,7 +657,8 @@
           thumb.src = url;
           fname.textContent = file.name;
           finfo.textContent = `${img.naturalWidth}×${img.naturalHeight} · ${formatBytes(file.size)}`;
-          preview.hidden = false;
+          rowPreview.hidden = false;
+          cbFile.classList.add("done");
           updateGenerateState();
         };
         img.onerror = () => alert("画像を読み込めませんでした");
@@ -496,8 +689,8 @@
         await QRCode.toCanvas(canvas, payload, {
           errorCorrectionLevel: level,
           margin: 2,
-          width: 320,
-          color: { dark: "#000000", light: "#ffffff" },
+          width: 240,
+          color: { dark: "#2b3346", light: "#ffffff" },
         });
         qrBox.appendChild(canvas);
         return canvas;
@@ -525,13 +718,13 @@
             const dim = parseInt(maxDim.value, 10);
             let q = parseInt(quality.value, 10) / 100;
             payload = resizeToDataUrl(currentImage, dim, mime, q);
+            let curDim = dim;
 
             if (autoFit.checked) {
               while (payload.length > limit && q > 0.1) {
                 q = Math.max(0.1, q - 0.1);
                 payload = resizeToDataUrl(currentImage, dim, mime, q);
               }
-              let curDim = dim;
               while (payload.length > limit && curDim > 32) {
                 curDim = Math.max(32, Math.round(curDim * 0.85));
                 payload = resizeToDataUrl(currentImage, curDim, mime, q);
@@ -543,22 +736,23 @@
           }
 
           const size = new Blob([payload]).size;
-          const limit2 = QR_BYTE_LIMITS[level];
-          const fits = size <= limit2;
+          const fits = size <= limit;
 
           if (!fits) {
             setStatus(
-              `<span class="pill err">超過</span>データ ${formatBytes(size)} / 上限 ${formatBytes(limit2)} (ECC ${level})。サイズ・画質を下げるか、URLモードをご利用ください。`
+              `<span class="pill err">超過</span>データ ${formatBytes(size)} / 上限 ${formatBytes(limit)} (ECC ${level})。サイズ・画質を下げるか、URLモードをご利用ください。`
             );
             qrBox.innerHTML = '<span class="qr-empty">QRに収まりません</span>';
+            footRate.textContent = "—";
             return;
           }
 
           await renderQr(payload, level);
-          const used = Math.round((size / limit2) * 100);
+          const used = Math.round((size / limit) * 100);
           setStatus(
-            `<span class="pill ${used > 80 ? "warn" : "ok"}">${used}% 使用</span>${info} · ${formatBytes(size)} / ${formatBytes(limit2)}`
+            `<span class="pill ${used > 80 ? "warn" : "ok"}">${used}% 使用</span>${info} · ${formatBytes(size)} / ${formatBytes(limit)}`
           );
+          footRate.textContent = `${used}% 使用`;
           downloadBtn.disabled = false;
           copyBtn.disabled = false;
         } catch (err) {
@@ -571,12 +765,14 @@
 
       resetBtn.addEventListener("click", () => {
         currentImage = null;
-        currentFile = null;
         fileInput.value = "";
         urlInput.value = "";
-        preview.hidden = true;
-        qrBox.innerHTML = '<span class="qr-empty">ここにQRコードが表示されます</span>';
-        setStatus("");
+        rowPreview.hidden = true;
+        cbFile.classList.remove("done");
+        cbUrl.classList.remove("done");
+        qrBox.innerHTML = '<span class="qr-empty">ここに<br />QRコードが<br />表示されます</span>';
+        setStatus("画像をアップロードして「QRコードを生成」を押してください。");
+        footRate.textContent = "—";
         downloadBtn.disabled = true;
         copyBtn.disabled = true;
         updateGenerateState();
@@ -602,6 +798,8 @@
           alert("クリップボードへのコピーに失敗しました: " + e.message);
         }
       });
+
+      setMode("data");
     </script>
   </body>
 </html>

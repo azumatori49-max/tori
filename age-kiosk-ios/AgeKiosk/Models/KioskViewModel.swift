@@ -7,16 +7,15 @@ import UIKit
 @MainActor
 final class KioskViewModel: ObservableObject {
     enum State: Equatable {
-        case waiting                                  // 顔がフレームに入っていない
-        case scanning(Float)                          // スキャン中 (進捗 0...1)
-        case decided(EntryDecision, estimatedAge: Int) // 入店判定確定
+        case waiting                       // 顔がフレームに入っていない
+        case scanning(Float)               // スキャン中 (進捗 0...1)
+        case result(Int)                   // 推定年齢
         case noPermission
         case noModel
     }
 
     @Published private(set) var state: State = .waiting
     @Published private(set) var faceBox: CGRect? = nil
-    @Published var policy: GatePolicy = .default      // スタッフ画面から書き換える
 
     let camera = CameraManager()
     private let detector = FaceDetector()
@@ -64,7 +63,7 @@ extension KioskViewModel: CameraManagerDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            if case .decided = self.state,
+            if case .result = self.state,
                let start = self.resultHoldStart,
                Date().timeIntervalSince(start) > self.resultHoldDuration {
                 self.resetToWaiting()
@@ -90,7 +89,7 @@ extension KioskViewModel: CameraManagerDelegate {
             .max(by: { $0.boundingBox.width < $1.boundingBox.width })
         else {
             faceBox = nil
-            if case .decided = state { return }
+            if case .result = state { return }
             smoother.reset()
             state = .waiting
             return
@@ -98,7 +97,7 @@ extension KioskViewModel: CameraManagerDelegate {
 
         faceBox = Self.previewRect(from: face.boundingBox)
 
-        if case .decided = state { return }
+        if case .result = state { return }
 
         do {
             let raw = try estimator.estimate(
@@ -117,9 +116,8 @@ extension KioskViewModel: CameraManagerDelegate {
 
             if smoother.isStable {
                 let display = Int(smoothed.rounded())
-                let decision = GateDecider.decide(displayAge: smoothed, policy: policy)
                 resultHoldStart = Date()
-                state = .decided(decision, estimatedAge: display)
+                state = .result(display)
             } else {
                 let progress = min(1.0, Float(smoother.smoothed ?? 0 > 0 ? 0.7 : 0.3))
                 state = .scanning(progress)

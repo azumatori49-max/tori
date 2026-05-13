@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>画像をQRコードに変換</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1115;
+        --panel: #171a21;
+        --panel-2: #1f232c;
+        --text: #e7ecf3;
+        --muted: #99a3b3;
+        --accent: #5b8def;
+        --accent-2: #7c5cff;
+        --ok: #3ecf8e;
+        --warn: #ffb454;
+        --err: #ff6a6a;
+        --border: #2a2f3a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(1200px 800px at 20% -10%, #1a2240 0%, var(--bg) 50%) fixed;
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+          "Noto Sans JP", sans-serif;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 80px;
+      }
+      header {
+        margin-bottom: 24px;
+      }
+      h1 {
+        font-size: 24px;
+        margin: 0 0 6px;
+        letter-spacing: 0.02em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+      }
+      .drop {
+        border: 2px dashed var(--border);
+        border-radius: 12px;
+        padding: 28px;
+        text-align: center;
+        background: var(--panel-2);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      .drop:hover,
+      .drop.drag {
+        border-color: var(--accent);
+        background: #1c2333;
+      }
+      .drop p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .drop strong {
+        font-size: 15px;
+      }
+      input[type="file"] {
+        display: none;
+      }
+      .preview {
+        margin-top: 14px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .preview img {
+        width: 96px;
+        height: 96px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #000;
+        border: 1px solid var(--border);
+      }
+      .preview .meta {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+        flex: 1;
+        min-width: 0;
+      }
+      .preview .meta .name {
+        color: var(--text);
+        word-break: break-all;
+      }
+      .controls {
+        margin-top: 18px;
+        display: grid;
+        gap: 12px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .row label {
+        flex: 0 0 110px;
+      }
+      .row input[type="range"] {
+        flex: 1;
+      }
+      .row .val {
+        flex: 0 0 56px;
+        text-align: right;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      select {
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 13px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: transform 0.05s ease, opacity 0.15s ease;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn.secondary {
+        background: var(--panel-2);
+        color: var(--text);
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .qr-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        min-height: 280px;
+      }
+      .qr-box canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        image-rendering: pixelated;
+      }
+      .qr-empty {
+        color: #666;
+        font-size: 13px;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .status .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      .pill.ok {
+        background: rgba(62, 207, 142, 0.15);
+        color: var(--ok);
+      }
+      .pill.warn {
+        background: rgba(255, 180, 84, 0.15);
+        color: var(--warn);
+      }
+      .pill.err {
+        background: rgba(255, 106, 106, 0.15);
+        color: var(--err);
+      }
+      details {
+        margin-top: 14px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--text);
+      }
+      .mode-tabs {
+        display: inline-flex;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 4px;
+        gap: 4px;
+        margin-bottom: 14px;
+      }
+      .mode-tabs button {
+        background: transparent;
+        color: var(--muted);
+        border: 0;
+        padding: 6px 12px;
+        border-radius: 7px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .mode-tabs button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      footer {
+        margin-top: 28px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>画像 → QRコード ジェネレーター</h1>
+        <p class="sub">
+          画像をアップロードしてQRコードに変換します。QRコードの容量（最大約3KB）に収まるよう自動でリサイズ・圧縮します。
+        </p>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <div class="mode-tabs" role="tablist">
+            <button id="modeData" class="active" type="button">画像を埋め込む</button>
+            <button id="modeUrl" type="button">画像URLを使う</button>
+          </div>
+
+          <div id="panelData">
+            <label class="drop" id="drop">
+              <strong>画像を選択 / ドラッグ&ドロップ</strong>
+              <p>PNG / JPEG / WebP など</p>
+              <input id="file" type="file" accept="image/*" />
+            </label>
+
+            <div class="preview" id="preview" hidden>
+              <img id="thumb" alt="" />
+              <div class="meta">
+                <div class="name" id="fname">—</div>
+                <div id="finfo">—</div>
+              </div>
+            </div>
+
+            <div class="controls">
+              <div class="row">
+                <label for="maxDim">最大サイズ</label>
+                <input id="maxDim" type="range" min="32" max="512" step="8" value="128" />
+                <span class="val"><span id="maxDimVal">128</span>px</span>
+              </div>
+              <div class="row">
+                <label for="quality">画質</label>
+                <input id="quality" type="range" min="20" max="95" step="5" value="60" />
+                <span class="val"><span id="qualityVal">60</span>%</span>
+              </div>
+              <div class="row">
+                <label for="format">フォーマット</label>
+                <select id="format">
+                  <option value="image/jpeg">JPEG</option>
+                  <option value="image/webp">WebP</option>
+                  <option value="image/png">PNG</option>
+                </select>
+              </div>
+              <div class="row">
+                <label for="ecc">誤り訂正</label>
+                <select id="ecc">
+                  <option value="L">L (低・容量大)</option>
+                  <option value="M" selected>M (標準)</option>
+                  <option value="Q">Q</option>
+                  <option value="H">H (高・容量小)</option>
+                </select>
+              </div>
+              <div class="row">
+                <label><input id="autoFit" type="checkbox" checked /> 自動で収まるよう調整</label>
+              </div>
+            </div>
+          </div>
+
+          <div id="panelUrl" hidden>
+            <p class="sub" style="margin-top: 0">
+              画像のURLをQRに変換します。読み取り側ではURL先の画像が表示されます（こちらは容量制限がほぼありません）。
+            </p>
+            <input
+              id="urlInput"
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              style="
+                width: 100%;
+                padding: 10px 12px;
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                background: var(--panel-2);
+                color: var(--text);
+                font-size: 14px;
+              "
+            />
+          </div>
+
+          <div class="actions">
+            <button id="generate" class="btn" type="button" disabled>QRコードを生成</button>
+            <button id="reset" class="btn secondary" type="button">リセット</button>
+          </div>
+
+          <details>
+            <summary>仕組みについて</summary>
+            <p>
+              「画像を埋め込む」モードでは画像をBase64データURLに変換しQRに格納します。QRの最大容量は約2,953バイト（バイナリ・誤り訂正L）なので、大きい画像はQRで読み取れません。アプリは指定したサイズ・画質でリサイズ＆圧縮を行い、可能な限り収めます。「自動で収まるよう調整」をONにすると、収まらない場合に自動的に画質を下げて再試行します。
+            </p>
+          </details>
+        </section>
+
+        <section class="card">
+          <div class="qr-box" id="qrBox">
+            <span class="qr-empty">ここにQRコードが表示されます</span>
+          </div>
+          <div class="status" id="status"></div>
+          <div class="actions">
+            <button id="download" class="btn" type="button" disabled>PNGをダウンロード</button>
+            <button id="copy" class="btn secondary" type="button" disabled>クリップボードにコピー</button>
+          </div>
+        </section>
+      </div>
+
+      <footer>Built with qrcode.js · 画像はブラウザ内のみで処理されます</footer>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      const fileInput = $("file");
+      const drop = $("drop");
+      const preview = $("preview");
+      const thumb = $("thumb");
+      const fname = $("fname");
+      const finfo = $("finfo");
+      const maxDim = $("maxDim");
+      const maxDimVal = $("maxDimVal");
+      const quality = $("quality");
+      const qualityVal = $("qualityVal");
+      const format = $("format");
+      const ecc = $("ecc");
+      const autoFit = $("autoFit");
+      const generateBtn = $("generate");
+      const resetBtn = $("reset");
+      const qrBox = $("qrBox");
+      const statusEl = $("status");
+      const downloadBtn = $("download");
+      const copyBtn = $("copy");
+      const modeData = $("modeData");
+      const modeUrl = $("modeUrl");
+      const panelData = $("panelData");
+      const panelUrl = $("panelUrl");
+      const urlInput = $("urlInput");
+
+      let currentImage = null;
+      let currentFile = null;
+      let currentMode = "data";
+
+      const QR_BYTE_LIMITS = { L: 2953, M: 2331, Q: 1663, H: 1273 };
+
+      function setMode(mode) {
+        currentMode = mode;
+        modeData.classList.toggle("active", mode === "data");
+        modeUrl.classList.toggle("active", mode === "url");
+        panelData.hidden = mode !== "data";
+        panelUrl.hidden = mode !== "url";
+        updateGenerateState();
+      }
+      modeData.addEventListener("click", () => setMode("data"));
+      modeUrl.addEventListener("click", () => setMode("url"));
+
+      maxDim.addEventListener("input", () => (maxDimVal.textContent = maxDim.value));
+      quality.addEventListener("input", () => (qualityVal.textContent = quality.value));
+
+      drop.addEventListener("click", () => fileInput.click());
+      drop.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        drop.classList.add("drag");
+      });
+      drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+      drop.addEventListener("drop", (e) => {
+        e.preventDefault();
+        drop.classList.remove("drag");
+        const f = e.dataTransfer.files?.[0];
+        if (f) handleFile(f);
+      });
+      fileInput.addEventListener("change", (e) => {
+        const f = e.target.files?.[0];
+        if (f) handleFile(f);
+      });
+      urlInput.addEventListener("input", updateGenerateState);
+
+      function updateGenerateState() {
+        if (currentMode === "data") {
+          generateBtn.disabled = !currentImage;
+        } else {
+          generateBtn.disabled = !urlInput.value.trim();
+        }
+      }
+
+      function handleFile(file) {
+        if (!file.type.startsWith("image/")) {
+          alert("画像ファイルを選択してください");
+          return;
+        }
+        currentFile = file;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          currentImage = img;
+          thumb.src = url;
+          fname.textContent = file.name;
+          finfo.textContent = `${img.naturalWidth}×${img.naturalHeight} · ${formatBytes(file.size)}`;
+          preview.hidden = false;
+          updateGenerateState();
+        };
+        img.onerror = () => alert("画像を読み込めませんでした");
+        img.src = url;
+      }
+
+      function formatBytes(n) {
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${(n / 1024 / 1024).toFixed(2)} MB`;
+      }
+
+      function resizeToDataUrl(img, maxSide, mime, q) {
+        const ratio = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * ratio));
+        const h = Math.max(1, Math.round(img.naturalHeight * ratio));
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        return c.toDataURL(mime, q);
+      }
+
+      async function renderQr(payload, level) {
+        qrBox.innerHTML = "";
+        const canvas = document.createElement("canvas");
+        await QRCode.toCanvas(canvas, payload, {
+          errorCorrectionLevel: level,
+          margin: 2,
+          width: 320,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+        qrBox.appendChild(canvas);
+        return canvas;
+      }
+
+      function setStatus(html) {
+        statusEl.innerHTML = html;
+      }
+
+      async function generate() {
+        downloadBtn.disabled = true;
+        copyBtn.disabled = true;
+
+        try {
+          let payload;
+          let info = "";
+          const level = ecc.value;
+          const limit = QR_BYTE_LIMITS[level];
+
+          if (currentMode === "url") {
+            payload = urlInput.value.trim();
+            info = `URLモード · ${payload.length} 文字`;
+          } else {
+            const mime = format.value;
+            const dim = parseInt(maxDim.value, 10);
+            let q = parseInt(quality.value, 10) / 100;
+            payload = resizeToDataUrl(currentImage, dim, mime, q);
+
+            if (autoFit.checked) {
+              while (payload.length > limit && q > 0.1) {
+                q = Math.max(0.1, q - 0.1);
+                payload = resizeToDataUrl(currentImage, dim, mime, q);
+              }
+              let curDim = dim;
+              while (payload.length > limit && curDim > 32) {
+                curDim = Math.max(32, Math.round(curDim * 0.85));
+                payload = resizeToDataUrl(currentImage, curDim, mime, q);
+              }
+              info = `自動調整: ${curDim}px / 画質 ${Math.round(q * 100)}%`;
+            } else {
+              info = `${dim}px / 画質 ${Math.round(q * 100)}%`;
+            }
+          }
+
+          const size = new Blob([payload]).size;
+          const limit2 = QR_BYTE_LIMITS[level];
+          const fits = size <= limit2;
+
+          if (!fits) {
+            setStatus(
+              `<span class="pill err">超過</span>データ ${formatBytes(size)} / 上限 ${formatBytes(limit2)} (ECC ${level})。サイズ・画質を下げるか、URLモードをご利用ください。`
+            );
+            qrBox.innerHTML = '<span class="qr-empty">QRに収まりません</span>';
+            return;
+          }
+
+          await renderQr(payload, level);
+          const used = Math.round((size / limit2) * 100);
+          setStatus(
+            `<span class="pill ${used > 80 ? "warn" : "ok"}">${used}% 使用</span>${info} · ${formatBytes(size)} / ${formatBytes(limit2)}`
+          );
+          downloadBtn.disabled = false;
+          copyBtn.disabled = false;
+        } catch (err) {
+          console.error(err);
+          setStatus(`<span class="pill err">エラー</span>${err.message || err}`);
+        }
+      }
+
+      generateBtn.addEventListener("click", generate);
+
+      resetBtn.addEventListener("click", () => {
+        currentImage = null;
+        currentFile = null;
+        fileInput.value = "";
+        urlInput.value = "";
+        preview.hidden = true;
+        qrBox.innerHTML = '<span class="qr-empty">ここにQRコードが表示されます</span>';
+        setStatus("");
+        downloadBtn.disabled = true;
+        copyBtn.disabled = true;
+        updateGenerateState();
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        const canvas = qrBox.querySelector("canvas");
+        if (!canvas) return;
+        const a = document.createElement("a");
+        a.download = "qrcode.png";
+        a.href = canvas.toDataURL("image/png");
+        a.click();
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        const canvas = qrBox.querySelector("canvas");
+        if (!canvas) return;
+        try {
+          const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setStatus(statusEl.innerHTML + ' <span class="pill ok">コピーしました</span>');
+        } catch (e) {
+          alert("クリップボードへのコピーに失敗しました: " + e.message);
+        }
+      });
+    </script>
+  </body>
+</html>

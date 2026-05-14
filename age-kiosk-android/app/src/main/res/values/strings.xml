@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">AgeKiosk</string>
+    <string name="title">Age Estimation</string>
+    <string name="subtitle">Look at the camera</string>
+    <string name="waiting_title">Align your face in the frame</string>
+    <string name="waiting_sub">Face the camera in a bright spot</string>
+    <string name="scanning">Analyzing…</string>
+    <string name="result_label">Estimated age</string>
+    <string name="result_unit">y/o</string>
+    <string name="footer_note">Calibrated for Japanese faces</string>
+    <string name="permission_title">Camera permission required</string>
+    <string name="permission_sub">Enable Camera in Settings → AgeKiosk</string>
+    <string name="model_missing_title">Model not installed</string>
+    <string name="model_missing_sub">Place age_net.tflite under app/src/main/assets</string>
+</resources>

@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">年齢推定キオスク</string>
+    <string name="title">年齢推定</string>
+    <string name="subtitle">カメラを正面から見てください</string>
+    <string name="waiting_title">顔をフレームに合わせてください</string>
+    <string name="waiting_sub">正面を向いて、明るい場所で</string>
+    <string name="scanning">解析中…</string>
+    <string name="result_label">推定年齢</string>
+    <string name="result_unit">歳</string>
+    <string name="footer_note">※ 日本人向けに補正済みの参考値です</string>
+    <string name="permission_title">カメラ許可が必要です</string>
+    <string name="permission_sub">設定 → AgeKiosk → カメラ をオンにしてください</string>
+    <string name="model_missing_title">モデル未搭載</string>
+    <string name="model_missing_sub">app/src/main/assets/age_net.tflite を配置してください</string>
+</resources>

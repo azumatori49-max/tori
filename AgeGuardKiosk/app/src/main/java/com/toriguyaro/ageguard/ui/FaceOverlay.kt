@@ -45,10 +45,13 @@ fun FaceOverlay(
     )
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        val frameWidth = size.width * 0.45f
+        val isPortrait = size.height >= size.width
+        val baseDim = minOf(size.width, size.height)
+        val frameWidth = baseDim * if (isPortrait) 0.7f else 0.45f
         val frameHeight = frameWidth * 1.25f
+        val verticalBias = if (isPortrait) 0.18f else 0.05f
         val left = (size.width - frameWidth) / 2f
-        val top = (size.height - frameHeight) / 2f - size.height * 0.05f
+        val top = (size.height - frameHeight) / 2f - size.height * verticalBias
         val topLeft = Offset(left, top)
         val frameSize = Size(frameWidth, frameHeight)
 

@@ -75,7 +75,7 @@ class KioskViewModel(app: Application) : AndroidViewModel(app) {
         val faces = runCatching { faceDetector.detect(image) }.getOrNull().orEmpty()
 
         val face = faces.maxByOrNull { it.box.width() }
-        if (face == null || face.box.width() < width * 0.18f) {
+        if (face == null || face.box.width() < width * 0.15f) {
             _faceBox.value = null
             if (_state.value is KioskState.Result) return
             smoother.reset()

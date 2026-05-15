@@ -11,7 +11,6 @@ import androidx.camera.core.ImageProxy
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
-import org.tensorflow.lite.nnapi.NnApiDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
@@ -28,7 +27,13 @@ import java.io.ByteArrayOutputStream
  *      * `age` 単一スカラー (float) — 回帰モデル
  *      * 101 要素 (0..100 歳の softmax) — DEX 型。期待値で年齢化
  *
- * NNAPI / GPU の delegate を順に試して使えるものを使う。
+ * delegate 戦略 (TECLAST / UNISOC 機を想定して NNAPI は使わない):
+ *   1. GPU delegate が使えれば GPU
+ *   2. ダメなら XNNPACK + マルチスレッド CPU
+ *
+ * 理由: UNISOC (TECLAST 系の SoC) の NNAPI ドライバはバグが多く、
+ *       使うと遅くなる/落ちる事例が多い。GPU か CPU(XNNPACK) の方が安定。
+ *
  * モデルは `app/src/main/assets/age_net.tflite` に置く。
  */
 class AgeEstimator private constructor(
@@ -105,16 +110,25 @@ class AgeEstimator private constructor(
         fun tryCreate(context: Context, inputSize: Int = 224): AgeEstimator? {
             val model = runCatching { FileUtil.loadMappedFile(context, ASSET_NAME) }.getOrNull() ?: return null
 
-            val options = Interpreter.Options().apply {
-                numThreads = 4
+            // まず GPU を試す。UNISOC でも Mali GPU 経由の TFLite GPU delegate は
+            // おおむね動く。失敗したら XNNPACK + 4 スレッド CPU にフォールバック。
+            // NNAPI は UNISOC ドライバが不安定なため意図的に使わない。
+            val interp = runCatching {
                 val compat = CompatibilityList()
-                when {
-                    compat.isDelegateSupportedOnThisDevice -> addDelegate(GpuDelegate(compat.bestOptionsForThisDevice))
-                    else -> addDelegate(NnApiDelegate())
+                if (!compat.isDelegateSupportedOnThisDevice) throw IllegalStateException("GPU unsupported")
+                val opts = Interpreter.Options().apply {
+                    numThreads = 2
+                    addDelegate(GpuDelegate(compat.bestOptionsForThisDevice))
                 }
+                Interpreter(model, opts)
+            }.getOrElse {
+                val opts = Interpreter.Options().apply {
+                    numThreads = 4
+                    setUseXNNPACK(true)
+                }
+                Interpreter(model, opts)
             }
 
-            val interp = Interpreter(model, options)
             val outShape = interp.getOutputTensor(0).shape() // 例: [1] or [1, 101]
             val numBuckets = if (outShape.size == 2 && outShape[1] > 1) outShape[1] else null
             return AgeEstimator(interp, inputSize, numBuckets)

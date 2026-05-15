@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AgeGuard Kiosk</string>
+    <string name="guide_align_face">顔を枠に合わせてください</string>
+    <string name="no_face">顔が検出できません</string>
+    <string name="age_unit">歳</string>
+    <string name="age_unknown">-- 歳</string>
+
+    <!--
+        モデルの学習データ数（万人単位）。
+        MODEL_SETUP.md の手順に従ってモデル確定後に実数値を反映してください。
+        例: UTKFace ≒ 約2万枚 → "2"
+    -->
+    <string name="training_data_count">2</string>
+    <string name="reliability_caption">%1$s万人のデータをもとに推定しています</string>
+</resources>

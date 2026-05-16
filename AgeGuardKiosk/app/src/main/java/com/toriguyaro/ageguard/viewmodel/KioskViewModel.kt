@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 enum class UiState { WAITING, DETECTING, RESULT, NO_FACE }
 
@@ -23,8 +24,9 @@ class KioskViewModel : ViewModel() {
     private val _ui = MutableStateFlow(KioskUi())
     val ui: StateFlow<KioskUi> = _ui.asStateFlow()
 
-    private var resetJob: Job? = null
-    private var lastNoFaceMs: Long = 0L
+    private var leaveJob: Job? = null
+    private val recentAges = ArrayDeque<Int>()
+    private var displayedAge: Int? = null
 
     fun onFrame(event: FaceAnalyzer.FrameEvent) {
         when (event) {
@@ -35,34 +37,65 @@ class KioskViewModel : ViewModel() {
     }
 
     private fun handleScanning() {
-        if (_ui.value.state == UiState.WAITING) {
+        // Face is present but inference is throttled — cancel any pending leave timer.
+        leaveJob?.cancel()
+        if (_ui.value.state == UiState.WAITING || _ui.value.state == UiState.NO_FACE) {
             _ui.value = _ui.value.copy(state = UiState.DETECTING)
         }
     }
 
     private fun handleNoFace() {
-        // Only transition to NO_FACE/WAITING when not currently displaying a result.
-        if (_ui.value.state == UiState.RESULT) return
-        // Debounce slight flicker
-        val now = System.currentTimeMillis()
-        if (now - lastNoFaceMs < 300) return
-        lastNoFaceMs = now
-        _ui.value = KioskUi(state = UiState.WAITING)
-    }
-
-    private fun handleFace(result: AgeResult) {
-        resetJob?.cancel()
-        val age = if (result.confidence >= MIN_CONFIDENCE) result.estimatedAge else null
-        _ui.value = KioskUi(state = UiState.RESULT, age = age)
-
-        resetJob = viewModelScope.launch {
-            delay(RESET_DELAY_MS)
+        // Don't immediately reset — give the user a grace period in case the
+        // face momentarily leaves the frame.
+        if (leaveJob?.isActive == true) return
+        leaveJob = viewModelScope.launch {
+            delay(LEAVE_GRACE_MS)
+            recentAges.clear()
+            displayedAge = null
             _ui.value = KioskUi(state = UiState.WAITING)
         }
     }
 
+    private fun handleFace(result: AgeResult) {
+        leaveJob?.cancel()
+
+        if (result.confidence < MIN_CONFIDENCE || result.estimatedAge == null) {
+            // Low-confidence frame — keep showing previous value if any.
+            if (displayedAge == null) {
+                _ui.value = KioskUi(state = UiState.RESULT, age = null)
+            }
+            return
+        }
+
+        val sample = result.estimatedAge
+        recentAges.addLast(sample)
+        while (recentAges.size > WINDOW_SIZE) recentAges.removeFirst()
+
+        val smoothed = median(recentAges)
+
+        // Hysteresis: only update displayed age when the smoothed value drifts
+        // far enough from the previous display. Stops 1-2-year flicker.
+        val current = displayedAge
+        val next = when {
+            current == null -> smoothed
+            abs(smoothed - current) >= UPDATE_THRESHOLD -> smoothed
+            else -> current
+        }
+        displayedAge = next
+        _ui.value = KioskUi(state = UiState.RESULT, age = next)
+    }
+
+    private fun median(values: Collection<Int>): Int {
+        val sorted = values.sorted()
+        val n = sorted.size
+        return if (n % 2 == 1) sorted[n / 2]
+        else ((sorted[n / 2 - 1] + sorted[n / 2]) / 2)
+    }
+
     companion object {
-        private const val RESET_DELAY_MS = 2000L
+        private const val LEAVE_GRACE_MS = 1500L
         private const val MIN_CONFIDENCE = 0.2f
+        private const val WINDOW_SIZE = 7
+        private const val UPDATE_THRESHOLD = 2
     }
 }

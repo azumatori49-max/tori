@@ -115,8 +115,21 @@ class AgeEstimator(context: Context) {
         return buffer
     }
 
-    private fun mockResult(): AgeResult =
-        AgeResult(estimatedAge = Random.nextInt(15, 66), confidence = 0.5f)
+    private fun mockResult(): AgeResult {
+        // Stable mock: pick a base age, then return small jitter around it.
+        // This avoids 50→19 swings while still demonstrating the UI updating.
+        val now = System.currentTimeMillis()
+        if (mockBaseAge == null || now - mockBaseSetMs > MOCK_SESSION_MS) {
+            mockBaseAge = Random.nextInt(20, 55)
+            mockBaseSetMs = now
+        }
+        val base = mockBaseAge!!
+        val jittered = (base + Random.nextInt(-1, 2)).coerceIn(15, 65)
+        return AgeResult(estimatedAge = jittered, confidence = 0.9f)
+    }
+
+    private var mockBaseAge: Int? = null
+    private var mockBaseSetMs: Long = 0L
 
     fun close() {
         interpreter?.close()
@@ -137,5 +150,6 @@ class AgeEstimator(context: Context) {
         private const val TAG = "AgeEstimator"
         private const val MODEL_PATH = "age_model.tflite"
         private const val INPUT_SIZE = 224
+        private const val MOCK_SESSION_MS = 8000L
     }
 }

@@ -35,6 +35,7 @@ import com.toriguyaro.ageguard.viewmodel.UiState
 fun KioskScreen(
     ui: KioskUi,
     cameraManagerFactory: () -> CameraManager,
+    isMockMode: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -75,6 +76,23 @@ fun KioskScreen(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium,
             )
+        }
+
+        if (isMockMode) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .background(Color(0xFFFF5252), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = "DEMO (モデル未配置・ランダム値)",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
 
         // Bottom age panel — about 1/3 of screen

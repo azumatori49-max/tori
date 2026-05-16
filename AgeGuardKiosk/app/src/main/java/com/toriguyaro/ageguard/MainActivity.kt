@@ -80,7 +80,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (permissionGranted) {
-                    KioskScreen(ui = ui, cameraManagerFactory = cameraManagerFactory)
+                    KioskScreen(
+                        ui = ui,
+                        cameraManagerFactory = cameraManagerFactory,
+                        isMockMode = ageEstimator.isMockMode,
+                    )
                 } else {
                     Box(
                         Modifier.fillMaxSize().background(Color.Black),

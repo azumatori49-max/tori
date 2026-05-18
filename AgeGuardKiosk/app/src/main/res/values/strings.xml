@@ -8,9 +8,8 @@
 
     <!--
         モデルの学習データ数（万人単位）。
-        MODEL_SETUP.md の手順に従ってモデル確定後に実数値を反映してください。
-        例: UTKFace ≒ 約2万枚 → "2"
+        AFAD(18+) + UTKFace + 子供オーバーサンプル ≒ 約 18 万人。
     -->
-    <string name="training_data_count">2</string>
+    <string name="training_data_count">18</string>
     <string name="reliability_caption">%1$s万人のデータをもとに推定しています</string>
 </resources>

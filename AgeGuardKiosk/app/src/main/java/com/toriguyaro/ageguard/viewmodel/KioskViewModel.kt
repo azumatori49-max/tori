@@ -28,6 +28,13 @@ class KioskViewModel : ViewModel() {
     private val recentAges = ArrayDeque<Int>()
     private var displayedAge: Int? = null
 
+    fun reset() {
+        leaveJob?.cancel()
+        recentAges.clear()
+        displayedAge = null
+        _ui.value = KioskUi(state = UiState.WAITING)
+    }
+
     fun onFrame(event: FaceAnalyzer.FrameEvent) {
         when (event) {
             FaceAnalyzer.FrameEvent.NoFace -> handleNoFace()

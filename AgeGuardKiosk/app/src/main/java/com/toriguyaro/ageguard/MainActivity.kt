@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                         ui = ui,
                         cameraManagerFactory = cameraManagerFactory,
                         isMockMode = ageEstimator.isMockMode,
+                        onTap = { viewModel.reset() },
                     )
                 } else {
                     Box(

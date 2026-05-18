@@ -3,6 +3,8 @@ package com.toriguyaro.ageguard.ui
 import android.view.ViewGroup
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,12 +38,23 @@ fun KioskScreen(
     ui: KioskUi,
     cameraManagerFactory: () -> CameraManager,
     isMockMode: Boolean = false,
+    onTap: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraManager = remember { cameraManagerFactory() }
+    val interactionSource = remember { MutableInteractionSource() }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onTap,
+            )
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {

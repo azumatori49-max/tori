@@ -62,7 +62,7 @@ dependencies {
 
     implementation("com.google.mlkit:face-detection:16.1.6")
 
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")

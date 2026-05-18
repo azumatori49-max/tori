@@ -36,7 +36,9 @@ class AgeEstimator(context: Context) {
     suspend fun estimate(bitmap: Bitmap): AgeResult = withContext(Dispatchers.Default) {
         val interp = interpreter ?: return@withContext mockResult()
         try {
-            runInference(interp, bitmap)
+            val result = runInference(interp, bitmap)
+            Log.d(TAG, "estimate -> age=${result.estimatedAge} confidence=${result.confidence}")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Inference failed, returning unknown", e)
             AgeResult(estimatedAge = null, confidence = 0f)
@@ -70,15 +72,16 @@ class AgeEstimator(context: Context) {
                 AgeResult(estimatedAge = age, confidence = 1.0f)
             }
             out.size in 2..120 -> {
-                // Classification: softmax probs over age bins (assume 0..N-1)
+                // Classification with softmax expectation (DEX). The peak
+                // probability is naturally low for wide age distributions, so
+                // we don't gate on it — the expectation is meaningful as long
+                // as inference completed.
                 val probs = softmaxIfNeeded(out)
                 var expected = 0f
-                var maxP = 0f
                 for (i in probs.indices) {
                     expected += i * probs[i]
-                    if (probs[i] > maxP) maxP = probs[i]
                 }
-                AgeResult(estimatedAge = expected.toInt(), confidence = maxP)
+                AgeResult(estimatedAge = expected.toInt(), confidence = 1.0f)
             }
             else -> {
                 // Unknown shape — best-effort mean

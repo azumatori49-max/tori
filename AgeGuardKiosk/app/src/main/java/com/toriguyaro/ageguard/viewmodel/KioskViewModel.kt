@@ -71,6 +71,15 @@ class KioskViewModel : ViewModel() {
         recentAges.addLast(sample)
         while (recentAges.size > WINDOW_SIZE) recentAges.removeFirst()
 
+        // Don't commit a value until we have enough samples — avoids showing
+        // the first noisy estimates while the median window fills up.
+        if (recentAges.size < WARMUP_SAMPLES) {
+            if (displayedAge == null) {
+                _ui.value = KioskUi(state = UiState.DETECTING, age = null)
+            }
+            return
+        }
+
         val smoothed = median(recentAges)
 
         // Hysteresis: only update displayed age when the smoothed value drifts
@@ -95,7 +104,8 @@ class KioskViewModel : ViewModel() {
     companion object {
         private const val LEAVE_GRACE_MS = 1500L
         private const val MIN_CONFIDENCE = 0.2f
-        private const val WINDOW_SIZE = 7
-        private const val UPDATE_THRESHOLD = 2
+        private const val WINDOW_SIZE = 15
+        private const val UPDATE_THRESHOLD = 3
+        private const val WARMUP_SAMPLES = 4
     }
 }

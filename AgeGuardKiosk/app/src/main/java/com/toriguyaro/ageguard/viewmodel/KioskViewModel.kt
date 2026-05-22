@@ -113,6 +113,6 @@ class KioskViewModel : ViewModel() {
         private const val MIN_CONFIDENCE = 0.2f
         private const val WINDOW_SIZE = 15
         private const val UPDATE_THRESHOLD = 3
-        private const val WARMUP_SAMPLES = 4
+        private const val WARMUP_SAMPLES = 6
     }
 }

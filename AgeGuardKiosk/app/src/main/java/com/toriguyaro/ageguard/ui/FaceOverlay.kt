@@ -58,10 +58,12 @@ fun FaceOverlay(
     Canvas(modifier = modifier.fillMaxSize()) {
         val isPortrait = size.height >= size.width
         val baseDim = minOf(size.width, size.height)
-        val frameWidth = baseDim * if (isPortrait) 0.7f else 0.46f
+        val frameWidth = baseDim * if (isPortrait) 0.7f else 0.5f
         val frameHeight = frameWidth * 1.22f
-        val verticalBias = if (isPortrait) 0.16f else 0.06f
-        val left = (size.width - frameWidth) / 2f
+        val verticalBias = if (isPortrait) 0.16f else 0.0f
+        // In landscape the result card sits on the right, so nudge the frame left.
+        val horizontalBias = if (isPortrait) 0f else -size.width * 0.14f
+        val left = (size.width - frameWidth) / 2f + horizontalBias
         val top = (size.height - frameHeight) / 2f - size.height * verticalBias
         val topLeft = Offset(left, top)
         val frameSize = Size(frameWidth, frameHeight)

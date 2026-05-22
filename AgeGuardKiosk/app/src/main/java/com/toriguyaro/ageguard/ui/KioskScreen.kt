@@ -1,5 +1,6 @@
 package com.toriguyaro.ageguard.ui
 
+import android.content.res.Configuration
 import android.view.ViewGroup
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -28,6 +30,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,8 @@ fun KioskScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraManager = remember { cameraManagerFactory() }
     val interactionSource = remember { MutableInteractionSource() }
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
         Modifier
@@ -114,15 +119,27 @@ fun KioskScreen(
             )
         }
 
-        // ---- Bottom result card ----
-        ResultCard(
-            ui = ui,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-        )
+        // ---- Result card: bottom (portrait) / right side (landscape) ----
+        if (isLandscape) {
+            ResultCard(
+                ui = ui,
+                landscape = true,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .widthIn(max = 360.dp)
+                    .padding(end = 28.dp),
+            )
+        } else {
+            ResultCard(
+                ui = ui,
+                landscape = false,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+            )
+        }
     }
 }
 
@@ -170,12 +187,16 @@ private fun BrandBar(ui: KioskUi, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
+private fun ResultCard(ui: KioskUi, landscape: Boolean, modifier: Modifier = Modifier) {
+    val numberSize = if (landscape) 84.sp else 116.sp
+    val unitSize = if (landscape) 28.sp else 36.sp
+    val unitBottomPad = if (landscape) 16.dp else 22.dp
+
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
             .background(CardBg)
-            .padding(horizontal = 28.dp, vertical = 22.dp),
+            .padding(horizontal = 28.dp, vertical = if (landscape) 18.dp else 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Guide / status line
@@ -205,21 +226,19 @@ private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
             Text(
                 digits,
                 color = numberColor,
-                fontSize = 116.sp,
+                fontSize = numberSize,
                 fontWeight = FontWeight.Black,
             )
             Text(
                 " ${stringResource(R.string.age_unit)}",
                 color = numberColor,
-                fontSize = 36.sp,
+                fontSize = unitSize,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 22.dp),
+                modifier = Modifier.padding(bottom = unitBottomPad),
             )
         }
 
-        // Status pill removed — show number only.
-
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(if (landscape) 8.dp else 14.dp))
 
         Text(
             stringResource(
@@ -228,6 +247,7 @@ private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
             ),
             color = Muted,
             fontSize = 13.sp,
+            textAlign = TextAlign.Center,
             modifier = Modifier.alpha(0.8f),
         )
         Text(

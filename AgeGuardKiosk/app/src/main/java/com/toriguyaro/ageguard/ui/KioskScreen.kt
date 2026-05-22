@@ -2,6 +2,11 @@ package com.toriguyaro.ageguard.ui
 
 import android.view.ViewGroup
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -9,22 +14,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -33,6 +45,27 @@ import com.toriguyaro.ageguard.camera.CameraManager
 import com.toriguyaro.ageguard.viewmodel.KioskUi
 import com.toriguyaro.ageguard.viewmodel.UiState
 
+// ----- Theme colors -----
+private val Cyan = Color(0xFF22D3EE)
+private val StatusMinor = Color(0xFFF43F5E)     // red
+private val StatusBoundary = Color(0xFFF59E0B)  // amber
+private val StatusAdult = Color(0xFF22C55E)     // green
+private val CardBg = Color(0xE6111827)          // frosted dark
+private val Muted = Color(0xFF94A3B8)
+
+private enum class AgeStatus(val labelRes: Int, val color: Color) {
+    MINOR(R.string.status_minor, StatusMinor),
+    BOUNDARY(R.string.status_boundary, StatusBoundary),
+    ADULT(R.string.status_adult, StatusAdult),
+}
+
+private fun statusFor(age: Int?): AgeStatus? = when {
+    age == null -> null
+    age < 20 -> AgeStatus.MINOR
+    age < 25 -> AgeStatus.BOUNDARY
+    else -> AgeStatus.ADULT
+}
+
 @Composable
 fun KioskScreen(
     ui: KioskUi,
@@ -40,7 +73,6 @@ fun KioskScreen(
     isMockMode: Boolean = false,
     onTap: () -> Unit = {},
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraManager = remember { cameraManagerFactory() }
     val interactionSource = remember { MutableInteractionSource() }
@@ -55,6 +87,7 @@ fun KioskScreen(
                 onClick = onTap,
             )
     ) {
+        // Camera preview
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
@@ -69,108 +102,224 @@ fun KioskScreen(
             },
         )
 
-        FaceOverlay(state = ui.state, modifier = Modifier.fillMaxSize())
-
-        // Top guide text
+        // Top + bottom gradient scrim for legibility
         Box(
             Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color(0xCC000000),
+                        0.25f to Color(0x00000000),
+                        0.55f to Color(0x00000000),
+                        1f to Color(0xF2000000),
+                    )
+                )
+        )
+
+        FaceOverlay(state = ui.state, status = statusKey(ui), modifier = Modifier.fillMaxSize())
+
+        // ---- Top brand bar ----
+        BrandBar(
+            ui = ui,
+            modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 24.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            val guide = when (ui.state) {
-                UiState.NO_FACE -> stringResource(R.string.no_face)
-                else -> stringResource(R.string.guide_align_face)
-            }
-            Text(
-                text = guide,
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 22.dp),
+        )
+
+        if (isMockMode) {
+            DemoBadge(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 64.dp, end = 24.dp)
             )
         }
 
-        if (isMockMode) {
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-                    .background(Color(0xFFFF5252), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = "DEMO (モデル未配置・ランダム値)",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-
-        // Bottom age panel — about 1/3 of screen
-        Box(
-            Modifier
+        // ---- Bottom result card ----
+        ResultCard(
+            ui = ui,
+            modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(0.33f)
-                .background(Color(0xCC000000)),
-            contentAlignment = Alignment.Center,
-        ) {
-            AgePanel(ui = ui)
-        }
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        )
+    }
+}
+
+private fun statusKey(ui: KioskUi): Int = when {
+    ui.state != UiState.RESULT -> 0
+    else -> when (statusFor(ui.age)) {
+        AgeStatus.MINOR -> 1
+        AgeStatus.BOUNDARY -> 2
+        AgeStatus.ADULT -> 3
+        null -> 0
     }
 }
 
 @Composable
-private fun AgePanel(ui: KioskUi) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .wrapContentHeight(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun BrandBar(ui: KioskUi, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val (digits, unit, digitColor) = when (ui.state) {
-            UiState.RESULT -> {
-                if (ui.age != null) {
-                    Triple(ui.age.toString(), stringResource(R.string.age_unit), Color.White)
-                } else {
-                    Triple("--", stringResource(R.string.age_unit), Color(0xFFBDBDBD))
-                }
-            }
-            UiState.DETECTING -> Triple("...", stringResource(R.string.age_unit), Color.White.copy(alpha = 0.6f))
-            else -> Triple("--", stringResource(R.string.age_unit), Color(0xFFBDBDBD))
-        }
-
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.Center,
+        // Logo mark
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Brush.linearGradient(listOf(Cyan, Color(0xFF3B82F6)))),
+            contentAlignment = Alignment.Center,
         ) {
+            Text("A", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
             Text(
-                text = digits,
-                color = digitColor,
-                fontSize = 120.sp,
+                stringResource(R.string.brand_name),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.brand_subtitle),
+                color = Muted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        // Live status dot
+        val live = ui.state == UiState.DETECTING || ui.state == UiState.RESULT
+        Box(
+            Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(if (live) Cyan else Muted.copy(alpha = 0.5f))
+        )
+    }
+}
+
+@Composable
+private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(CardBg)
+            .padding(horizontal = 28.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Guide / status line
+        val guide = when (ui.state) {
+            UiState.NO_FACE -> stringResource(R.string.no_face)
+            UiState.DETECTING -> stringResource(R.string.guide_scanning)
+            UiState.RESULT -> stringResource(R.string.age_prefix)
+            else -> stringResource(R.string.guide_align_face)
+        }
+        Text(
+            guide,
+            color = Muted,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // Big age number
+        val showAge = ui.state == UiState.RESULT && ui.age != null
+        val digits = if (showAge) ui.age.toString()
+        else if (ui.state == UiState.DETECTING) "··"
+        else stringResource(R.string.age_unknown)
+        val numberColor = if (showAge) Color.White else Muted
+
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                digits,
+                color = numberColor,
+                fontSize = 116.sp,
                 fontWeight = FontWeight.Black,
             )
             Text(
-                text = " $unit",
-                color = digitColor,
-                fontSize = 40.sp,
+                " ${stringResource(R.string.age_unit)}",
+                color = numberColor,
+                fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 18.dp),
+                modifier = Modifier.padding(bottom = 22.dp),
             )
         }
 
+        // Status pill (only on result)
+        AnimatedVisibility(
+            visible = showAge,
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(150)),
+        ) {
+            StatusPill(statusFor(ui.age))
+        }
+
+        Spacer(Modifier.height(14.dp))
+
         Text(
-            text = stringResource(
+            stringResource(
                 R.string.reliability_caption,
                 stringResource(R.string.training_data_count),
             ),
+            color = Muted,
+            fontSize = 13.sp,
+            modifier = Modifier.alpha(0.8f),
+        )
+        Text(
+            stringResource(R.string.disclaimer),
+            color = Muted,
+            fontSize = 11.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .alpha(0.6f)
+                .padding(top = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(status: AgeStatus?) {
+    if (status == null) return
+    val color by animateColorAsState(status.color, tween(300), label = "pill")
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.18f))
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            stringResource(status.labelRes),
+            color = color,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun DemoBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xFFEF4444))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            "DEMO・モデル未配置",
             color = Color.White,
-            fontSize = 16.sp,
-            modifier = Modifier.alpha(0.6f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
         )
     }
 }

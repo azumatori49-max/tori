@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AgeGuard Kiosk</string>
+    <string name="app_name">エイジー</string>
+    <string name="brand_name">エイジー</string>
+    <string name="brand_subtitle">AI 年齢推定システム</string>
     <string name="guide_align_face">顔を枠に合わせてください</string>
+    <string name="guide_scanning">推定中…</string>
     <string name="no_face">顔が検出できません</string>
     <string name="age_unit">歳</string>
-    <string name="age_unknown">-- 歳</string>
+    <string name="age_unknown">--</string>
+    <string name="age_prefix">推定年齢</string>
+    <string name="tap_hint">画面タップでリセット</string>
+
+    <string name="status_minor">未成年の可能性</string>
+    <string name="status_boundary">要年齢確認</string>
+    <string name="status_adult">成人と推定</string>
 
     <!--
         モデルの学習データ数（万人単位）。
@@ -12,4 +21,6 @@
     -->
     <string name="training_data_count">18</string>
     <string name="reliability_caption">%1$s万人のデータをもとに推定しています</string>
+    <string name="disclaimer">本システムは年齢確認の補助です。最終確認はスタッフが行います。</string>
 </resources>
+

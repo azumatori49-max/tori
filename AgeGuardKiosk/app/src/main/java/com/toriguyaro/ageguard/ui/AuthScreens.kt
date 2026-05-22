@@ -94,6 +94,13 @@ fun SplashScreen(onStart: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                 )
             }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                stringResource(R.string.reliability_caption, "18"),
+                color = MutedText,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
 
         Text(

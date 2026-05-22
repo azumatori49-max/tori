@@ -2,11 +2,6 @@ package com.toriguyaro.ageguard.ui
 
 import android.view.ViewGroup
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -47,24 +42,8 @@ import com.toriguyaro.ageguard.viewmodel.UiState
 
 // ----- Theme colors -----
 private val Cyan = Color(0xFF22D3EE)
-private val StatusMinor = Color(0xFFF43F5E)     // red
-private val StatusBoundary = Color(0xFFF59E0B)  // amber
-private val StatusAdult = Color(0xFF22C55E)     // green
 private val CardBg = Color(0xE6111827)          // frosted dark
 private val Muted = Color(0xFF94A3B8)
-
-private enum class AgeStatus(val labelRes: Int, val color: Color) {
-    MINOR(R.string.status_minor, StatusMinor),
-    BOUNDARY(R.string.status_boundary, StatusBoundary),
-    ADULT(R.string.status_adult, StatusAdult),
-}
-
-private fun statusFor(age: Int?): AgeStatus? = when {
-    age == null -> null
-    age < 20 -> AgeStatus.MINOR
-    age < 25 -> AgeStatus.BOUNDARY
-    else -> AgeStatus.ADULT
-}
 
 @Composable
 fun KioskScreen(
@@ -116,7 +95,7 @@ fun KioskScreen(
                 )
         )
 
-        FaceOverlay(state = ui.state, status = statusKey(ui), modifier = Modifier.fillMaxSize())
+        FaceOverlay(state = ui.state, modifier = Modifier.fillMaxSize())
 
         // ---- Top brand bar ----
         BrandBar(
@@ -144,16 +123,6 @@ fun KioskScreen(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
         )
-    }
-}
-
-private fun statusKey(ui: KioskUi): Int = when {
-    ui.state != UiState.RESULT -> 0
-    else -> when (statusFor(ui.age)) {
-        AgeStatus.MINOR -> 1
-        AgeStatus.BOUNDARY -> 2
-        AgeStatus.ADULT -> 3
-        null -> 0
     }
 }
 
@@ -248,14 +217,7 @@ private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
             )
         }
 
-        // Status pill (only on result)
-        AnimatedVisibility(
-            visible = showAge,
-            enter = fadeIn(tween(250)),
-            exit = fadeOut(tween(150)),
-        ) {
-            StatusPill(statusFor(ui.age))
-        }
+        // Status pill removed — show number only.
 
         Spacer(Modifier.height(14.dp))
 
@@ -276,33 +238,6 @@ private fun ResultCard(ui: KioskUi, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .alpha(0.6f)
                 .padding(top = 2.dp),
-        )
-    }
-}
-
-@Composable
-private fun StatusPill(status: AgeStatus?) {
-    if (status == null) return
-    val color by animateColorAsState(status.color, tween(300), label = "pill")
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.18f))
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            stringResource(status.labelRes),
-            color = color,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
         )
     }
 }

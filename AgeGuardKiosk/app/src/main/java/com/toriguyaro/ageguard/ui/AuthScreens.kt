@@ -1,10 +1,6 @@
 package com.toriguyaro.ageguard.ui
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -31,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,26 +48,13 @@ private fun authBackground(): Modifier = Modifier
 
 @Composable
 fun LogoMark(size: Int = 84) {
-    val infinite = rememberInfiniteTransition(label = "logo")
-    val glow by infinite.animateFloat(
-        initialValue = 0.6f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1600), RepeatMode.Reverse),
-        label = "glow",
-    )
-    Box(
-        Modifier
+    Image(
+        painter = painterResource(R.drawable.app_logo),
+        contentDescription = null,
+        modifier = Modifier
             .size(size.dp)
-            .clip(RoundedCornerShape((size / 3.5).dp))
-            .background(Brush.linearGradient(listOf(Accent.copy(alpha = glow), AccentBlue))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "A",
-            color = Color.White,
-            fontSize = (size * 0.55).sp,
-            fontWeight = FontWeight.Black,
-        )
-    }
+            .clip(RoundedCornerShape((size / 4.5).dp)),
+    )
 }
 
 @Composable

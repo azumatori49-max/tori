@@ -31,6 +31,8 @@ import com.toriguyaro.ageguard.camera.CameraManager
 import com.toriguyaro.ageguard.camera.FaceAnalyzer
 import com.toriguyaro.ageguard.ml.AgeEstimator
 import com.toriguyaro.ageguard.ui.KioskScreen
+import com.toriguyaro.ageguard.ui.PinScreen
+import com.toriguyaro.ageguard.ui.SplashScreen
 import com.toriguyaro.ageguard.viewmodel.KioskViewModel
 
 class MainActivity : ComponentActivity() {
@@ -79,23 +81,39 @@ class MainActivity : ComponentActivity() {
                     { CameraManager(applicationContext, faceAnalyzer) }
                 }
 
-                if (permissionGranted) {
-                    KioskScreen(
-                        ui = ui,
-                        cameraManagerFactory = cameraManagerFactory,
-                        isMockMode = ageEstimator.isMockMode,
-                        onTap = { viewModel.reset() },
+                var screen by remember { mutableStateOf(AppScreen.SPLASH) }
+
+                when (screen) {
+                    AppScreen.SPLASH -> SplashScreen(
+                        onStart = { screen = AppScreen.PIN },
                     )
-                } else {
-                    Box(
-                        Modifier.fillMaxSize().background(Color.Black),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "カメラの権限が必要です",
-                            color = Color.White,
-                            fontSize = 22.sp,
-                        )
+
+                    AppScreen.PIN -> PinScreen(
+                        correctPin = STAFF_PIN,
+                        onSuccess = { screen = AppScreen.KIOSK },
+                        onBack = { screen = AppScreen.SPLASH },
+                    )
+
+                    AppScreen.KIOSK -> {
+                        if (permissionGranted) {
+                            KioskScreen(
+                                ui = ui,
+                                cameraManagerFactory = cameraManagerFactory,
+                                isMockMode = ageEstimator.isMockMode,
+                                onTap = { viewModel.reset() },
+                            )
+                        } else {
+                            Box(
+                                Modifier.fillMaxSize().background(Color.Black),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "カメラの権限が必要です",
+                                    color = Color.White,
+                                    fontSize = 22.sp,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -105,5 +123,12 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (::ageEstimator.isInitialized) ageEstimator.close()
+    }
+
+    private enum class AppScreen { SPLASH, PIN, KIOSK }
+
+    companion object {
+        // Staff unlock PIN. Change this before deployment.
+        private const val STAFF_PIN = "2580"
     }
 }

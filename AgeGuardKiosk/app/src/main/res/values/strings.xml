@@ -22,5 +22,12 @@
     <string name="training_data_count">18</string>
     <string name="reliability_caption">%1$s万人のデータをもとに推定しています</string>
     <string name="disclaimer">本システムは年齢確認の補助です。最終確認はスタッフが行います。</string>
+
+    <!-- Auth screens -->
+    <string name="start_button">開始する</string>
+    <string name="pin_title">スタッフ認証</string>
+    <string name="pin_subtitle">PIN を入力してください</string>
+    <string name="pin_error">PIN が違います。もう一度入力してください</string>
+    <string name="back">戻る</string>
 </resources>
 

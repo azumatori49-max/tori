@@ -7,7 +7,13 @@
  *   税抜き        72,500 = メンテナンス + 備品資材廃棄
  *   請求額（税込） 79,750 = 税抜き × 1.1（端数四捨五入）
  */
-import type { MaintenanceReport, SupplyLine, ToppingItem } from '@/types/report';
+import type {
+  AnnualSchedule,
+  DiyItem,
+  MaintenanceReport,
+  SupplyLine,
+  ToppingItem,
+} from '@/types/report';
 
 /** 備品資材1行の金額 */
 export function supplyAmount(line: SupplyLine): number {
@@ -26,6 +32,11 @@ export function toppingsTotal(toppings: ToppingItem[]): number {
     .reduce((sum, t) => sum + (t.fee || 0), 0);
 }
 
+/** チェックされたプチDIYの追加費用合計（円・税抜） */
+export function diyTotal(diy: DiyItem[]): number {
+  return diy.filter((d) => d.checked).reduce((sum, d) => sum + (d.fee || 0), 0);
+}
+
 export interface BillingBreakdown {
   /** メンテナンス料金 */
   maintenance: number;
@@ -33,6 +44,10 @@ export interface BillingBreakdown {
   supplies: number;
   /** トッピング追加費用 */
   toppings: number;
+  /** プチDIY追加費用 */
+  diy: number;
+  /** 年間スケジュール追加費用 */
+  annual: number;
   /** 税抜き合計 */
   taxExcluded: number;
   /** 消費税額 */
@@ -47,14 +62,18 @@ export function calcBilling(report: {
   taxRate: number;
   supplies: SupplyLine[];
   toppings: ToppingItem[];
+  diy: DiyItem[];
+  annualSchedule: AnnualSchedule;
 }): BillingBreakdown {
   const maintenance = report.maintenanceFee || 0;
   const supplies = suppliesTotal(report.supplies);
   const toppings = toppingsTotal(report.toppings);
-  const taxExcluded = maintenance + supplies + toppings;
+  const diy = diyTotal(report.diy);
+  const annual = report.annualSchedule?.fee || 0;
+  const taxExcluded = maintenance + supplies + toppings + diy + annual;
   const taxIncluded = Math.round(taxExcluded * (1 + (report.taxRate || 0)));
   const tax = taxIncluded - taxExcluded;
-  return { maintenance, supplies, toppings, taxExcluded, tax, taxIncluded };
+  return { maintenance, supplies, toppings, diy, annual, taxExcluded, tax, taxIncluded };
 }
 
 /** 千円区切りの金額表示（例: 79750 → "79,750"） */

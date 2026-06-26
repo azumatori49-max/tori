@@ -12,13 +12,12 @@ import type {
   ToppingItem,
 } from '@/types/report';
 
-/** 状況プルダウンの選択肢 */
+/** 状況プルダウンの選択肢（4段階） */
 export const CONDITION_OPTIONS: ConditionLabel[] = [
-  'とても良く出来ています',
-  '良く出来ています',
-  '普通です',
-  '改善が必要です',
-  '要対応',
+  'とてもよくできてます',
+  'よくできてます',
+  '普通',
+  'できてない',
 ];
 
 /** 定期点検チェックリストの定型項目 */
@@ -75,6 +74,8 @@ export function makeDefaultDiy(): DiyItem[] {
     name,
     checked: false,
     comment: '',
+    fee: 0,
+    photos: [],
   }));
 }
 
@@ -109,6 +110,7 @@ export function makeDefaultReport(settings: AppSettings): MaintenanceReportInser
     diy: makeDefaultDiy(),
     supplies: [],
     photos: [],
+    annualSchedule: { comment: '', fee: 0, photos: [] },
     comment: '',
   };
 }

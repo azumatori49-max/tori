@@ -72,7 +72,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
     if (get().hydrated) return;
     const raw = load<MaintenanceReport[]>(REPORTS_KEY, []);
     // 旧バージョンのデータに不足フィールドを補完
-    const reports = raw.map((r) => ({ ...r, photos: r.photos ?? [] }));
+    const reports = raw.map((r) => ({
+      ...r,
+      photos: r.photos ?? [],
+      diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: d.photos ?? [] })),
+      annualSchedule: r.annualSchedule ?? { comment: '', fee: 0, photos: [] },
+    }));
     const settings = load<AppSettings>(SETTINGS_KEY, DEFAULT_SETTINGS);
     set({ reports, settings, hydrated: true });
   },

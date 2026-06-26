@@ -42,6 +42,11 @@ export default function ReportsScreen() {
           sorted.map((r) => {
             const billing = calcBilling(r);
             const doneCount = r.checklist.filter((c) => c.checked).length;
+            const allPhotos = [
+              ...r.photos,
+              ...r.diy.flatMap((d) => d.photos),
+              ...r.annualSchedule.photos,
+            ];
             return (
               <Pressable
                 key={r.id}
@@ -57,13 +62,13 @@ export default function ReportsScreen() {
                 <View style={styles.itemRow}>
                   <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
                   <Text style={styles.itemMeta}>点検 {doneCount}/{r.checklist.length}</Text>
-                  {r.photos.length > 0 && (
-                    <Text style={styles.itemMeta}>📷 {r.photos.length}</Text>
+                  {allPhotos.length > 0 && (
+                    <Text style={styles.itemMeta}>📷 {allPhotos.length}</Text>
                   )}
                 </View>
-                {r.photos.length > 0 && (
+                {allPhotos.length > 0 && (
                   <View style={styles.thumbStrip}>
-                    {r.photos.slice(0, 4).map((ph) => (
+                    {allPhotos.slice(0, 4).map((ph) => (
                       <Image
                         key={ph.id}
                         source={{ uri: ph.uri }}

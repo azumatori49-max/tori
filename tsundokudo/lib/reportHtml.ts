@@ -18,6 +18,22 @@ function esc(s: string): string {
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
 
+/** 写真グリッドのHTML（分類バッジ＋メモ付き） */
+function photosHtml(photos: { uri: string; category: string; caption: string }[]): string {
+  if (!photos.length) return '';
+  return `<div class="photos">
+    ${photos
+      .map(
+        (p) => `
+      <div class="photo">
+        <img src="${p.uri}" />
+        <div class="photo-cap"><span class="badge">${esc(p.category)}</span>${esc(p.caption)}</div>
+      </div>`,
+      )
+      .join('')}
+  </div>`;
+}
+
 export function buildReportHtml(report: ReportLike): string {
   const b = calcBilling(report);
 
@@ -59,14 +75,30 @@ export function buildReportHtml(report: ReportLike): string {
 
   const diy = report.diy.filter((d) => d.checked);
   const diyBlock = diy.length
-    ? `<table class="grid">
-        <thead><tr><th style="width:32%">プチDIY</th><th>内容</th></tr></thead>
-        <tbody>
-        ${diy
-          .map((d) => `<tr><td class="name">${esc(d.name)}</td><td>${esc(d.comment)}</td></tr>`)
-          .join('')}
-        </tbody>
-       </table>`
+    ? diy
+        .map(
+          (d) => `
+      <div class="block">
+        <div class="block-head">
+          <span class="block-name">${esc(d.name)}</span>
+          ${d.fee ? `<span class="fee">追加費用 ¥${yen(d.fee)}</span>` : ''}
+        </div>
+        ${d.comment ? `<div class="block-body">${esc(d.comment)}</div>` : ''}
+        ${photosHtml(d.photos)}
+      </div>`,
+        )
+        .join('')
+    : '';
+
+  const annual = report.annualSchedule;
+  const hasAnnual = annual && (annual.comment || annual.fee || annual.photos.length);
+  const annualBlock = hasAnnual
+    ? `<div class="section-title">年間スケジュール</div>
+       <div class="block">
+         ${annual.fee ? `<div class="block-head"><span></span><span class="fee">追加費用 ¥${yen(annual.fee)}</span></div>` : ''}
+         ${annual.comment ? `<div class="block-body">${esc(annual.comment)}</div>` : ''}
+         ${photosHtml(annual.photos)}
+       </div>`
     : '';
 
   const supplyRows = report.supplies.length
@@ -84,18 +116,7 @@ export function buildReportHtml(report: ReportLike): string {
     : '<tr><td colspan="4" class="muted">なし</td></tr>';
 
   const photoBlock = report.photos.length
-    ? `<div class="section-title">写真</div>
-       <div class="photos">
-       ${report.photos
-         .map(
-           (p) => `
-         <div class="photo">
-           <img src="${p.uri}" />
-           <div class="photo-cap"><span class="badge">${esc(p.category)}</span>${esc(p.caption)}</div>
-         </div>`,
-         )
-         .join('')}
-       </div>`
+    ? `<div class="section-title">写真</div>${photosHtml(report.photos)}`
     : '';
 
   return `<!DOCTYPE html>
@@ -133,6 +154,12 @@ export function buildReportHtml(report: ReportLike): string {
   .bill-breakdown tr.grand td { border-top: 2px solid #0E9488; border-bottom: none; font-size: 15px; color: #0B7268; font-weight: 800; padding-top: 6px; }
   .pest { padding: 6px 8px; border: 1px solid #cbd5e1; }
   .comment { padding: 8px; border: 1px solid #cbd5e1; min-height: 40px; white-space: pre-wrap; }
+  .block { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .block-head { display: flex; justify-content: space-between; align-items: center; }
+  .block-name { font-weight: 700; }
+  .fee { color: #0B7268; font-weight: 700; }
+  .block-body { margin-top: 4px; white-space: pre-wrap; color: #334155; }
+  .block .photos { margin-top: 6px; }
   .photos { display: flex; flex-wrap: wrap; gap: 10px; }
   .photo { width: 31%; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
   .photo img { width: 100%; height: 140px; object-fit: cover; display: block; }
@@ -200,6 +227,8 @@ export function buildReportHtml(report: ReportLike): string {
   <table class="bill-breakdown">
     <tr><td>メンテナンス</td><td class="right">¥${yen(b.maintenance)}</td></tr>
     <tr><td>トッピング</td><td class="right">¥${yen(b.toppings)}</td></tr>
+    <tr><td>プチDIY</td><td class="right">¥${yen(b.diy)}</td></tr>
+    <tr><td>年間スケジュール</td><td class="right">¥${yen(b.annual)}</td></tr>
     <tr><td>備品 資材 廃棄</td><td class="right">¥${yen(b.supplies)}</td></tr>
     <tr><td>税抜き</td><td class="right">¥${yen(b.taxExcluded)}</td></tr>
     <tr><td>消費税</td><td class="right">¥${yen(b.tax)}</td></tr>
@@ -208,6 +237,8 @@ export function buildReportHtml(report: ReportLike): string {
 
   <div class="section-title">コメント・提案</div>
   <div class="comment">${esc(report.comment) || '<span class="muted">—</span>'}</div>
+
+  ${annualBlock}
 
   ${photoBlock}
 

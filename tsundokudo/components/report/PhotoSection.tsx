@@ -26,14 +26,22 @@ function uuid(): string {
 export function PhotoSection({
   photos,
   onChange,
+  max,
+  defaultCategory = '店舗外観',
 }: {
   photos: ReportPhoto[];
   onChange: (next: ReportPhoto[]) => void;
+  /** 最大枚数（未指定なら無制限） */
+  max?: number;
+  defaultCategory?: PhotoCategory;
 }) {
+  const reachedMax = max != null && photos.length >= max;
+
   async function add(kind: 'camera' | 'library') {
+    if (reachedMax) return;
     const uri = kind === 'camera' ? await capturePhoto() : await selectPhoto();
     if (!uri) return;
-    onChange([...photos, { id: uuid(), uri, category: '店舗外観', caption: '' }]);
+    onChange([...photos, { id: uuid(), uri, category: defaultCategory, caption: '' }]);
   }
 
   function patch(id: string, p: Partial<ReportPhoto>) {
@@ -82,16 +90,22 @@ export function PhotoSection({
         </View>
       ))}
 
-      <View style={styles.addRow}>
-        {CAMERA_SUPPORTED && (
-          <Pressable style={styles.addBtn} onPress={() => void add('camera')}>
-            <Text style={styles.addBtnText}>📷 撮影</Text>
+      {reachedMax ? (
+        <Text style={styles.maxNote}>写真は最大{max}枚までです</Text>
+      ) : (
+        <View style={styles.addRow}>
+          {CAMERA_SUPPORTED && (
+            <Pressable style={styles.addBtn} onPress={() => void add('camera')}>
+              <Text style={styles.addBtnText}>📷 撮影</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.addBtn} onPress={() => void add('library')}>
+            <Text style={styles.addBtnText}>
+              🖼 写真を選択{max != null ? `（${photos.length}/${max}）` : ''}
+            </Text>
           </Pressable>
-        )}
-        <Pressable style={styles.addBtn} onPress={() => void add('library')}>
-          <Text style={styles.addBtnText}>🖼 写真を選択</Text>
-        </Pressable>
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -133,4 +147,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addBtnText: { color: C.primaryDark, fontSize: 14, fontWeight: '700' },
+  maxNote: { color: C.textFaint, fontSize: 12, textAlign: 'center', paddingVertical: 8 },
 });

@@ -20,19 +20,37 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
-import { Button, Card, CheckBox, ChipSelect, Field, Input, SectionTitle } from '@/components/ui';
+import {
+  Button,
+  Card,
+  CheckBox,
+  ChipSelect,
+  Dropdown,
+  Field,
+  Input,
+  SectionTitle,
+} from '@/components/ui';
 import { PhotoSection } from '@/components/report/PhotoSection';
-import { CONDITION_OPTIONS } from '@/constants/hygiene';
-import { C } from '@/constants/colors';
+import { DatePicker } from '@/components/report/DatePicker';
+import { CONDITION_OPTIONS, DEFAULT_TOPPING_NAMES } from '@/constants/hygiene';
+import { C, CONDITION_COLOR } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { exportReportPdf } from '@/lib/exportPdf';
 import type {
+  AnnualSchedule,
   ChecklistItem,
   DiyItem,
   MaintenanceReportInsert,
+  ReportPhoto,
   SupplyLine,
   ToppingItem,
 } from '@/types/report';
+
+/** 施工担当者は「、」区切りで複数名を保持する */
+const TECH_SEP = '、';
+function splitTech(value: string): string[] {
+  return value.split(TECH_SEP).map((s) => s.trim()).filter(Boolean);
+}
 
 function toNum(v: string): number {
   return Number(v.replace(/[^0-9]/g, '')) || 0;
@@ -82,11 +100,36 @@ export default function ReportFormScreen() {
     }));
   }
 
+  function addTopping() {
+    setForm((f) => ({
+      ...f,
+      toppings: [...f.toppings, { name: '', checked: true, comment: '', fee: 0 }],
+    }));
+  }
+
+  function removeTopping(idx: number) {
+    setForm((f) => ({ ...f, toppings: f.toppings.filter((_, i) => i !== idx) }));
+  }
+
   function patchDiy(idx: number, p: Partial<DiyItem>) {
     setForm((f) => ({
       ...f,
       diy: f.diy.map((d, i) => (i === idx ? { ...d, ...p } : d)),
     }));
+  }
+
+  function patchAnnual(p: Partial<AnnualSchedule>) {
+    setForm((f) => ({ ...f, annualSchedule: { ...f.annualSchedule, ...p } }));
+  }
+
+  function toggleTechnician(name: string) {
+    setForm((f) => {
+      const list = splitTech(f.technician);
+      const next = list.includes(name)
+        ? list.filter((n) => n !== name)
+        : [...list, name];
+      return { ...f, technician: next.join(TECH_SEP) };
+    });
   }
 
   function patchSupply(idx: number, p: Partial<SupplyLine>) {
@@ -186,11 +229,7 @@ export default function ReportFormScreen() {
               />
             </Field>
             <Field label="作業日">
-              <Input
-                value={form.workDate}
-                onChangeText={(v) => patch({ workDate: v })}
-                placeholder="例: 5/15 または 2026-05-15"
-              />
+              <DatePicker value={form.workDate} onChange={(v) => patch({ workDate: v })} />
             </Field>
             <Field label="契約プラン">
               <Input
@@ -199,18 +238,27 @@ export default function ReportFormScreen() {
                 placeholder="例: メンテナンス"
               />
             </Field>
-            <Field label="施工担当者">
-              <Input
-                value={form.technician}
-                onChangeText={(v) => patch({ technician: v })}
-                placeholder="例: 佐藤　真人"
-              />
-              <View style={{ height: 8 }} />
-              <ChipSelect
-                options={store.settings.technicians}
-                value={form.technician}
-                onChange={(v) => patch({ technician: v })}
-              />
+            <Field label="施工担当者（複数選択可）">
+              <View style={styles.techWrap}>
+                {store.settings.technicians.map((name) => {
+                  const active = splitTech(form.technician).includes(name);
+                  return (
+                    <Pressable
+                      key={name}
+                      onPress={() => toggleTechnician(name)}
+                      style={[styles.techChip, active && styles.techChipActive]}
+                    >
+                      <Text style={[styles.techCheck, active && styles.techCheckOn]}>
+                        {active ? '✓' : ''}
+                      </Text>
+                      <Text style={[styles.techText, active && styles.techTextActive]}>{name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!!form.technician && (
+                <Text style={styles.techSelected}>選択中: {form.technician}</Text>
+              )}
             </Field>
             <Field label="御請求先">
               <Input
@@ -249,6 +297,14 @@ export default function ReportFormScreen() {
               <Text style={styles.billVal}>¥{yen(billing.toppings)}</Text>
             </View>
             <View style={styles.billRow}>
+              <Text style={styles.billLabel}>プチDIY</Text>
+              <Text style={styles.billVal}>¥{yen(billing.diy)}</Text>
+            </View>
+            <View style={styles.billRow}>
+              <Text style={styles.billLabel}>年間スケジュール</Text>
+              <Text style={styles.billVal}>¥{yen(billing.annual)}</Text>
+            </View>
+            <View style={styles.billRow}>
               <Text style={styles.billLabel}>備品 資材 廃棄</Text>
               <Text style={styles.billVal}>¥{yen(billing.supplies)}</Text>
             </View>
@@ -278,10 +334,12 @@ export default function ReportFormScreen() {
               {item.checked && (
                 <View style={styles.checklistBody}>
                   <Text style={styles.subLabel}>状況</Text>
-                  <ChipSelect
+                  <Dropdown
                     options={CONDITION_OPTIONS}
                     value={item.condition}
                     onChange={(v) => patchChecklist(idx, { condition: v as ChecklistItem['condition'] })}
+                    placeholder="状況を選択"
+                    colorMap={CONDITION_COLOR}
                   />
                   <View style={{ height: 8 }} />
                   <Input
@@ -341,32 +399,54 @@ export default function ReportFormScreen() {
 
           {/* ── トッピング ── */}
           <SectionTitle>トッピング（追加作業）</SectionTitle>
-          {form.toppings.map((t, idx) => (
-            <Card key={t.name}>
-              <CheckBox
-                checked={t.checked}
-                onToggle={() => patchTopping(idx, { checked: !t.checked })}
-                label={t.name}
-              />
-              {t.checked && (
-                <View style={styles.checklistBody}>
-                  <Input
-                    value={t.comment}
-                    onChangeText={(v) => patchTopping(idx, { comment: v })}
-                    placeholder="コメント"
+          {form.toppings.map((t, idx) => {
+            const isCustom = !DEFAULT_TOPPING_NAMES.includes(t.name);
+            return (
+              <Card key={`top-${idx}`}>
+                <View style={styles.rowInline}>
+                  <CheckBox
+                    checked={t.checked}
+                    onToggle={() => patchTopping(idx, { checked: !t.checked })}
+                    label={isCustom ? undefined : t.name}
                   />
-                  <View style={{ height: 8 }} />
-                  <Field label="追加費用（税抜・円）">
-                    <Input
-                      value={String(t.fee)}
-                      onChangeText={(v) => patchTopping(idx, { fee: toNum(v) })}
-                      keyboardType="number-pad"
-                    />
-                  </Field>
+                  {isCustom && (
+                    <>
+                      <Input
+                        value={t.name}
+                        onChangeText={(v) => patchTopping(idx, { name: v })}
+                        placeholder="項目名（自由入力）"
+                        style={styles.inlineInput}
+                      />
+                      <Pressable onPress={() => removeTopping(idx)} hitSlop={8}>
+                        <Text style={styles.removeBtn}>削除</Text>
+                      </Pressable>
+                    </>
+                  )}
                 </View>
-              )}
-            </Card>
-          ))}
+                {t.checked && (
+                  <View style={styles.checklistBody}>
+                    <Input
+                      value={t.comment}
+                      onChangeText={(v) => patchTopping(idx, { comment: v })}
+                      placeholder="コメント"
+                      multiline
+                    />
+                    <View style={{ height: 8 }} />
+                    <Field label="追加費用（税抜・円）">
+                      <Input
+                        value={String(t.fee)}
+                        onChangeText={(v) => patchTopping(idx, { fee: toNum(v) })}
+                        keyboardType="number-pad"
+                      />
+                    </Field>
+                  </View>
+                )}
+              </Card>
+            );
+          })}
+          <View style={styles.addInline}>
+            <Button title="＋ トッピングを追加" variant="ghost" onPress={addTopping} />
+          </View>
 
           {/* ── プチDIY ── */}
           <SectionTitle>プチDIY</SectionTitle>
@@ -385,10 +465,52 @@ export default function ReportFormScreen() {
                     placeholder="コメント（例: 交換なし、清掃完了）"
                     multiline
                   />
+                  <View style={{ height: 8 }} />
+                  <Field label="追加費用（税抜・円）">
+                    <Input
+                      value={String(d.fee)}
+                      onChangeText={(v) => patchDiy(idx, { fee: toNum(v) })}
+                      keyboardType="number-pad"
+                    />
+                  </Field>
+                  <Text style={styles.subLabel}>写真（最大6枚）</Text>
+                  <PhotoSection
+                    photos={d.photos}
+                    onChange={(photos: ReportPhoto[]) => patchDiy(idx, { photos })}
+                    max={6}
+                    defaultCategory="作業後"
+                  />
                 </View>
               )}
             </Card>
           ))}
+
+          {/* ── 年間スケジュール ── */}
+          <SectionTitle>年間スケジュール</SectionTitle>
+          <Card>
+            <Field label="コメント">
+              <Input
+                value={form.annualSchedule.comment}
+                onChangeText={(v) => patchAnnual({ comment: v })}
+                placeholder="例: 12月 冷蔵庫パッキン / 4月エアコン清掃 / 9月排水管清掃 …"
+                multiline
+              />
+            </Field>
+            <Field label="追加費用（税抜・円）">
+              <Input
+                value={String(form.annualSchedule.fee)}
+                onChangeText={(v) => patchAnnual({ fee: toNum(v) })}
+                keyboardType="number-pad"
+              />
+            </Field>
+            <Text style={styles.subLabel}>写真（最大6枚）</Text>
+            <PhotoSection
+              photos={form.annualSchedule.photos}
+              onChange={(photos: ReportPhoto[]) => patchAnnual({ photos })}
+              max={6}
+              defaultCategory="その他"
+            />
+          </Card>
 
           {/* ── 備品資材 ── */}
           <SectionTitle>使用備品資材</SectionTitle>
@@ -505,7 +627,27 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
-  subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6 },
+  subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
+  techWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  techChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#FFF',
+  },
+  techChipActive: { backgroundColor: C.primaryLight, borderColor: C.primary },
+  techCheck: { fontSize: 13, color: 'transparent', fontWeight: '900', marginRight: 4 },
+  techCheckOn: { color: C.primary },
+  techText: { fontSize: 14, color: C.textSub },
+  techTextActive: { color: C.primaryDark, fontWeight: '700' },
+  techSelected: { fontSize: 12, color: C.textSub, marginTop: 8 },
+  rowInline: { flexDirection: 'row', alignItems: 'center' },
+  inlineInput: { flex: 1, marginLeft: 8, paddingVertical: 8 },
+  addInline: { marginHorizontal: 12, marginTop: 4 },
   pestRow: { paddingVertical: 6 },
   emptyLine: { color: C.textFaint, fontSize: 13, paddingVertical: 6 },
   supplyRow: {

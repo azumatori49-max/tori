@@ -2,7 +2,8 @@
  * 衛生管理アプリ 共通UIプリミティブ
  */
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { TextInputProps, ViewStyle } from 'react-native';
 
 import { C } from '@/constants/colors';
@@ -105,6 +106,67 @@ export function ChipSelect({
         );
       })}
     </View>
+  );
+}
+
+/** タップでモーダルを開く単一選択プルダウン */
+export function Dropdown({
+  options,
+  value,
+  onChange,
+  placeholder = '選択してください',
+  colorMap,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  colorMap?: Record<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const accent = value && colorMap ? colorMap[value] : undefined;
+
+  return (
+    <>
+      <Pressable
+        style={styles.dropdown}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+      >
+        {accent && <View style={[styles.dot, { backgroundColor: accent }]} />}
+        <Text style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}>
+          {value || placeholder}
+        </Text>
+        <Text style={styles.dropdownCaret}>▾</Text>
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
+          <View style={styles.sheet}>
+            {options.map((opt) => {
+              const active = opt === value;
+              const c = colorMap?.[opt];
+              return (
+                <Pressable
+                  key={opt}
+                  style={[styles.sheetItem, active && styles.sheetItemActive]}
+                  onPress={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                >
+                  {c && <View style={[styles.dot, { backgroundColor: c }]} />}
+                  <Text style={[styles.sheetItemText, active && styles.sheetItemTextActive]}>
+                    {opt}
+                  </Text>
+                  {active && <Text style={styles.sheetCheck}>✓</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -215,4 +277,40 @@ const styles = StyleSheet.create({
   btnDanger: { backgroundColor: C.danger },
   btnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   btnTextGhost: { color: C.textSub },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    backgroundColor: '#FBFDFD',
+  },
+  dropdownText: { flex: 1, fontSize: 15, color: C.text },
+  dropdownPlaceholder: { color: C.textFaint },
+  dropdownCaret: { fontSize: 12, color: C.textSub, marginLeft: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  sheet: {
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  sheetItemActive: { backgroundColor: C.primaryLight },
+  sheetItemText: { flex: 1, fontSize: 16, color: C.text },
+  sheetItemTextActive: { color: C.primaryDark, fontWeight: '700' },
+  sheetCheck: { color: C.primary, fontSize: 16, fontWeight: '800' },
 });

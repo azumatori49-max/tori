@@ -5,13 +5,12 @@
  * そのままアプリのデータ構造に落とし込んだもの。
  */
 
-/** 作業項目の状況（プルダウン選択肢） */
+/** 作業項目の状況（4段階プルダウン） */
 export type ConditionLabel =
-  | 'とても良く出来ています'
-  | '良く出来ています'
-  | '普通です'
-  | '改善が必要です'
-  | '要対応';
+  | 'とてもよくできてます'
+  | 'よくできてます'
+  | '普通'
+  | 'できてない';
 
 /** 定期点検チェックリストの1項目 */
 export interface ChecklistItem {
@@ -46,11 +45,24 @@ export interface ToppingItem {
   fee: number;
 }
 
-/** プチDIY項目 */
+/** プチDIY項目（写真・追加費用付き） */
 export interface DiyItem {
   name: string;
   checked: boolean;
   comment: string;
+  /** 追加費用（円・税抜） */
+  fee: number;
+  /** 写真（最大6枚） */
+  photos: ReportPhoto[];
+}
+
+/** 年間スケジュール（コメント・追加費用・写真） */
+export interface AnnualSchedule {
+  comment: string;
+  /** 追加費用（円・税抜） */
+  fee: number;
+  /** 写真（最大6枚） */
+  photos: ReportPhoto[];
 }
 
 /** 写真の分類 */
@@ -108,6 +120,8 @@ export interface MaintenanceReport {
   supplies: SupplyLine[];
   /** 添付写真（店舗外観・作業前後など） */
   photos: ReportPhoto[];
+  /** 年間スケジュール */
+  annualSchedule: AnnualSchedule;
   /** コメント・提案 */
   comment: string;
 

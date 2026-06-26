@@ -33,6 +33,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Pages を未設定でも自動で有効化する（手動設定が不要になる）
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:

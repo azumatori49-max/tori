@@ -25,8 +25,10 @@ import { PhotoSection } from '@/components/report/PhotoSection';
 import { CONDITION_OPTIONS } from '@/constants/hygiene';
 import { C } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
+import { exportReportPdf } from '@/lib/exportPdf';
 import type {
   ChecklistItem,
+  DiyItem,
   MaintenanceReportInsert,
   SupplyLine,
   ToppingItem,
@@ -80,6 +82,13 @@ export default function ReportFormScreen() {
     }));
   }
 
+  function patchDiy(idx: number, p: Partial<DiyItem>) {
+    setForm((f) => ({
+      ...f,
+      diy: f.diy.map((d, i) => (i === idx ? { ...d, ...p } : d)),
+    }));
+  }
+
   function patchSupply(idx: number, p: Partial<SupplyLine>) {
     setForm((f) => ({
       ...f,
@@ -114,6 +123,15 @@ export default function ReportFormScreen() {
       store.updateReport(id, form);
     }
     goBack();
+  }
+
+  async function onExport() {
+    try {
+      const res = await exportReportPdf(form);
+      if (res.message) Alert.alert('PDF', res.message);
+    } catch (e) {
+      Alert.alert('PDF出力に失敗しました', e instanceof Error ? e.message : String(e));
+    }
   }
 
   function onDelete() {
@@ -350,6 +368,28 @@ export default function ReportFormScreen() {
             </Card>
           ))}
 
+          {/* ── プチDIY ── */}
+          <SectionTitle>プチDIY</SectionTitle>
+          {form.diy.map((d, idx) => (
+            <Card key={d.name}>
+              <CheckBox
+                checked={d.checked}
+                onToggle={() => patchDiy(idx, { checked: !d.checked })}
+                label={d.name}
+              />
+              {d.checked && (
+                <View style={styles.checklistBody}>
+                  <Input
+                    value={d.comment}
+                    onChangeText={(v) => patchDiy(idx, { comment: v })}
+                    placeholder="コメント（例: 交換なし、清掃完了）"
+                    multiline
+                  />
+                </View>
+              )}
+            </Card>
+          ))}
+
           {/* ── 備品資材 ── */}
           <SectionTitle>使用備品資材</SectionTitle>
           <Card>
@@ -415,6 +455,8 @@ export default function ReportFormScreen() {
           {/* ── アクション ── */}
           <View style={styles.actions}>
             <Button title={isNew ? 'レポートを保存' : '変更を保存'} onPress={onSave} />
+            <View style={{ height: 10 }} />
+            <Button title="📄 PDF出力・共有" variant="ghost" onPress={() => void onExport()} />
             {!isNew && (
               <>
                 <View style={{ height: 10 }} />

@@ -1,12 +1,14 @@
 /**
- * 衛生管理レポート ストア（Zustand + MMKV ローカル永続化）
+ * 衛生管理レポート ストア（Zustand + 非同期永続化）
  *
- * バックエンド不要で動くローカルファースト構成。
+ * 保存先:
+ *   - Web: IndexedDB（写真base64も保存可能。localStorageの容量制限を回避）
+ *   - ネイティブ: MMKV
  * 将来的に Supabase 等へ同期する場合は CRUD 内に送信処理を足せばよい。
  */
 import { create } from 'zustand';
 
-import { storage } from '@/lib/mmkv';
+import { persist } from '@/lib/persist';
 import { DEFAULT_SETTINGS, makeDefaultReport } from '@/constants/hygiene';
 import type {
   AppSettings,
@@ -27,8 +29,7 @@ function uuid(): string {
   });
 }
 
-function load<T>(key: string, fallback: T): T {
-  const raw = storage.getString(key);
+function parse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -37,40 +38,50 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
-function save<T>(key: string, value: T): void {
-  storage.set(key, JSON.stringify(value));
-}
-
 interface ReportState {
   reports: MaintenanceReport[];
   settings: AppSettings;
   hydrated: boolean;
+  /** 直近の保存エラー（容量超過など） */
+  error: string | null;
 
-  /** 起動時にローカルストレージから読み込む */
-  hydrate: () => void;
+  /** 起動時にストレージから読み込む */
+  hydrate: () => Promise<void>;
 
-  // CRUD
+  // CRUD（成功で true / 失敗で false）
   getReport: (id: string) => MaintenanceReport | undefined;
-  /** 店舗名でフィルタした一覧（新しい順） */
   reportsByStore: (storeName?: string) => MaintenanceReport[];
-  createReport: (data: MaintenanceReportInsert) => MaintenanceReport;
-  updateReport: (id: string, data: Partial<MaintenanceReportInsert>) => void;
-  deleteReport: (id: string) => void;
-  /** マスタ既定値から空のレポート雛形を作る（保存はしない） */
+  createReport: (data: MaintenanceReportInsert) => Promise<boolean>;
+  updateReport: (id: string, data: Partial<MaintenanceReportInsert>) => Promise<boolean>;
+  deleteReport: (id: string) => Promise<boolean>;
   draftReport: () => MaintenanceReportInsert;
 
-  // 設定
   updateSettings: (data: Partial<AppSettings>) => void;
+  clearError: () => void;
+}
+
+/** 保存失敗時のメッセージ整形 */
+function persistErrorMessage(e: unknown): string {
+  const name = e instanceof Error ? e.name : '';
+  if (name === 'QuotaExceededError') {
+    return '保存容量の上限に達しました。写真の枚数を減らすか、古いレポートを削除してください。';
+  }
+  return '保存に失敗しました。時間をおいて再度お試しください。';
 }
 
 export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
   settings: DEFAULT_SETTINGS,
   hydrated: false,
+  error: null,
 
-  hydrate: () => {
+  hydrate: async () => {
     if (get().hydrated) return;
-    const raw = load<MaintenanceReport[]>(REPORTS_KEY, []);
+    const [reportsRaw, settingsRaw] = await Promise.all([
+      persist.getItem(REPORTS_KEY),
+      persist.getItem(SETTINGS_KEY),
+    ]);
+    const raw = parse<MaintenanceReport[]>(reportsRaw, []);
     // 旧バージョンのデータに不足フィールドを補完
     const reports = raw.map((r) => ({
       ...r,
@@ -78,7 +89,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
       diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: d.photos ?? [] })),
       annualSchedule: r.annualSchedule ?? { comment: '', fee: 0, photos: [] },
     }));
-    const settings = load<AppSettings>(SETTINGS_KEY, DEFAULT_SETTINGS);
+    const settings = parse<AppSettings>(settingsRaw, DEFAULT_SETTINGS);
     set({ reports, settings, hydrated: true });
   },
 
@@ -91,7 +102,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  createReport: (data) => {
+  createReport: async (data) => {
     const now = new Date().toISOString();
     const report: MaintenanceReport = {
       ...data,
@@ -99,47 +110,66 @@ export const useReportStore = create<ReportState>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    set((s) => {
-      const reports = [report, ...s.reports];
-      save(REPORTS_KEY, reports);
-      // 新しい店舗・担当者をマスタに自動追加
-      const settings = mergeMaster(s.settings, report);
-      if (settings !== s.settings) save(SETTINGS_KEY, settings);
-      return { reports, settings };
-    });
-    return report;
+    const prev = get().reports;
+    const reports = [report, ...prev];
+    const settings = mergeMaster(get().settings, report);
+    set({ reports, settings, error: null });
+    try {
+      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (settings !== get().settings) {
+        await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      return true;
+    } catch (e) {
+      set({ reports: prev, error: persistErrorMessage(e) });
+      return false;
+    }
   },
 
-  updateReport: (id, data) => {
-    set((s) => {
-      const reports = s.reports.map((r) =>
-        r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r,
-      );
-      save(REPORTS_KEY, reports);
-      const updated = reports.find((r) => r.id === id);
-      const settings = updated ? mergeMaster(s.settings, updated) : s.settings;
-      if (settings !== s.settings) save(SETTINGS_KEY, settings);
-      return { reports, settings };
-    });
+  updateReport: async (id, data) => {
+    const prev = get().reports;
+    const reports = prev.map((r) =>
+      r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r,
+    );
+    const updated = reports.find((r) => r.id === id);
+    const settings = updated ? mergeMaster(get().settings, updated) : get().settings;
+    set({ reports, settings, error: null });
+    try {
+      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (settings !== get().settings) {
+        await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      }
+      return true;
+    } catch (e) {
+      set({ reports: prev, error: persistErrorMessage(e) });
+      return false;
+    }
   },
 
-  deleteReport: (id) => {
-    set((s) => {
-      const reports = s.reports.filter((r) => r.id !== id);
-      save(REPORTS_KEY, reports);
-      return { reports };
-    });
+  deleteReport: async (id) => {
+    const prev = get().reports;
+    const reports = prev.filter((r) => r.id !== id);
+    set({ reports, error: null });
+    try {
+      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      return true;
+    } catch (e) {
+      set({ reports: prev, error: persistErrorMessage(e) });
+      return false;
+    }
   },
 
   draftReport: () => makeDefaultReport(get().settings),
 
   updateSettings: (data) => {
-    set((s) => {
-      const settings = { ...s.settings, ...data };
-      save(SETTINGS_KEY, settings);
-      return { settings };
+    const settings = { ...get().settings, ...data };
+    set({ settings });
+    void persist.setItem(SETTINGS_KEY, JSON.stringify(settings)).catch(() => {
+      set({ error: '設定の保存に失敗しました。' });
     });
   },
+
+  clearError: () => set({ error: null }),
 }));
 
 /** レポートに含まれる店舗名・担当者をマスタへ取り込む（重複は無視） */
@@ -152,9 +182,12 @@ function mergeMaster(settings: AppSettings, report: MaintenanceReport): AppSetti
     stores.push(report.storeName);
     changed = true;
   }
-  if (report.technician && !technicians.includes(report.technician)) {
-    technicians.push(report.technician);
-    changed = true;
+  // 「、」区切りの複数担当者をそれぞれ取り込む
+  for (const name of report.technician.split('、').map((s) => s.trim()).filter(Boolean)) {
+    if (!technicians.includes(name)) {
+      technicians.push(name);
+      changed = true;
+    }
   }
   return changed ? { ...settings, stores, technicians } : settings;
 }

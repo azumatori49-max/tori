@@ -14,7 +14,7 @@ export default function RootLayout() {
   const hydrate = useReportStore((s) => s.hydrate);
 
   useEffect(() => {
-    hydrate();
+    void hydrate();
   }, [hydrate]);
 
   return (

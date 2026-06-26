@@ -155,17 +155,22 @@ export default function ReportFormScreen() {
     else router.replace('/reports');
   }
 
-  function onSave() {
+  async function onSave() {
     if (!form.storeName.trim()) {
       Alert.alert('店舗名を入力してください');
       return;
     }
-    if (isNew) {
-      store.createReport(form);
+    const ok = isNew
+      ? await store.createReport(form)
+      : await store.updateReport(id, form);
+    if (ok) {
+      goBack();
     } else {
-      store.updateReport(id, form);
+      Alert.alert(
+        '保存できませんでした',
+        useReportStore.getState().error ?? '保存に失敗しました。',
+      );
     }
-    goBack();
   }
 
   async function onExport() {
@@ -184,8 +189,9 @@ export default function ReportFormScreen() {
         text: '削除',
         style: 'destructive',
         onPress: () => {
-          store.deleteReport(id);
-          goBack();
+          void store.deleteReport(id).then((ok) => {
+            if (ok) goBack();
+          });
         },
       },
     ]);
@@ -199,7 +205,7 @@ export default function ReportFormScreen() {
           <Text style={styles.topbarBtn}>‹ 戻る</Text>
         </Pressable>
         <Text style={styles.topbarTitle}>{isNew ? '新規レポート' : 'レポート編集'}</Text>
-        <Pressable onPress={onSave} hitSlop={10}>
+        <Pressable onPress={() => void onSave()} hitSlop={10}>
           <Text style={[styles.topbarBtn, styles.topbarSave]}>保存</Text>
         </Pressable>
       </View>
@@ -576,7 +582,7 @@ export default function ReportFormScreen() {
 
           {/* ── アクション ── */}
           <View style={styles.actions}>
-            <Button title={isNew ? 'レポートを保存' : '変更を保存'} onPress={onSave} />
+            <Button title={isNew ? 'レポートを保存' : '変更を保存'} onPress={() => void onSave()} />
             <View style={{ height: 10 }} />
             <Button title="📄 PDF出力・共有" variant="ghost" onPress={() => void onExport()} />
             {!isNew && (

@@ -20,18 +20,13 @@ function esc(s: string): string {
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
 
-const COND_COLOR: Record<string, string> = {
-  とてもよくできてます: '#16A34A',
-  よくできてます: '#0E9488',
-  普通: '#64748B',
-  できてない: '#DC2626',
-};
-
-/** 状況をカラーピルで表示 */
+/** 状況をモノクロのピルで表示。「できてない」のみ塗りで強調 */
 function conditionPill(c: string): string {
   if (!c) return '<span class="muted-sm">—</span>';
-  const col = COND_COLOR[c] ?? '#64748B';
-  return `<span class="pill" style="background:${col}14;color:${col};border:1px solid ${col}40">${esc(c)}</span>`;
+  if (c === 'できてない') {
+    return `<span class="pill pill-alert">${esc(c)}</span>`;
+  }
+  return `<span class="pill pill-ok">${esc(c)}</span>`;
 }
 
 /** 写真グリッド（分類バッジ＋メモ付き） */
@@ -149,7 +144,7 @@ export function buildReportHtml(report: ReportLike): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   * { box-sizing: border-box; }
-  :root { --teal:#0E9488; --teal-d:#0B7268; --ink:#0f172a; --sub:#64748b; --line:#e6ebef; }
+  :root { --teal:#374151; --teal-d:#111827; --ink:#111827; --sub:#6b7280; --line:#e5e7eb; }
   body {
     font-family: "游ゴシック体","YuGothic","Yu Gothic","游ゴシック Medium","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
     color: var(--ink); margin: 0; padding: 28px 30px; font-size: 12px; line-height: 1.55;
@@ -162,7 +157,7 @@ export function buildReportHtml(report: ReportLike): string {
   .doc-kicker { font-size:10px; letter-spacing:3px; color:var(--teal); font-weight:700; }
   .doc-title { font-size:26px; font-weight:800; color:var(--ink); margin-top:2px; letter-spacing:1px; }
   .doc-sub { font-size:11px; color:var(--sub); margin-top:4px; }
-  .summary-card { background:linear-gradient(135deg,var(--teal),var(--teal-d)); color:#fff; border-radius:14px; padding:14px 20px; min-width:210px; text-align:right; box-shadow:0 4px 14px rgba(14,148,136,.25); }
+  .summary-card { background:linear-gradient(135deg,var(--teal),var(--teal-d)); color:#fff; border-radius:14px; padding:14px 20px; min-width:210px; text-align:right; box-shadow:0 4px 14px rgba(17,24,39,.22); }
   .sc-label { font-size:10px; opacity:.9; letter-spacing:1px; }
   .sc-amount { font-size:28px; font-weight:800; margin:2px 0; }
   .sc-tax { font-size:10px; opacity:.85; }
@@ -180,7 +175,7 @@ export function buildReportHtml(report: ReportLike): string {
 
   /* ── テーブル ── */
   table.tbl { width:100%; border-collapse:collapse; }
-  table.tbl thead th { font-size:10px; color:var(--sub); font-weight:700; text-align:left; padding:6px 10px; border-bottom:2px solid var(--teal); background:#f4faf9; }
+  table.tbl thead th { font-size:10px; color:var(--sub); font-weight:700; text-align:left; padding:6px 10px; border-bottom:2px solid var(--teal); background:#f3f4f6; }
   table.tbl td { padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:11.5px; }
   table.tbl tbody tr:last-child td { border-bottom:none; }
   .c-name { font-weight:600; }
@@ -189,13 +184,15 @@ export function buildReportHtml(report: ReportLike): string {
   .c-date { color:var(--teal-d); font-weight:600; }
   .c-note { color:#475569; }
   .c-empty { text-align:center; color:#b0b9c2; padding:12px; }
-  .tick { display:inline-block; width:17px; height:17px; line-height:17px; text-align:center; border-radius:50%; background:#16A34A; color:#fff; font-size:11px; font-weight:900; }
+  .tick { display:inline-block; width:17px; height:17px; line-height:17px; text-align:center; border-radius:50%; background:#111827; color:#fff; font-size:11px; font-weight:900; }
   .tick-off { display:inline-block; width:15px; height:15px; border:1.5px solid #cbd5e1; border-radius:50%; }
   .pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:10.5px; font-weight:700; }
+  .pill-ok { background:#f3f4f6; color:#374151; border:1px solid #d1d5db; }
+  .pill-alert { background:#111827; color:#fff; border:1px solid #111827; }
 
   /* ── タグ（害虫駆除） ── */
   .tags { display:flex; flex-wrap:wrap; gap:6px; padding:4px 0; }
-  .tag { display:inline-block; background:#ecfdf8; color:var(--teal-d); border:1px solid #b9e7e0; border-radius:14px; padding:4px 12px; font-size:11px; font-weight:700; }
+  .tag { display:inline-block; background:#f3f4f6; color:var(--teal-d); border:1px solid #d1d5db; border-radius:14px; padding:4px 12px; font-size:11px; font-weight:700; }
 
   /* ── パネル（DIY / 年間） ── */
   .panel { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; page-break-inside:avoid; }
@@ -221,10 +218,10 @@ export function buildReportHtml(report: ReportLike): string {
   .photo { width:31.5%; margin:0; border:1px solid var(--line); border-radius:9px; overflow:hidden; page-break-inside:avoid; }
   .photo img { width:100%; height:135px; object-fit:cover; display:block; background:#eef2f4; }
   .photo figcaption { padding:6px 8px; font-size:10px; color:#475569; }
-  .badge { display:inline-block; background:#d6f2ee; color:var(--teal-d); border-radius:7px; padding:1px 6px; margin-right:5px; font-weight:700; font-size:9px; }
+  .badge { display:inline-block; background:#e5e7eb; color:var(--teal-d); border-radius:7px; padding:1px 6px; margin-right:5px; font-weight:700; font-size:9px; }
 
   /* ── コメント ── */
-  .comment { border:1px solid var(--line); border-left:4px solid var(--teal); border-radius:8px; padding:10px 12px; min-height:38px; white-space:pre-wrap; background:#fafdfd; }
+  .comment { border:1px solid var(--line); border-left:4px solid var(--teal); border-radius:8px; padding:10px 12px; min-height:38px; white-space:pre-wrap; background:#fafafa; }
 
   /* ── 署名欄 ── */
   .sign { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; page-break-inside:avoid; }

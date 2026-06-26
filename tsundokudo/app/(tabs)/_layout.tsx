@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
 
+import { C } from '@/constants/colors';
+
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.55 }}>{emoji}</Text>;
+  return <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
 }
 
 export default function TabsLayout() {
@@ -11,41 +13,34 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#1C1008',
-          borderTopColor: '#3A2010',
+          backgroundColor: '#FFFFFF',
+          borderTopColor: C.border,
           borderTopWidth: 1,
         },
-        tabBarActiveTintColor: '#D97706',
-        tabBarInactiveTintColor: '#78716C',
+        tabBarActiveTintColor: C.primary,
+        tabBarInactiveTintColor: C.textFaint,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
-        name="shelf"
+        name="reports"
         options={{
-          title: '本棚',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📚" focused={focused} />,
+          title: 'レポート',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="📋" focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="tower"
+        name="stores"
         options={{
-          title: '積読タワー',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🗼" focused={focused} />,
+          title: '店舗',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🏪" focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="stats"
+        name="settings"
         options={{
-          title: '統計',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📊" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="scan"
-        options={{
-          title: '追加',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📷" focused={focused} />,
+          title: '設定',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} />,
         }}
       />
     </Tabs>

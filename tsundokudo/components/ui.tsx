@@ -7,6 +7,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import type { TextInputProps, ViewStyle } from 'react-native';
 
 import { C } from '@/constants/colors';
+import { FONT_FAMILY } from '@/constants/fonts';
 
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[styles.card, style]}>{children}</View>;
@@ -229,9 +230,15 @@ const styles = StyleSheet.create({
     backgroundColor: C.primary,
     marginRight: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: C.text },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: C.text, fontFamily: FONT_FAMILY },
   field: { marginBottom: 12 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: C.textSub, marginBottom: 6 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.textSub,
+    marginBottom: 6,
+    fontFamily: FONT_FAMILY,
+  },
   input: {
     borderWidth: 1,
     borderColor: C.border,
@@ -241,6 +248,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: C.text,
     backgroundColor: '#FBFDFD',
+    fontFamily: FONT_FAMILY,
   },
   inputMultiline: { minHeight: 72, textAlignVertical: 'top' },
   checkRow: { flexDirection: 'row', alignItems: 'center' },
@@ -253,7 +261,7 @@ const styles = StyleSheet.create({
   },
   checkBoxOn: { backgroundColor: C.accent, borderColor: C.accent },
   checkMark: { color: '#FFF', fontWeight: '900', lineHeight: 18 },
-  checkLabel: { marginLeft: 8, fontSize: 15, color: C.text, flexShrink: 1 },
+  checkLabel: { marginLeft: 8, fontSize: 15, color: C.text, flexShrink: 1, fontFamily: FONT_FAMILY },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 12,
@@ -264,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   chipActive: { backgroundColor: C.primaryLight, borderColor: C.primary },
-  chipText: { fontSize: 13, color: C.textSub },
+  chipText: { fontSize: 13, color: C.textSub, fontFamily: FONT_FAMILY },
   chipTextActive: { color: C.primaryDark, fontWeight: '700' },
   btn: {
     paddingVertical: 13,
@@ -275,7 +283,7 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: C.primary },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border },
   btnDanger: { backgroundColor: C.danger },
-  btnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  btnText: { color: '#FFF', fontSize: 15, fontWeight: '700', fontFamily: FONT_FAMILY },
   btnTextGhost: { color: C.textSub },
   dropdown: {
     flexDirection: 'row',
@@ -287,7 +295,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     backgroundColor: '#FBFDFD',
   },
-  dropdownText: { flex: 1, fontSize: 15, color: C.text },
+  dropdownText: { flex: 1, fontSize: 15, color: C.text, fontFamily: FONT_FAMILY },
   dropdownPlaceholder: { color: C.textFaint },
   dropdownCaret: { fontSize: 12, color: C.textSub, marginLeft: 8 },
   dot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
@@ -310,7 +318,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sheetItemActive: { backgroundColor: C.primaryLight },
-  sheetItemText: { flex: 1, fontSize: 16, color: C.text },
+  sheetItemText: { flex: 1, fontSize: 16, color: C.text, fontFamily: FONT_FAMILY },
   sheetItemTextActive: { color: C.primaryDark, fontWeight: '700' },
   sheetCheck: { color: C.primary, fontSize: 16, fontWeight: '800' },
 });

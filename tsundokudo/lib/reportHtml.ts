@@ -127,7 +127,8 @@ export function buildReportHtml(report: ReportLike): string {
 <style>
   * { box-sizing: border-box; }
   body {
-    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif;
+    font-family: "游ゴシック体", "YuGothic", "Yu Gothic", "游ゴシック Medium",
+      "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
     color: #0f172a; margin: 0; padding: 24px; font-size: 12px;
   }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0E9488; padding-bottom: 10px; margin-bottom: 14px; }

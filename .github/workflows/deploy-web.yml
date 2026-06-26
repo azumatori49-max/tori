@@ -33,11 +33,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Pages を未設定でも自動で有効化する（手動設定が不要になる）
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # 注: GitHub Pages の有効化は事前に1回だけ手動設定が必要。
+      #   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+      #   （Actions の標準トークンでは Pages サイトを自動作成できないため）
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

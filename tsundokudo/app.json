@@ -26,6 +26,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "店舗・作業の写真をレポートに添付するためにアクセスを許可してください。",
+          "cameraPermission": "店舗・作業の写真を撮影するためにカメラの使用を許可してください。"
+        }
+      ]
+    ]
   }
 }

@@ -108,6 +108,7 @@ export function makeDefaultReport(settings: AppSettings): MaintenanceReportInser
     toppings: makeDefaultToppings(),
     diy: makeDefaultDiy(),
     supplies: [],
+    photos: [],
     comment: '',
   };
 }

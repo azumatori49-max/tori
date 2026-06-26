@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { Button, Card, CheckBox, ChipSelect, Field, Input, SectionTitle } from '@/components/ui';
+import { PhotoSection } from '@/components/report/PhotoSection';
 import { CONDITION_OPTIONS } from '@/constants/hygiene';
 import { C } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
@@ -97,6 +98,11 @@ export default function ReportFormScreen() {
     setForm((f) => ({ ...f, supplies: f.supplies.filter((_, i) => i !== idx) }));
   }
 
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/reports');
+  }
+
   function onSave() {
     if (!form.storeName.trim()) {
       Alert.alert('店舗名を入力してください');
@@ -107,7 +113,7 @@ export default function ReportFormScreen() {
     } else {
       store.updateReport(id, form);
     }
-    router.back();
+    goBack();
   }
 
   function onDelete() {
@@ -118,7 +124,7 @@ export default function ReportFormScreen() {
         style: 'destructive',
         onPress: () => {
           store.deleteReport(id);
-          router.back();
+          goBack();
         },
       },
     ]);
@@ -128,7 +134,7 @@ export default function ReportFormScreen() {
     <View style={styles.root}>
       {/* ヘッダーバー */}
       <View style={[styles.topbar, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={styles.topbarBtn}>‹ 戻る</Text>
         </Pressable>
         <Text style={styles.topbarTitle}>{isNew ? '新規レポート' : 'レポート編集'}</Text>
@@ -195,6 +201,15 @@ export default function ReportFormScreen() {
                 multiline
               />
             </Field>
+          </Card>
+
+          {/* ── 写真 ── */}
+          <SectionTitle>写真</SectionTitle>
+          <Card>
+            <PhotoSection
+              photos={form.photos}
+              onChange={(photos) => patch({ photos })}
+            />
           </Card>
 
           {/* ── 請求サマリ（自動計算） ── */}

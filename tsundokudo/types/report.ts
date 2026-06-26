@@ -53,6 +53,20 @@ export interface DiyItem {
   comment: string;
 }
 
+/** 写真の分類 */
+export type PhotoCategory = '店舗外観' | '作業前' | '作業後' | 'その他';
+
+/** レポートに添付する写真 */
+export interface ReportPhoto {
+  id: string;
+  /** 画像データ（data URL もしくはファイルURI） */
+  uri: string;
+  /** 分類 */
+  category: PhotoCategory;
+  /** 一言メモ */
+  caption: string;
+}
+
 /** 使用備品資材の明細1行 */
 export interface SupplyLine {
   /** 品目（例: ゴミ回収 3立米） */
@@ -92,6 +106,8 @@ export interface MaintenanceReport {
   diy: DiyItem[];
   /** 使用備品資材 */
   supplies: SupplyLine[];
+  /** 添付写真（店舗外観・作業前後など） */
+  photos: ReportPhoto[];
   /** コメント・提案 */
   comment: string;
 

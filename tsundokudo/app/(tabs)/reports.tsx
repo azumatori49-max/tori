@@ -5,6 +5,7 @@
  */
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -56,7 +57,22 @@ export default function ReportsScreen() {
                 <View style={styles.itemRow}>
                   <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
                   <Text style={styles.itemMeta}>点検 {doneCount}/{r.checklist.length}</Text>
+                  {r.photos.length > 0 && (
+                    <Text style={styles.itemMeta}>📷 {r.photos.length}</Text>
+                  )}
                 </View>
+                {r.photos.length > 0 && (
+                  <View style={styles.thumbStrip}>
+                    {r.photos.slice(0, 4).map((ph) => (
+                      <Image
+                        key={ph.id}
+                        source={{ uri: ph.uri }}
+                        style={styles.thumb}
+                        contentFit="cover"
+                      />
+                    ))}
+                  </View>
+                )}
                 <View style={styles.itemBottom}>
                   <Text style={styles.itemPlan}>{r.contractPlan || 'プラン未設定'}</Text>
                   <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
@@ -107,6 +123,8 @@ const styles = StyleSheet.create({
   itemDate: { fontSize: 13, color: C.primaryDark, fontWeight: '600' },
   itemRow: { flexDirection: 'row', gap: 16, marginTop: 6 },
   itemMeta: { fontSize: 12, color: C.textSub },
+  thumbStrip: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: C.border },
   itemBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',

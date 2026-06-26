@@ -1,0 +1,71 @@
+name: Deploy Web (GitHub Pages)
+
+# 衛生管理レポートアプリ（tsundokudo/）の Web 版を GitHub Pages へ公開する。
+# 公開URL: https://azumatori49-max.github.io/tori/
+#
+# 事前準備（リポジトリ設定 → Pages）:
+#   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+
+on:
+  push:
+    branches:
+      - claude/spreadsheet-hygiene-app-r0qya3
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時実行は1つにまとめる（古いデプロイはキャンセル）
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tsundokudo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tsundokudo/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Export web build
+        run: npx expo export --platform web
+
+      - name: SPA fallback (deep-link / reload 対応)
+        run: cp dist/index.html dist/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: tsundokudo/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

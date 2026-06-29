@@ -147,8 +147,8 @@ export function buildReportHtml(report: ReportLike): string {
 
   /* ヘッダー（情報 + 請求 + 写真） */
   .head { display:flex; border:1px solid var(--bd); }
-  .head .col-info { flex:1.4; }
-  .head .col-bill { flex:1; border-left:1px solid var(--bd); }
+  .head .col-info { flex:1.3; }
+  .head .col-bill { flex:1.05; border-left:1px solid var(--bd); }
   .head .col-photo { width:150px; border-left:1px solid var(--bd); padding:4px; display:flex; align-items:center; justify-content:center; }
   .head .col-photo img { max-width:100%; max-height:120px; object-fit:cover; }
   .kv { display:flex; border-bottom:1px solid var(--bd); }
@@ -156,7 +156,18 @@ export function buildReportHtml(report: ReportLike): string {
   .kv .k { width:74px; flex:none; background:#f2f2f2; font-weight:700; padding:4px 6px; border-right:1px solid var(--bd); }
   .kv .v { flex:1; padding:4px 6px; }
   .kv .v.orange { background:var(--orange); font-weight:700; }
-  .kv .v.amt { font-weight:800; font-size:13px; }
+
+  /* 請求書（インボイス）スタイル */
+  .invoice { padding:6px; }
+  .inv-amt { border:2px solid #000; padding:5px 8px; display:flex; flex-direction:column; align-items:center; background:#f7f7f7; }
+  .inv-amt-k { font-size:9.5px; font-weight:700; letter-spacing:.5px; }
+  .inv-amt-v { font-size:19px; font-weight:800; letter-spacing:1px; margin-top:1px; }
+  .inv-tbl { width:100%; border-collapse:collapse; margin-top:5px; }
+  .inv-tbl td { padding:3px 4px; border-bottom:1px solid #d0d0d0; font-size:10px; }
+  .inv-tbl td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .inv-tbl .inv-total td { font-weight:800; font-size:11px; border-bottom:none; border-top:1.5px solid #000; }
+  .inv-break { margin-top:5px; padding-top:4px; border-top:1px dashed #c0c0c0; }
+  .inv-break .ibr { display:flex; justify-content:space-between; font-size:9px; color:#555; padding:1px 2px; }
 
   /* 表 */
   table.grid { width:100%; border-collapse:collapse; }
@@ -209,11 +220,22 @@ export function buildReportHtml(report: ReportLike): string {
     </div>
     <div class="col-bill">
       <div class="kv"><div class="k">作業日</div><div class="v">${esc(formatWorkDate(report.workDate))}</div></div>
-      <div class="kv"><div class="k">請求額<br/>(税込)</div><div class="v amt">¥${yen(b.taxIncluded)}</div></div>
-      <div class="kv"><div class="k">税抜き</div><div class="v">¥${yen(b.taxExcluded)}</div></div>
-      <div class="kv"><div class="k">メンテ</div><div class="v">¥${yen(b.maintenance)}</div></div>
-      ${extra ? `<div class="kv"><div class="k">追加作業</div><div class="v">¥${yen(extra)}</div></div>` : ''}
-      <div class="kv"><div class="k">備品資材<br/>廃棄</div><div class="v">¥${yen(b.supplies)}</div></div>
+      <div class="invoice">
+        <div class="inv-amt">
+          <span class="inv-amt-k">ご請求金額（税込）</span>
+          <span class="inv-amt-v">¥${yen(b.taxIncluded)}-</span>
+        </div>
+        <table class="inv-tbl">
+          <tr><td>小計（税抜）</td><td>¥${yen(b.taxExcluded)}</td></tr>
+          <tr><td>消費税（10%）</td><td>¥${yen(b.tax)}</td></tr>
+          <tr class="inv-total"><td>合計</td><td>¥${yen(b.taxIncluded)}</td></tr>
+        </table>
+        <div class="inv-break">
+          <div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
+          ${extra ? `<div class="ibr"><span>追加作業</span><span>¥${yen(extra)}</span></div>` : ''}
+          <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
+        </div>
+      </div>
     </div>
     ${headerPhoto ? `<div class="col-photo"><img src="${headerPhoto.uri}" /></div>` : ''}
   </div>

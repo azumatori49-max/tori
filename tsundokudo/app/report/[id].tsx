@@ -584,7 +584,7 @@ export default function ReportFormScreen() {
           <View style={styles.actions}>
             <Button title={isNew ? 'レポートを保存' : '変更を保存'} onPress={() => void onSave()} />
             <View style={{ height: 10 }} />
-            <Button title="📄 PDF出力・共有" variant="ghost" onPress={() => void onExport()} />
+            <Button title="PDF出力・共有" variant="ghost" onPress={() => void onExport()} />
             {!isNew && (
               <>
                 <View style={{ height: 10 }} />

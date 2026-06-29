@@ -93,7 +93,6 @@ export function DatePicker({
   return (
     <>
       <Pressable style={styles.field} onPress={openPicker} accessibilityRole="button">
-        <Text style={styles.calIcon}>📅</Text>
         <Text style={[styles.fieldText, !label && styles.placeholder]}>
           {label || '日付を選択'}
         </Text>
@@ -166,7 +165,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     backgroundColor: '#FBFDFD',
   },
-  calIcon: { fontSize: 15, marginRight: 8 },
   fieldText: { flex: 1, fontSize: 15, color: C.text },
   placeholder: { color: C.textFaint },
   caret: { fontSize: 12, color: C.textSub },

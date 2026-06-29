@@ -1,11 +1,6 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
 
 import { C } from '@/constants/colors';
-
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
-}
 
 export default function TabsLayout() {
   return (
@@ -16,33 +11,20 @@ export default function TabsLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: C.border,
           borderTopWidth: 1,
+          height: 56,
+          paddingBottom: 6,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: C.primary,
         tabBarInactiveTintColor: C.textFaint,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 13, fontWeight: '700' },
+        // アイコンは使わない（未指定だと react-navigation のプレースホルダが出るため明示的に無効化）
+        tabBarIcon: () => null,
       }}
     >
-      <Tabs.Screen
-        name="reports"
-        options={{
-          title: 'レポート',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📋" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="stores"
-        options={{
-          title: '店舗',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🏪" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: '設定',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} />,
-        }}
-      />
+      <Tabs.Screen name="reports" options={{ title: 'レポート' }} />
+      <Tabs.Screen name="stores" options={{ title: '店舗' }} />
+      <Tabs.Screen name="settings" options={{ title: '設定' }} />
     </Tabs>
   );
 }

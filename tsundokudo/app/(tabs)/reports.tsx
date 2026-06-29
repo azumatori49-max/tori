@@ -34,7 +34,6 @@ export default function ReportsScreen() {
       >
         {sorted.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🧽</Text>
             <Text style={styles.emptyText}>まだレポートがありません</Text>
             <Text style={styles.emptySub}>右下のボタンから作成できます</Text>
           </View>
@@ -63,7 +62,7 @@ export default function ReportsScreen() {
                   <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
                   <Text style={styles.itemMeta}>点検 {doneCount}/{r.checklist.length}</Text>
                   {allPhotos.length > 0 && (
-                    <Text style={styles.itemMeta}>📷 {allPhotos.length}</Text>
+                    <Text style={styles.itemMeta}>写真 {allPhotos.length}枚</Text>
                   )}
                 </View>
                 {allPhotos.length > 0 && (
@@ -111,7 +110,6 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
   headerSub: { color: '#D6F2EE', fontSize: 13, marginTop: 2 },
   empty: { alignItems: 'center', marginTop: 80 },
-  emptyEmoji: { fontSize: 48 },
   emptyText: { fontSize: 16, color: C.textSub, marginTop: 10, fontWeight: '600' },
   emptySub: { fontSize: 13, color: C.textFaint, marginTop: 4 },
   item: {

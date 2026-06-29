@@ -96,12 +96,12 @@ export function PhotoSection({
         <View style={styles.addRow}>
           {CAMERA_SUPPORTED && (
             <Pressable style={styles.addBtn} onPress={() => void add('camera')}>
-              <Text style={styles.addBtnText}>📷 撮影</Text>
+              <Text style={styles.addBtnText}>撮影</Text>
             </Pressable>
           )}
           <Pressable style={styles.addBtn} onPress={() => void add('library')}>
             <Text style={styles.addBtnText}>
-              🖼 写真を選択{max != null ? `（${photos.length}/${max}）` : ''}
+              写真を選択{max != null ? `（${photos.length}/${max}）` : ''}
             </Text>
           </Pressable>
         </View>

@@ -69,7 +69,8 @@ function persistErrorMessage(e: unknown): string {
   if (name === 'QuotaExceededError') {
     return '保存容量の上限に達しました。写真の枚数を減らすか、古いレポートを削除してください。';
   }
-  return '保存に失敗しました。時間をおいて再度お試しください。';
+  const detail = e instanceof Error ? e.message : String(e);
+  return `保存に失敗しました。\n${detail}`;
 }
 
 export const useReportStore = create<ReportState>((set, get) => ({

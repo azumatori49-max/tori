@@ -37,8 +37,8 @@ export function LoginScreen() {
     >
       <View style={[styles.inner, { paddingTop: insets.top }]}>
         <View style={styles.brand}>
-          <Text style={styles.title}>メンテナンスレポート</Text>
-          <Text style={styles.sub}>衛生管理・定期点検</Text>
+          <Text style={styles.title}>WINWIN メンテナンス報告書</Text>
+          <Text style={styles.sub}>定期点検・作業記録</Text>
         </View>
 
         <View style={styles.card}>

@@ -209,7 +209,7 @@ export function buildReportHtml(report: ReportLike): string {
 </style>
 </head>
 <body>
-  <div class="title">メンテナンスレポート</div>
+  <div class="title">WINWIN メンテナンス報告書</div>
 
   <div class="head">
     <div class="col-info">
@@ -287,9 +287,9 @@ export function buildReportHtml(report: ReportLike): string {
 </html>`;
 }
 
-/** 共有時のファイル名（例: メンテナンスレポート_まる助東松山駅前店_5-15） */
+/** 共有時のファイル名（例: WINWINメンテナンス報告書_まる助東松山駅前店_5-15） */
 export function reportFileName(report: ReportLike): string {
   const date = formatWorkDate(report.workDate).replace(/\//g, '-');
   const store = report.storeName || '店舗未設定';
-  return `メンテナンスレポート_${store}${date ? '_' + date : ''}`;
+  return `WINWINメンテナンス報告書_${store}${date ? '_' + date : ''}`;
 }

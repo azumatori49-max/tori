@@ -106,7 +106,7 @@ export default function SettingsScreen() {
           ))}
         </Card>
 
-        <Text style={styles.footer}>衛生管理レポート · ローカル保存（この端末内）</Text>
+        <Text style={styles.footer}>WINWIN メンテナンス報告書</Text>
       </ScrollView>
     </View>
   );

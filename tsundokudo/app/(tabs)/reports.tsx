@@ -25,8 +25,8 @@ export default function ReportsScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.headerTitle}>メンテナンスレポート</Text>
-        <Text style={styles.headerSub}>衛生管理・定期点検の記録</Text>
+        <Text style={styles.headerTitle}>WINWIN メンテナンス報告書</Text>
+        <Text style={styles.headerSub}>定期点検・作業記録</Text>
       </View>
 
       <ScrollView

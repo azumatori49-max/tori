@@ -29,7 +29,7 @@ function conditionPill(c: string): string {
   return `<span class="pill pill-ok">${esc(c)}</span>`;
 }
 
-/** 写真グリッド（分類バッジ＋メモ付き） */
+/** 小サイズの写真グリッド（DIY/年間スケジュール内のインライン用） */
 function photosHtml(photos: { uri: string; category: string; caption: string }[]): string {
   if (!photos.length) return '';
   return `<div class="photos">
@@ -43,6 +43,24 @@ function photosHtml(photos: { uri: string; category: string; caption: string }[]
       )
       .join('')}
   </div>`;
+}
+
+/** 作業写真のコンタクトシート（ラベルを写真の上に表示する3列グリッド・専用ページ） */
+function photoSheet(photos: { uri: string; category: string; caption: string }[]): string {
+  if (!photos.length) return '';
+  const cells = photos
+    .map(
+      (p) => `
+      <div class="sheet-cell">
+        <div class="sheet-lbl">${esc(p.caption || p.category)}</div>
+        <img src="${p.uri}" />
+      </div>`,
+    )
+    .join('');
+  return `<section class="photo-page">
+    <div class="sec-label">作業写真</div>
+    <div class="sheet">${cells}</div>
+  </section>`;
 }
 
 export function buildReportHtml(report: ReportLike): string {
@@ -133,9 +151,7 @@ export function buildReportHtml(report: ReportLike): string {
         .join('')
     : '<tr><td colspan="4" class="c-empty">なし</td></tr>';
 
-  const photoBlock = report.photos.length
-    ? `<div class="sec-label">写真</div>${photosHtml(report.photos)}`
-    : '';
+  const photoBlock = photoSheet(report.photos);
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -219,6 +235,13 @@ export function buildReportHtml(report: ReportLike): string {
   .photo img { width:100%; height:135px; object-fit:cover; display:block; background:#eef2f4; }
   .photo figcaption { padding:6px 8px; font-size:10px; color:#475569; }
   .badge { display:inline-block; background:#e5e7eb; color:var(--teal-d); border-radius:7px; padding:1px 6px; margin-right:5px; font-weight:700; font-size:9px; }
+
+  /* ── 作業写真ページ（コンタクトシート） ── */
+  .photo-page { page-break-before:always; }
+  .sheet { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .sheet-cell { page-break-inside:avoid; }
+  .sheet-lbl { font-size:10.5px; font-weight:700; color:var(--ink); margin-bottom:3px; }
+  .sheet-cell img { width:100%; height:205px; object-fit:cover; display:block; border:1px solid var(--line); background:#eef2f4; }
 
   /* ── コメント ── */
   .comment { border:1px solid var(--line); border-left:4px solid var(--teal); border-radius:8px; padding:10px 12px; min-height:38px; white-space:pre-wrap; background:#fafafa; }
@@ -304,12 +327,12 @@ export function buildReportHtml(report: ReportLike): string {
 
   ${annualBlock}
 
-  ${photoBlock}
-
   <section class="sign">
     <div class="sign-box"><span class="k">施工担当者</span><div class="sign-line">${esc(report.technician) || ''}</div></div>
     <div class="sign-box"><span class="k">確認（お客様）</span><div class="sign-line"></div></div>
   </section>
+
+  ${photoBlock}
 
   <div class="footer">
     <span>衛生管理メンテナンスレポート</span>

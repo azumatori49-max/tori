@@ -4,11 +4,13 @@
  * - 担当者・店舗の一覧（レポート作成時に自動追加もされる）
  * - 電球プライスなどの単価メモ
  */
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
-import { Card, Field, Input, SectionTitle } from '@/components/ui';
+import { useAuthStore } from '@/store/authStore';
+import { isSupabaseEnabled } from '@/lib/supabase';
+import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
 import { C } from '@/constants/colors';
 import { yen } from '@/lib/billing';
 
@@ -16,6 +18,15 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const settings = useReportStore((s) => s.settings);
   const updateSettings = useReportStore((s) => s.updateSettings);
+  const session = useAuthStore((s) => s.session);
+  const signOut = useAuthStore((s) => s.signOut);
+
+  function onSignOut() {
+    Alert.alert('ログアウト', 'ログアウトしますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: 'ログアウト', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  }
 
   return (
     <View style={styles.root}>
@@ -25,6 +36,19 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+        {isSupabaseEnabled && (
+          <>
+            <SectionTitle>アカウント</SectionTitle>
+            <Card>
+              <Text style={styles.accountLabel}>ログイン中</Text>
+              <Text style={styles.accountEmail}>{session?.user.email ?? '—'}</Text>
+              <Text style={styles.accountNote}>データは全員で共有されます（クラウド保存）。</Text>
+              <View style={{ height: 12 }} />
+              <Button title="ログアウト" variant="ghost" onPress={onSignOut} />
+            </Card>
+          </>
+        )}
+
         <SectionTitle>既定値</SectionTitle>
         <Card>
           <Field label="御請求先">
@@ -114,4 +138,7 @@ const styles = StyleSheet.create({
   priceLabel: { fontSize: 15, color: C.text, fontWeight: '600' },
   priceVal: { fontSize: 15, color: C.textSub },
   footer: { textAlign: 'center', color: C.textFaint, fontSize: 12, marginTop: 24 },
+  accountLabel: { fontSize: 12, color: C.textSub },
+  accountEmail: { fontSize: 16, fontWeight: '700', color: C.text, marginTop: 2 },
+  accountNote: { fontSize: 12, color: C.textFaint, marginTop: 8 },
 });

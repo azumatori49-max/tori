@@ -9,6 +9,9 @@
 import { create } from 'zustand';
 
 import { persist } from '@/lib/persist';
+import { isSupabaseEnabled } from '@/lib/supabase';
+import { cloudDeleteReport, cloudFetchReports, cloudUpsertReport } from '@/lib/cloudReports';
+import { normalizeReport } from '@/lib/reportNormalize';
 import { DEFAULT_SETTINGS, makeDefaultReport } from '@/constants/hygiene';
 import type {
   AppSettings,
@@ -77,19 +80,29 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   hydrate: async () => {
     if (get().hydrated) return;
-    const [reportsRaw, settingsRaw] = await Promise.all([
-      persist.getItem(REPORTS_KEY),
-      persist.getItem(SETTINGS_KEY),
-    ]);
-    const raw = parse<MaintenanceReport[]>(reportsRaw, []);
-    // 旧バージョンのデータに不足フィールドを補完
-    const reports = raw.map((r) => ({
-      ...r,
-      photos: r.photos ?? [],
-      diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: d.photos ?? [] })),
-      annualSchedule: r.annualSchedule ?? { comment: '', fee: 0, photos: [] },
-    }));
-    const settings = parse<AppSettings>(settingsRaw, DEFAULT_SETTINGS);
+    // 設定（マスタ）は端末ローカルに保持
+    const settingsRaw = await persist.getItem(SETTINGS_KEY);
+    let settings = parse<AppSettings>(settingsRaw, DEFAULT_SETTINGS);
+
+    if (isSupabaseEnabled) {
+      // クラウド: 共有テーブルから取得
+      try {
+        const reports = await cloudFetchReports();
+        // 取得したレポートから店舗・担当者をマスタへ取り込む
+        for (const r of reports) settings = mergeMaster(settings, r);
+        set({ reports, settings, hydrated: true });
+      } catch (e) {
+        set({
+          hydrated: true,
+          error: e instanceof Error ? e.message : 'データの取得に失敗しました。',
+        });
+      }
+      return;
+    }
+
+    // ローカル: IndexedDB / MMKV から取得
+    const reportsRaw = await persist.getItem(REPORTS_KEY);
+    const reports = parse<MaintenanceReport[]>(reportsRaw, []).map(normalizeReport);
     set({ reports, settings, hydrated: true });
   },
 
@@ -113,10 +126,15 @@ export const useReportStore = create<ReportState>((set, get) => ({
     const prev = get().reports;
     const reports = [report, ...prev];
     const settings = mergeMaster(get().settings, report);
+    const prevSettings = get().settings;
     set({ reports, settings, error: null });
     try {
-      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
-      if (settings !== get().settings) {
+      if (isSupabaseEnabled) {
+        await cloudUpsertReport(report);
+      } else {
+        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      }
+      if (settings !== prevSettings) {
         await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
       }
       return true;
@@ -133,10 +151,15 @@ export const useReportStore = create<ReportState>((set, get) => ({
     );
     const updated = reports.find((r) => r.id === id);
     const settings = updated ? mergeMaster(get().settings, updated) : get().settings;
+    const prevSettings = get().settings;
     set({ reports, settings, error: null });
     try {
-      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
-      if (settings !== get().settings) {
+      if (isSupabaseEnabled) {
+        if (updated) await cloudUpsertReport(updated);
+      } else {
+        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      }
+      if (settings !== prevSettings) {
         await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
       }
       return true;
@@ -151,7 +174,11 @@ export const useReportStore = create<ReportState>((set, get) => ({
     const reports = prev.filter((r) => r.id !== id);
     set({ reports, error: null });
     try {
-      await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (isSupabaseEnabled) {
+        await cloudDeleteReport(id);
+      } else {
+        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      }
       return true;
     } catch (e) {
       set({ reports: prev, error: persistErrorMessage(e) });

@@ -53,7 +53,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Export web build
-        run: npx expo export --platform web
+        # Supabase を使う場合はリポジトリの Variables に以下を設定する
+        #   Settings → Secrets and variables → Actions → Variables
+        #   EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY
+        # 未設定なら従来どおりローカル保存で動作する
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npx expo export --platform web --clear
 
       - name: SPA fallback (deep-link / reload 対応)
         run: cp dist/index.html dist/404.html

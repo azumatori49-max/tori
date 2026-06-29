@@ -2,9 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* アプリ全体のフォントを游ゴシックに（Web / react-native-web） */
+/* アプリ全体のフォントを Noto Sans JP に（Web / react-native-web） */
 #root,
 #root * {
-  font-family: '游ゴシック体', 'YuGothic', 'Yu Gothic', '游ゴシック Medium',
-    'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif !important;
+  font-family: 'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Kaku Gothic ProN',
+    sans-serif !important;
 }

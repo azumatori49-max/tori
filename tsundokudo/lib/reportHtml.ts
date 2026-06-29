@@ -158,11 +158,14 @@ export function buildReportHtml(report: ReportLike): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" />
 <style>
   * { box-sizing: border-box; }
   :root { --teal:#374151; --teal-d:#111827; --ink:#111827; --sub:#6b7280; --line:#e5e7eb; }
   body {
-    font-family: "游ゴシック体","YuGothic","Yu Gothic","游ゴシック Medium","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    font-family: "Noto Sans JP","Noto Sans CJK JP","Hiragino Kaku Gothic ProN",sans-serif;
     color: var(--ink); margin: 0; padding: 28px 30px; font-size: 12px; line-height: 1.55;
   }
   .muted-sm { color:#b0b9c2; }

@@ -4,12 +4,13 @@
  * - 担当者・店舗の一覧（レポート作成時に自動追加もされる）
  * - 電球プライスなどの単価メモ
  */
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseEnabled } from '@/lib/supabase';
+import { confirmAsync } from '@/lib/dialog';
 import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
 import { C } from '@/constants/colors';
 import { yen } from '@/lib/billing';
@@ -21,11 +22,9 @@ export default function SettingsScreen() {
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
 
-  function onSignOut() {
-    Alert.alert('ログアウト', 'ログアウトしますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: 'ログアウト', style: 'destructive', onPress: () => void signOut() },
-    ]);
+  async function onSignOut() {
+    const ok = await confirmAsync('ログアウト', 'ログアウトしますか？', 'ログアウト');
+    if (ok) await signOut();
   }
 
   return (
@@ -44,7 +43,7 @@ export default function SettingsScreen() {
               <Text style={styles.accountEmail}>{session?.user.email ?? '—'}</Text>
               <Text style={styles.accountNote}>データは全員で共有されます（クラウド保存）。</Text>
               <View style={{ height: 12 }} />
-              <Button title="ログアウト" variant="ghost" onPress={onSignOut} />
+              <Button title="ログアウト" variant="ghost" onPress={() => void onSignOut()} />
             </Card>
           </>
         )}

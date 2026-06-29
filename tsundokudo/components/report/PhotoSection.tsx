@@ -3,10 +3,11 @@
  * - 撮影 / ライブラリ選択で写真を追加
  * - 各写真に分類（店舗外観・作業前・作業後・その他）とメモを付与
  */
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { Input } from '@/components/ui';
+import { confirmAsync } from '@/lib/dialog';
 import { C } from '@/constants/colors';
 import { CAMERA_SUPPORTED, capturePhoto, selectPhoto } from '@/lib/photos';
 import type { PhotoCategory, ReportPhoto } from '@/types/report';
@@ -48,11 +49,9 @@ export function PhotoSection({
     onChange(photos.map((ph) => (ph.id === id ? { ...ph, ...p } : ph)));
   }
 
-  function remove(id: string) {
-    Alert.alert('写真を削除', 'この写真を削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => onChange(photos.filter((ph) => ph.id !== id)) },
-    ]);
+  async function remove(id: string) {
+    const ok = await confirmAsync('写真を削除', 'この写真を削除しますか？', '削除');
+    if (ok) onChange(photos.filter((ph) => ph.id !== id));
   }
 
   return (
@@ -76,7 +75,7 @@ export function PhotoSection({
                   );
                 })}
               </View>
-              <Pressable onPress={() => remove(ph.id)} hitSlop={8}>
+              <Pressable onPress={() => void remove(ph.id)} hitSlop={8}>
                 <Text style={styles.removeBtn}>削除</Text>
               </Pressable>
             </View>

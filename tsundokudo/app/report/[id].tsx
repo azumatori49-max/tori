@@ -7,7 +7,6 @@
  */
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,6 +19,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
+import { confirmAsync, notify } from '@/lib/dialog';
 import {
   Button,
   Card,
@@ -157,7 +157,7 @@ export default function ReportFormScreen() {
 
   async function onSave() {
     if (!form.storeName.trim()) {
-      Alert.alert('店舗名を入力してください');
+      notify('店舗名を入力してください');
       return;
     }
     const ok = isNew
@@ -166,35 +166,25 @@ export default function ReportFormScreen() {
     if (ok) {
       goBack();
     } else {
-      Alert.alert(
-        '保存できませんでした',
-        useReportStore.getState().error ?? '保存に失敗しました。',
-      );
+      notify('保存できませんでした', useReportStore.getState().error ?? '保存に失敗しました。');
     }
   }
 
   async function onExport() {
     try {
       const res = await exportReportPdf(form);
-      if (res.message) Alert.alert('PDF', res.message);
+      if (res.message) notify('PDF', res.message);
     } catch (e) {
-      Alert.alert('PDF出力に失敗しました', e instanceof Error ? e.message : String(e));
+      notify('PDF出力に失敗しました', e instanceof Error ? e.message : String(e));
     }
   }
 
-  function onDelete() {
-    Alert.alert('レポートを削除', 'この操作は取り消せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除',
-        style: 'destructive',
-        onPress: () => {
-          void store.deleteReport(id).then((ok) => {
-            if (ok) goBack();
-          });
-        },
-      },
-    ]);
+  async function onDelete() {
+    const ok = await confirmAsync('レポートを削除', 'この操作は取り消せません。', '削除');
+    if (!ok) return;
+    const done = await store.deleteReport(id);
+    if (done) goBack();
+    else notify('削除できませんでした', useReportStore.getState().error ?? '');
   }
 
   return (
@@ -588,7 +578,7 @@ export default function ReportFormScreen() {
             {!isNew && (
               <>
                 <View style={{ height: 10 }} />
-                <Button title="このレポートを削除" variant="danger" onPress={onDelete} />
+                <Button title="このレポートを削除" variant="danger" onPress={() => void onDelete()} />
               </>
             )}
           </View>

@@ -40,6 +40,12 @@
   @media(max-width:700px){.grid3{grid-template-columns:1fr;}}
   label{display:block;font-size:12px;color:var(--sub);margin:8px 0 2px;}
   .saved-msg{font-size:12px;color:var(--ok);}
+  .hint{font-size:12px;color:var(--sub);background:#f2f6ff;border-radius:6px;padding:8px 10px;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;}
+  th{background:#f0f2f6;font-weight:600;white-space:nowrap;}
+  td input{width:100%;border:none;font:inherit;background:transparent;padding:2px;}
+  td input:focus{outline:2px solid var(--accent);border-radius:3px;}
   dialog{border:1px solid var(--line);border-radius:10px;padding:16px;max-width:560px;width:92%;}
   dialog::backdrop{background:rgba(0,0,0,.3);}
 </style>
@@ -61,6 +67,20 @@
     <div><label>応募日</label><input type="date" id="n-date" style="width:100%;"></div>
     <div><label>&nbsp;</label><button class="btn-main" style="width:100%;" onclick="addApplicant()">＋ 登録</button></div>
   </div>
+</section>
+
+<section>
+  <h2>1-2. まとめて登録(応募通知を貼り付けるだけ)</h2>
+  <div class="hint">
+    媒体からの応募通知メールやLINEの文面をそのまま貼り付けて「解析する」を押すと、氏名・店舗・職種・媒体・応募日を自動で読み取ります。
+    複数人分は空行で区切って一度に貼り付けOK。「氏名:◯◯」「店舗:◯◯」のようなラベル付きの行を読み取ります。
+    「山田太郎,難波店,ホール,バイトル」のようなカンマ区切りの1行でも登録できます。
+  </div>
+  <textarea id="bulk-in" rows="8" placeholder="【応募がありました】&#10;氏名:山田 太郎&#10;応募店舗:難波店&#10;応募職種:ホールスタッフ&#10;応募媒体:バイトル&#10;応募日時:2026/07/02 10:23&#10;&#10;氏名:佐藤 花子&#10;..."></textarea>
+  <div class="toolbar">
+    <button class="btn-main" onclick="parseBulk()">解析する ▼</button>
+  </div>
+  <div id="bulk-preview"></div>
 </section>
 
 <section>
@@ -120,6 +140,63 @@ function addApplicant(){
     status:'新規応募',updated:today(),interview:'',memo:'',done:''
   });
   ['n-name','n-store','n-job','n-media'].forEach(id=>$(id).value='');
+  persist();render();
+}
+
+let bulkRows=[];
+function parseDate(s){
+  if(!s)return today();
+  let m=s.match(/(20\d{2})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);
+  if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+  m=s.match(/(\d{1,2})[\/月](\d{1,2})/);
+  if(m)return new Date().getFullYear()+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');
+  return today();
+}
+function parseBulk(){
+  const text=$('bulk-in').value;
+  const blocks=text.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean);
+  bulkRows=[];const skipped=[];
+  const grab=(block,re)=>{const m=block.match(re);return m?m[1].trim().replace(/\s*様$/,''):'';};
+  blocks.forEach(b=>{
+    // カンマ・タブ区切りの1行(ラベルなし)
+    if(!/\n/.test(b)&&/[,、\t]/.test(b)&&!/[::]/.test(b)){
+      const p=b.split(/[,、\t]/).map(s=>s.trim());
+      if(p[0]){bulkRows.push({name:p[0].replace(/\s*様$/,''),store:p[1]||'',job:p[2]||'',media:p[3]||'',applied:parseDate(p[4]||'')});return;}
+    }
+    const name=grab(b,/(?:氏名|お名前|応募者名|応募者|名前)\s*[::]\s*(.+)/);
+    if(!name){skipped.push(b.split('\n')[0].slice(0,20));return;}
+    bulkRows.push({
+      name,
+      store:grab(b,/(?:応募店舗|応募先|勤務地|勤務先|店舗)\s*[::]\s*(.+)/),
+      job:grab(b,/(?:応募職種|希望職種|職種)\s*[::]\s*(.+)/),
+      media:grab(b,/(?:応募媒体|応募経路|媒体|経由)\s*[::]\s*(.+)/),
+      applied:parseDate(grab(b,/(?:応募日時|応募日|受付日|日時)\s*[::]\s*(.+)/))
+    });
+  });
+  renderBulkPreview(skipped);
+}
+function renderBulkPreview(skipped){
+  const box=$('bulk-preview');
+  if(!bulkRows.length){
+    box.innerHTML='<div class="alert" style="margin-top:10px;"><strong>読み取れませんでした。</strong>「氏名:◯◯」のようなラベル付きの行、またはカンマ区切り(名前,店舗,職種,媒体)で貼り付けてください。</div>';
+    return;
+  }
+  let html='<table style="margin-top:10px;"><thead><tr><th>氏名</th><th>店舗</th><th>職種</th><th>媒体</th><th>応募日</th></tr></thead><tbody>';
+  bulkRows.forEach((r,i)=>{
+    html+='<tr>'+['name','store','job','media','applied'].map(f=>'<td><input data-i="'+i+'" data-f="'+f+'" value="'+esc(r[f]).replace(/"/g,'&quot;')+'"></td>').join('')+'</tr>';
+  });
+  html+='</tbody></table>';
+  if(skipped.length)html+='<div class="alert" style="margin-top:10px;">読み取れなかったブロックが'+skipped.length+'件あります('+esc(skipped.join(' / '))+'…)。上の登録欄から手動で追加してください。</div>';
+  html+='<div class="toolbar"><button class="btn-main" onclick="commitBulk()">この内容で '+bulkRows.length+' 人を登録する</button><span style="font-size:12px;color:var(--sub);">※登録前に表の中身を直接修正できます</span></div>';
+  box.innerHTML=html;
+  box.querySelectorAll('input').forEach(inp=>{inp.onchange=()=>{bulkRows[+inp.dataset.i][inp.dataset.f]=inp.value;};});
+}
+function commitBulk(){
+  bulkRows.forEach((r,idx)=>{
+    if(!r.name)return;
+    db.applicants.push({id:Date.now()+idx,name:r.name,store:r.store,job:r.job,media:r.media,applied:r.applied||today(),status:'新規応募',updated:today(),interview:'',memo:'',done:''});
+  });
+  $('bulk-in').value='';$('bulk-preview').innerHTML='';bulkRows=[];
   persist();render();
 }
 

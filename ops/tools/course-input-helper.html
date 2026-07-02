@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コース入力ヘルパー(食べログ / ホットペッパー)</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#1f2430; --sub:#5b6472;
+    --line:#dde1e7; --accent:#2f6fed; --ok:#1a8a4e; --ng:#d3382f; --warn:#b7791f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:14px;line-height:1.6;}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  header h1{font-size:17px;margin:0;}
+  header .note{color:var(--sub);font-size:12px;}
+  main{max-width:1100px;margin:0 auto;padding:16px 20px 60px;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  section h2{font-size:15px;margin:0 0 12px;border-left:4px solid var(--accent);padding-left:8px;}
+  label{display:block;font-size:12px;color:var(--sub);margin:8px 0 2px;}
+  input[type=text],input[type=number],textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;background:#fff;}
+  textarea{resize:vertical;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0 12px;}
+  @media(max-width:760px){.grid2,.grid4{grid-template-columns:1fr;}}
+  button{font:inherit;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;}
+  .btn-main{background:var(--accent);color:#fff;font-weight:bold;}
+  .btn-sub{background:#eef1f5;color:var(--ink);}
+  .btn-danger{background:#fdecea;color:var(--ng);}
+  .btn-copy{background:#eef1f5;font-size:12px;padding:4px 10px;}
+  .counter{font-size:12px;text-align:right;color:var(--sub);}
+  .counter.over{color:var(--ng);font-weight:bold;}
+  .site-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:900px){.site-panels{grid-template-columns:1fr;}}
+  .site-panel{border:1px solid var(--line);border-radius:8px;padding:12px;}
+  .site-panel h3{margin:0 0 8px;font-size:14px;}
+  .tabelog h3{color:#c2410c;} .hotpepper h3{color:#b91c1c;}
+  .check-item{margin:4px 0;}
+  .result-ok{color:var(--ok);} .result-ng{color:var(--ng);font-weight:bold;} .result-warn{color:var(--warn);}
+  .limits-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:4px 0;}
+  .limits-row span{font-size:12px;color:var(--sub);min-width:110px;}
+  .limits-row input{width:80px;}
+  details summary{cursor:pointer;color:var(--accent);font-size:13px;}
+  .hint{font-size:12px;color:var(--sub);background:#f2f6ff;border-radius:6px;padding:8px 10px;margin-top:8px;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .saved-msg{font-size:12px;color:var(--ok);}
+</style>
+</head>
+<body>
+<header>
+  <h1>コース入力ヘルパー</h1>
+  <span class="note">1回入力 → 食べログ用・ホットペッパー用を同時作成。データはこのPC内に自動保存されます。</span>
+</header>
+<main>
+
+<!-- 1. 文字数制限の設定 -->
+<section>
+  <h2>0. 文字数制限の設定(最初に1回だけ)</h2>
+  <details>
+    <summary>設定を開く(各サイトの管理画面で確認した上限文字数を入力)</summary>
+    <div class="grid2" style="margin-top:8px;">
+      <div>
+        <strong style="font-size:13px;">食べログ</strong>
+        <div class="limits-row"><span>コース名 上限</span><input type="number" id="lim-tb-name" min="0"> 文字</div>
+        <div class="limits-row"><span>説明文 上限</span><input type="number" id="lim-tb-desc" min="0"> 文字</div>
+        <div class="limits-row"><span>料理内容 上限</span><input type="number" id="lim-tb-items" min="0"> 文字</div>
+      </div>
+      <div>
+        <strong style="font-size:13px;">ホットペッパー</strong>
+        <div class="limits-row"><span>コース名 上限</span><input type="number" id="lim-hp-name" min="0"> 文字</div>
+        <div class="limits-row"><span>説明文 上限</span><input type="number" id="lim-hp-desc" min="0"> 文字</div>
+        <div class="limits-row"><span>料理内容 上限</span><input type="number" id="lim-hp-items" min="0"> 文字</div>
+      </div>
+    </div>
+    <div class="hint">0または空欄にすると、その欄はチェック対象外(文字数表示のみ)になります。設定は自動保存されます。</div>
+  </details>
+</section>
+
+<!-- 2. 入力 -->
+<section>
+  <h2>1. コース情報を入力(幹部LINEの文章から転記)</h2>
+  <label>幹部LINEで届いた原文(まるごと貼り付け・メモ用)</label>
+  <textarea id="in-raw" rows="4" placeholder="届いた文章をそのまま貼っておくと、あとで見返せます"></textarea>
+  <div class="grid2">
+    <div>
+      <label>店舗名</label><input type="text" id="in-store">
+      <label>コース名</label><input type="text" id="in-name">
+      <label>価格(例:5000円(税込))</label><input type="text" id="in-price">
+      <label>品数(例:8品)</label><input type="text" id="in-count">
+    </div>
+    <div>
+      <label>飲み放題(例:2時間飲み放題付き/なし)</label><input type="text" id="in-drink">
+      <label>利用可能曜日・期間(例:月〜木限定/12月末まで)</label><input type="text" id="in-days">
+      <label>利用人数(例:2名様〜)</label><input type="text" id="in-people">
+      <label>予約条件(例:前日までの要予約)</label><input type="text" id="in-reserve">
+    </div>
+  </div>
+  <label>料理内容(1行に1品)</label>
+  <textarea id="in-items" rows="8" placeholder="先付け 季節の前菜盛り合わせ&#10;お造り 三種盛り&#10;..."></textarea>
+  <label>コース説明文(原文のアピール文など)</label>
+  <textarea id="in-desc" rows="4"></textarea>
+  <div class="toolbar">
+    <button class="btn-main" onclick="generate()">2サイト分のテキストを生成 ▼</button>
+    <button class="btn-sub" onclick="clearInputs()">入力欄をクリア</button>
+    <span class="saved-msg" id="saved-msg"></span>
+  </div>
+</section>
+
+<!-- 3. 生成結果 -->
+<section>
+  <h2>2. サイト別テキスト(ここで直接編集して長さを調整)</h2>
+  <div class="hint">
+    削ってよいもの:①修飾語(「当店自慢の」等)→ ②料理の細かい説明 → ③重複情報。
+    <strong>価格・品数・飲み放題・曜日・人数・予約条件は絶対に削らない。</strong>
+  </div>
+  <div class="site-panels" style="margin-top:12px;">
+    <div class="site-panel tabelog">
+      <h3>食べログ用</h3>
+      <label>コース名 <button class="btn-copy" onclick="copyField('tb-name')">コピー</button></label>
+      <textarea id="tb-name" rows="2" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-tb-name"></div>
+      <label>説明文 <button class="btn-copy" onclick="copyField('tb-desc')">コピー</button></label>
+      <textarea id="tb-desc" rows="6" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-tb-desc"></div>
+      <label>料理内容 <button class="btn-copy" onclick="copyField('tb-items')">コピー</button></label>
+      <textarea id="tb-items" rows="8" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-tb-items"></div>
+    </div>
+    <div class="site-panel hotpepper">
+      <h3>ホットペッパー用</h3>
+      <label>コース名 <button class="btn-copy" onclick="copyField('hp-name')">コピー</button></label>
+      <textarea id="hp-name" rows="2" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-hp-name"></div>
+      <label>説明文 <button class="btn-copy" onclick="copyField('hp-desc')">コピー</button></label>
+      <textarea id="hp-desc" rows="6" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-hp-desc"></div>
+      <label>料理内容 <button class="btn-copy" onclick="copyField('hp-items')">コピー</button></label>
+      <textarea id="hp-items" rows="8" oninput="updateCounters()"></textarea>
+      <div class="counter" id="cnt-hp-items"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-sub" onclick="runConsistency()">整合性チェックを実行</button>
+  </div>
+  <div id="consistency"></div>
+</section>
+
+<!-- 4. チェックリスト -->
+<section>
+  <h2>3. 入力・確認チェックリスト</h2>
+  <div id="checklist"></div>
+</section>
+
+<!-- 5. 完了報告 -->
+<section>
+  <h2>4. 幹部LINEへの完了報告文</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <button class="btn-sub" onclick="makeReport()">報告文を生成</button>
+    <button class="btn-copy" onclick="copyField('report')">コピー</button>
+  </div>
+  <textarea id="report" rows="8" style="margin-top:8px;"></textarea>
+</section>
+
+<!-- 6. データ管理 -->
+<section>
+  <h2>データ管理</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <button class="btn-danger" onclick="wipeAll()">保存データを全削除(入力・設定・チェック状態)</button>
+  </div>
+</section>
+
+<script>
+const KEY='course-helper-v1';
+const CHECKS=[
+  '幹部LINEの原文から 価格・品数・条件 を正しく転記した',
+  '食べログに入力した',
+  'ホットペッパーに入力した',
+  '食べログの公開ページで表示を確認した(価格・品数・条件を目視)',
+  'ホットペッパーの公開ページで表示を確認した(価格・品数・条件を目視)',
+  '2サイトの表示を見比べて一致を確認した',
+  '幹部LINEへ完了報告した'
+];
+const FIELD_IDS=['in-raw','in-store','in-name','in-price','in-count','in-drink','in-days','in-people','in-reserve','in-items','in-desc',
+ 'tb-name','tb-desc','tb-items','hp-name','hp-desc','hp-items','report',
+ 'lim-tb-name','lim-tb-desc','lim-tb-items','lim-hp-name','lim-hp-desc','lim-hp-items'];
+
+function $(id){return document.getElementById(id);}
+
+function buildChecklist(state){
+  const box=$('checklist');box.innerHTML='';
+  CHECKS.forEach((t,i)=>{
+    const d=document.createElement('div');d.className='check-item';
+    const c=document.createElement('input');c.type='checkbox';c.id='chk'+i;
+    c.checked=!!(state&&state[i]);c.onchange=save;
+    const l=document.createElement('label');l.htmlFor='chk'+i;l.style.display='inline';l.style.marginLeft='6px';l.style.color='inherit';l.style.fontSize='14px';l.textContent=t;
+    d.appendChild(c);d.appendChild(l);box.appendChild(d);
+  });
+}
+
+function save(){
+  const data={fields:{},checks:CHECKS.map((_,i)=>$('chk'+i).checked)};
+  FIELD_IDS.forEach(id=>data.fields[id]=$(id).value);
+  localStorage.setItem(KEY,JSON.stringify(data));
+  const m=$('saved-msg');m.textContent='保存しました ✓';setTimeout(()=>m.textContent='',1500);
+}
+
+function load(){
+  let data=null;
+  try{data=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
+  buildChecklist(data&&data.checks);
+  if(data&&data.fields)FIELD_IDS.forEach(id=>{if(data.fields[id]!=null)$(id).value=data.fields[id];});
+  updateCounters();
+}
+
+function generate(){
+  const name=$('in-name').value.trim();
+  const price=$('in-price').value.trim();
+  const count=$('in-count').value.trim();
+  const drink=$('in-drink').value.trim();
+  const days=$('in-days').value.trim();
+  const people=$('in-people').value.trim();
+  const reserve=$('in-reserve').value.trim();
+  const items=$('in-items').value.trim();
+  const desc=$('in-desc').value.trim();
+
+  const conds=[count,drink&&drink!=='なし'?drink:'',days,people,reserve].filter(Boolean).join(' / ');
+  const fullDesc=(desc?desc+'\n':'')+(conds?'【'+conds+'】':'');
+  const fullName=name+(price?' '+price:'');
+
+  ['tb','hp'].forEach(s=>{
+    $(s+'-name').value=fullName;
+    $(s+'-desc').value=fullDesc;
+    $(s+'-items').value=items;
+  });
+  updateCounters();save();
+}
+
+function limit(id){const v=parseInt($(id).value,10);return isNaN(v)||v<=0?null:v;}
+
+function updateCounters(){
+  const map={'tb-name':'lim-tb-name','tb-desc':'lim-tb-desc','tb-items':'lim-tb-items',
+             'hp-name':'lim-hp-name','hp-desc':'lim-hp-desc','hp-items':'lim-hp-items'};
+  Object.keys(map).forEach(f=>{
+    const len=$(f).value.length,lim=limit(map[f]),el=$('cnt-'+f);
+    if(lim){el.textContent=len+' / '+lim+' 文字'+(len>lim?'('+(len-lim)+'文字オーバー)':'');el.className='counter'+(len>lim?' over':'');}
+    else{el.textContent=len+' 文字(上限未設定)';el.className='counter';}
+  });
+}
+
+function nums(t){return (t.match(/[0-9,０-９]+/g)||[]).map(s=>s.replace(/,/g,'').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)));}
+function lineCount(t){return t.split('\n').map(s=>s.trim()).filter(Boolean).length;}
+
+function runConsistency(){
+  const box=$('consistency');const out=[];
+  const tbAll=$('tb-name').value+'\n'+$('tb-desc').value+'\n'+$('tb-items').value;
+  const hpAll=$('hp-name').value+'\n'+$('hp-desc').value+'\n'+$('hp-items').value;
+
+  // 価格
+  const priceNums=nums($('in-price').value);
+  if(priceNums.length){
+    const p=priceNums[0];
+    out.push(check('価格「'+p+'」が食べログ側に含まれている',tbAll.includes(p)));
+    out.push(check('価格「'+p+'」がホットペッパー側に含まれている',hpAll.includes(p)));
+  }else{out.push(warn('価格が未入力のため価格チェックはスキップ'));}
+
+  // 品数
+  const cNums=nums($('in-count').value);
+  if(cNums.length){
+    const c=cNums[0];
+    out.push(check('品数「'+c+'品」表記が食べログ側にある',tbAll.includes(c)));
+    out.push(check('品数「'+c+'品」表記がホットペッパー側にある',hpAll.includes(c)));
+    const tl=lineCount($('tb-items').value),hl=lineCount($('hp-items').value);
+    out.push(check('料理内容の行数が一致(食べログ'+tl+'行 / HP '+hl+'行)',tl===hl));
+    if(String(tl)!==c)out.push(warn('料理内容の行数('+tl+')と品数('+c+')が一致していません。まとめ書きなら問題なし'));
+  }
+
+  // 条件系キーワード
+  [['in-drink','飲み放題'],['in-days','曜日・期間'],['in-people','人数'],['in-reserve','予約条件']].forEach(([id,label])=>{
+    const v=$(id).value.trim();
+    if(!v||v==='なし')return;
+    const key=v.replace(/\s/g,'').slice(0,6);
+    const inTb=tbAll.replace(/\s/g,'').includes(key),inHp=hpAll.replace(/\s/g,'').includes(key);
+    if(inTb&&inHp)out.push(check(label+'「'+v+'」が両サイトに含まれている',true));
+    else out.push(check(label+'「'+v+'」が'+(!inTb&&!inHp?'両サイト':(!inTb?'食べログ側':'ホットペッパー側'))+'に見つかりません',false));
+  });
+
+  // 文字数
+  updateCounters();
+  document.querySelectorAll('.counter.over').forEach(el=>{
+    out.push(check('文字数オーバーがあります:'+el.id.replace('cnt-',''),false));
+  });
+
+  box.innerHTML='<div style="margin-top:10px;">'+out.join('')+'</div>';
+  function check(msg,ok){return '<div class="'+(ok?'result-ok':'result-ng')+'">'+(ok?'✓ ':'✗ ')+msg+'</div>';}
+  function warn(msg){return '<div class="result-warn">△ '+msg+'</div>';}
+}
+
+function makeReport(){
+  const store=$('in-store').value.trim()||'◯◯';
+  const name=$('in-name').value.trim()||'◯◯コース';
+  const price=$('in-price').value.trim();
+  $('report').value=
+'【コース登録 完了報告】\n'+
+'店舗:'+store+'\n'+
+'コース:'+name+(price?'('+price+')':'')+'\n'+
+'食べログ:入力・公開反映を確認済み\n'+
+'ホットペッパー:入力・公開反映を確認済み\n'+
+'両サイトの価格・品数・条件が一致していることを確認しました。';
+  save();
+}
+
+function copyField(id){
+  navigator.clipboard.writeText($(id).value).then(()=>{
+    const m=$('saved-msg');m.textContent='コピーしました ✓';setTimeout(()=>m.textContent='',1500);
+  });
+}
+
+function clearInputs(){
+  if(!confirm('入力欄と生成結果をクリアします(文字数設定は残ります)。よろしいですか?'))return;
+  FIELD_IDS.filter(id=>!id.startsWith('lim-')).forEach(id=>$(id).value='');
+  document.querySelectorAll('#checklist input').forEach(c=>c.checked=false);
+  $('consistency').innerHTML='';updateCounters();save();
+}
+
+function wipeAll(){
+  if(!confirm('設定を含む保存データをすべて削除します。よろしいですか?'))return;
+  localStorage.removeItem(KEY);location.reload();
+}
+
+FIELD_IDS.forEach(id=>{document.addEventListener('DOMContentLoaded',()=>{$(id).addEventListener('change',save);});});
+document.addEventListener('DOMContentLoaded',load);
+</script>
+</body>
+</html>

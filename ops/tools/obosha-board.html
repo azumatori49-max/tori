@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>応募者対応ボード</title>
+<style>
+  :root{--bg:#f5f6f8;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#dde1e7;--accent:#2f6fed;--ok:#1a8a4e;--ng:#d3382f;--warn:#b7791f;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:14px;line-height:1.6;}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  header h1{font-size:17px;margin:0;}
+  header .note{color:var(--sub);font-size:12px;}
+  main{max-width:1150px;margin:0 auto;padding:16px 20px 60px;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  section h2{font-size:15px;margin:0 0 12px;border-left:4px solid var(--accent);padding-left:8px;}
+  button{font:inherit;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;}
+  .btn-main{background:var(--accent);color:#fff;font-weight:bold;}
+  .btn-sub{background:#eef1f5;color:var(--ink);}
+  .btn-danger{background:#fdecea;color:var(--ng);}
+  .btn-mini{background:#eef1f5;font-size:12px;padding:3px 8px;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+  input[type=text],input[type=date],select,textarea{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;}
+  textarea{width:100%;resize:vertical;}
+  .alert{background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;}
+  .alert strong{color:var(--warn);}
+  .board{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  @media(max-width:1000px){.board{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:600px){.board{grid-template-columns:1fr;}}
+  .col{background:#f0f2f6;border-radius:8px;padding:8px;min-height:120px;}
+  .col h3{font-size:12.5px;margin:0 0 8px;color:var(--sub);text-align:center;}
+  .cardp{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12.5px;}
+  .cardp.warn{border-color:#fdba74;background:#fffbf5;}
+  .cardp .name{font-weight:bold;font-size:13.5px;}
+  .cardp .meta{color:var(--sub);}
+  .cardp .days{font-size:11.5px;}
+  .cardp .days.late{color:var(--ng);font-weight:bold;}
+  .cardp .actions{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px;}
+  @media(max-width:700px){.grid3{grid-template-columns:1fr;}}
+  label{display:block;font-size:12px;color:var(--sub);margin:8px 0 2px;}
+  .saved-msg{font-size:12px;color:var(--ok);}
+  dialog{border:1px solid var(--line);border-radius:10px;padding:16px;max-width:560px;width:92%;}
+  dialog::backdrop{background:rgba(0,0,0,.3);}
+</style>
+</head>
+<body>
+<header>
+  <h1>応募者対応ボード</h1>
+  <span class="note">誰が返信待ちか一目で分かる。2日動きがない応募者は自動で警告表示。データはこのPC内に保存されます。</span>
+</header>
+<main>
+
+<section>
+  <h2>1. 応募者を登録(応募が入ったら30秒で)</h2>
+  <div class="grid3">
+    <div><label>氏名</label><input type="text" id="n-name" style="width:100%;"></div>
+    <div><label>店舗</label><input type="text" id="n-store" style="width:100%;"></div>
+    <div><label>職種</label><input type="text" id="n-job" style="width:100%;"></div>
+    <div><label>応募媒体</label><input type="text" id="n-media" style="width:100%;"></div>
+    <div><label>応募日</label><input type="date" id="n-date" style="width:100%;"></div>
+    <div><label>&nbsp;</label><button class="btn-main" style="width:100%;" onclick="addApplicant()">＋ 登録</button></div>
+  </div>
+</section>
+
+<section>
+  <h2>2. 対応ボード</h2>
+  <div id="stale-alert"></div>
+  <div class="board" id="board"></div>
+  <div class="toolbar">
+    <span class="saved-msg" id="saved-msg"></span>
+  </div>
+</section>
+
+<section>
+  <h2>3. 完了・不成立(直近20件)</h2>
+  <div id="done-list" style="font-size:13px;"></div>
+</section>
+
+<section>
+  <h2>データ管理</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <button class="btn-sub" onclick="exportCsv()">CSVエクスポート(バックアップ用)</button>
+    <button class="btn-danger" onclick="wipeAll()">保存データを全削除</button>
+  </div>
+</section>
+
+<dialog id="msg-dialog">
+  <h3 style="margin-top:0;font-size:15px;" id="msg-title">LINE文面</h3>
+  <textarea id="msg-body" rows="12"></textarea>
+  <div class="toolbar">
+    <button class="btn-main" onclick="copyMsg()">コピー</button>
+    <button class="btn-sub" onclick="document.getElementById('msg-dialog').close()">閉じる</button>
+  </div>
+</dialog>
+
+<script>
+const KEY='obosha-board-v1';
+const STATUSES=['新規応募','担当者確認中','候補日提示・返信待ち','日程確定','再調整中'];
+let db={applicants:[]};
+function $(id){return document.getElementById(id);}
+function load(){try{db=JSON.parse(localStorage.getItem(KEY))||db;}catch(e){}}
+function persist(){localStorage.setItem(KEY,JSON.stringify(db));flash('保存しました ✓');}
+function flash(t){const m=$('saved-msg');m.textContent=t;setTimeout(()=>m.textContent='',1500);}
+function today(){return new Date().toISOString().slice(0,10);}
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function daysSince(dateStr){
+  const d=new Date(dateStr);d.setHours(0,0,0,0);
+  const t=new Date();t.setHours(0,0,0,0);
+  return Math.round((t-d)/86400000);
+}
+
+function addApplicant(){
+  const name=$('n-name').value.trim();
+  if(!name){alert('氏名を入力してください');return;}
+  db.applicants.push({
+    id:Date.now(),name,
+    store:$('n-store').value.trim(),job:$('n-job').value.trim(),
+    media:$('n-media').value.trim(),applied:$('n-date').value||today(),
+    status:'新規応募',updated:today(),interview:'',memo:'',done:''
+  });
+  ['n-name','n-store','n-job','n-media'].forEach(id=>$(id).value='');
+  persist();render();
+}
+
+function render(){
+  const board=$('board');board.innerHTML='';
+  let staleCount=0;
+  STATUSES.forEach(st=>{
+    const col=document.createElement('div');col.className='col';
+    const items=db.applicants.filter(a=>a.status===st&&!a.done);
+    col.innerHTML='<h3>'+st+'('+items.length+')</h3>';
+    items.forEach(a=>{
+      const stale=daysSince(a.updated);
+      const isWarn=stale>=2&&st!=='日程確定';
+      if(isWarn)staleCount++;
+      const c=document.createElement('div');c.className='cardp'+(isWarn?' warn':'');
+      c.innerHTML='<div class="name">'+esc(a.name)+'</div>'+
+        '<div class="meta">'+esc(a.store)+(a.job?' / '+esc(a.job):'')+(a.media?' / '+esc(a.media):'')+'</div>'+
+        (a.interview?'<div class="meta">面接:'+esc(a.interview)+'</div>':'')+
+        (a.memo?'<div class="meta">メモ:'+esc(a.memo)+'</div>':'')+
+        '<div class="days'+(isWarn?' late':'')+'">最終更新から'+stale+'日'+(isWarn?' ⚠ 要フォロー':'')+'</div>';
+      const act=document.createElement('div');act.className='actions';
+      // ステータス移動
+      const sel=document.createElement('select');
+      STATUSES.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;if(s===a.status)o.selected=true;sel.appendChild(o);});
+      sel.onchange=()=>{a.status=sel.value;a.updated=today();persist();render();};
+      act.appendChild(sel);
+      // LINE文面
+      const msgBtn=document.createElement('button');msgBtn.className='btn-mini';msgBtn.textContent='LINE文面';
+      msgBtn.onclick=()=>openMsg(a);act.appendChild(msgBtn);
+      // 面接日・メモ
+      const editBtn=document.createElement('button');editBtn.className='btn-mini';editBtn.textContent='面接日/メモ';
+      editBtn.onclick=()=>{
+        const iv=prompt('面接日時(例:7/10(金)14:00)',a.interview||'');
+        if(iv!==null)a.interview=iv;
+        const mm=prompt('メモ',a.memo||'');
+        if(mm!==null)a.memo=mm;
+        a.updated=today();persist();render();
+      };
+      act.appendChild(editBtn);
+      // 完了/不成立
+      const doneBtn=document.createElement('button');doneBtn.className='btn-mini';doneBtn.textContent='完了';
+      doneBtn.onclick=()=>{
+        const r=prompt('結果を入力:「面接済み」「辞退」「連絡取れず」など','面接済み');
+        if(r===null)return;
+        a.done=r;a.updated=today();persist();render();
+      };
+      act.appendChild(doneBtn);
+      c.appendChild(act);col.appendChild(c);
+    });
+    board.appendChild(col);
+  });
+  $('stale-alert').innerHTML=staleCount?'<div class="alert"><strong>⚠ 2日以上動きのない応募者が '+staleCount+' 人います。</strong> リマインド(LINE文面ボタン→テンプレ生成)を送りましょう。</div>':'';
+  // 完了リスト
+  const done=db.applicants.filter(a=>a.done).slice(-20).reverse();
+  $('done-list').innerHTML=done.length?done.map(a=>{
+    return '<div>・'+esc(a.name)+'('+esc(a.store)+')— '+esc(a.done)+' <button class="btn-mini" onclick="removeApplicant('+a.id+')">削除</button></div>';
+  }).join(''):'<span style="color:var(--sub);">まだありません</span>';
+}
+
+function removeApplicant(id){
+  if(!confirm('この応募者の記録を削除しますか?'))return;
+  db.applicants=db.applicants.filter(a=>a.id!==id);persist();render();
+}
+
+function openMsg(a){
+  const map={
+    '新規応募':['面接担当者への日程確認',
+'お疲れさまです。'+(a.store||'◯◯店')+'に応募がありました。\n■氏名:'+a.name+'さん\n■職種:'+(a.job||'◯◯')+'\n■媒体:'+(a.media||'◯◯')+'\n面接可能な日時を、候補3つほどいただけますか?\n(例:◯日◯時〜、◯日◯時〜)'],
+    '担当者確認中':['応募者への候補日提示',
+a.name+'さん\nこの度は'+(a.store||'◯◯(店舗名)')+'へご応募いただき、ありがとうございます!\n採用担当の◯◯です。\n面接の日程について、以下の候補からご都合のよい日時をお知らせください。\n\n①◯月◯日(◯)◯時〜\n②◯月◯日(◯)◯時〜\n③◯月◯日(◯)◯時〜\n\n上記でご都合が合わない場合は、ご希望の日時をお知らせください。\nご連絡お待ちしております!'],
+    '候補日提示・返信待ち':['リマインド(返信が2日ない場合)',
+a.name+'さん\n先日ご案内した面接日程の件、その後いかがでしょうか?\n以下の候補以外でも調整可能ですので、ご都合をお知らせください。\n①◯月◯日(◯)◯時〜\n②◯月◯日(◯)◯時〜\nご連絡お待ちしております!'],
+    '日程確定':['確定連絡',
+a.name+'さん\nご返信ありがとうございます!\nそれでは面接は以下の日程で確定いたします。\n\n■日時:'+(a.interview||'◯月◯日(◯)◯時〜')+'\n■場所:'+(a.store||'◯◯')+'(住所・地図URL)\n■持ち物:◯◯\n■当日の連絡先:◯◯\n\nご不明な点があればお気軽にご連絡ください。\n当日お会いできるのを楽しみにしております!'],
+    '再調整中':['日程再調整',
+a.name+'さん\nご連絡ありがとうございます。承知いたしました!\nそれでは改めて、以下の日程はいかがでしょうか?\n①◯月◯日(◯)◯時〜\n②◯月◯日(◯)◯時〜\nご都合をお知らせください。よろしくお願いいたします!']
+  };
+  const[title,body]=map[a.status]||['LINE文面',''];
+  $('msg-title').textContent=title+'('+a.name+'さん)';
+  $('msg-body').value=body;
+  $('msg-dialog').showModal();
+}
+
+function copyMsg(){
+  navigator.clipboard.writeText($('msg-body').value).then(()=>{
+    $('msg-dialog').close();flash('コピーしました ✓');
+  });
+}
+
+function exportCsv(){
+  let csv='氏名,店舗,職種,媒体,応募日,ステータス,面接日,結果,メモ,最終更新\n';
+  db.applicants.forEach(a=>{
+    csv+=[a.name,a.store,a.job,a.media,a.applied,a.status,a.interview,a.done,(a.memo||'').replace(/[,\n]/g,' '),a.updated].join(',')+'\n';
+  });
+  const el=document.createElement('a');
+  el.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
+  el.download='obosha-board.csv';el.click();
+}
+
+function wipeAll(){
+  if(!confirm('全応募者データを削除します。よろしいですか?'))return;
+  localStorage.removeItem(KEY);location.reload();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  load();$('n-date').value=today();render();
+});
+</script>
+</body>
+</html>

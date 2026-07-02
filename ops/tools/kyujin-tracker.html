@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>求人媒体トラッカー</title>
+<style>
+  :root{--bg:#f5f6f8;--card:#fff;--ink:#1f2430;--sub:#5b6472;--line:#dde1e7;--accent:#2f6fed;--ok:#1a8a4e;--ng:#d3382f;--warn:#b7791f;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:14px;line-height:1.6;}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  header h1{font-size:17px;margin:0;}
+  header .note{color:var(--sub);font-size:12px;}
+  main{max-width:1150px;margin:0 auto;padding:16px 20px 60px;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  section h2{font-size:15px;margin:0 0 12px;border-left:4px solid var(--accent);padding-left:8px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;}
+  th{background:#f0f2f6;font-weight:600;white-space:nowrap;}
+  td input{width:100%;border:none;font:inherit;background:transparent;padding:2px;}
+  td input:focus{outline:2px solid var(--accent);border-radius:3px;}
+  .num{text-align:right;}
+  .total-row td{background:#f7f9fc;font-weight:bold;}
+  button{font:inherit;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;}
+  .btn-main{background:var(--accent);color:#fff;font-weight:bold;}
+  .btn-sub{background:#eef1f5;color:var(--ink);}
+  .btn-danger{background:#fdecea;color:var(--ng);}
+  .btn-mini{background:#eef1f5;font-size:12px;padding:3px 8px;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;}
+  textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;resize:vertical;}
+  input[type=month],input[type=date],input[type=text],select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;}
+  .cmp-up{color:var(--ok);} .cmp-down{color:var(--ng);}
+  .alert{background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;}
+  .alert strong{color:var(--warn);}
+  .expired{color:var(--ng);font-weight:bold;} .soon{color:var(--warn);font-weight:bold;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;}
+  @media(max-width:800px){.grid2{grid-template-columns:1fr;}}
+  label{display:block;font-size:12px;color:var(--sub);margin:8px 0 2px;}
+  .saved-msg{font-size:12px;color:var(--ok);}
+</style>
+</head>
+<body>
+<header>
+  <h1>求人媒体トラッカー</h1>
+  <span class="note">数字をここに集約 → 採用単価・前月比・報告文を自動生成。データはこのPC内に保存されます。</span>
+</header>
+<main>
+
+<section>
+  <h2>1. 月次データ入力(月中・月末の月2回)</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <span>対象月:</span><input type="month" id="month" onchange="renderTable()">
+    <button class="btn-sub" onclick="addRow()">＋ 行を追加</button>
+    <button class="btn-mini" onclick="copyPrevRows()">前月の媒体・店舗をコピー</button>
+    <span class="saved-msg" id="saved-msg"></span>
+  </div>
+  <div style="overflow-x:auto;margin-top:10px;">
+  <table id="data-table">
+    <thead><tr>
+      <th>媒体</th><th>店舗</th><th>不足人数</th><th>応募数</th><th>採用数</th><th>掲載費用(円)</th><th>採用単価(自動)</th><th></th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+    <tfoot id="tfoot"></tfoot>
+  </table>
+  </div>
+  <div id="compare" style="margin-top:10px;font-size:13px;"></div>
+  <label>掲載判断メモ(この月の判断理由を書き残す → 判断基準が資産になります)</label>
+  <textarea id="memo" rows="3" onchange="saveMemo()" placeholder="例:◯◯店はA媒体の単価が高騰しているためB媒体へ切替。◯◯店は充足したため掲載停止。"></textarea>
+</section>
+
+<section>
+  <h2>2. グループLINE用 集計報告文</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <button class="btn-main" onclick="makeReport()">集計報告文を生成</button>
+    <button class="btn-mini" onclick="copyText('report')">コピー</button>
+  </div>
+  <textarea id="report" rows="12" style="margin-top:8px;"></textarea>
+</section>
+
+<section>
+  <h2>3. 掲載案・依頼文ジェネレーター</h2>
+  <div class="grid2">
+    <div>
+      <label>媒体</label><input type="text" id="g-media">
+      <label>店舗</label><input type="text" id="g-store">
+      <label>プラン</label><input type="text" id="g-plan">
+    </div>
+    <div>
+      <label>予算(円)</label><input type="text" id="g-budget">
+      <label>期間(例:7/10〜8/9)</label><input type="text" id="g-period">
+      <label>背景メモ(不足人数・前回実績など)</label><input type="text" id="g-bg">
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-sub" onclick="makeProposal()">幹部LINE用の掲載案を生成</button>
+    <button class="btn-sub" onclick="makeRequest()">媒体担当者用の依頼文を生成</button>
+    <button class="btn-mini" onclick="copyText('gen-out')">コピー</button>
+  </div>
+  <textarea id="gen-out" rows="12" style="margin-top:8px;"></textarea>
+</section>
+
+<section>
+  <h2>4. 掲載中リスト(終了日の見落とし防止・バイトル含む)</h2>
+  <div id="ending-alert"></div>
+  <div class="toolbar" style="margin-top:0;">
+    <input type="text" id="l-media" placeholder="媒体(例:バイトル)">
+    <input type="text" id="l-store" placeholder="店舗">
+    <input type="date" id="l-end">
+    <button class="btn-sub" onclick="addListing()">＋ 登録</button>
+  </div>
+  <table style="margin-top:10px;">
+    <thead><tr><th>媒体</th><th>店舗</th><th>終了日</th><th>残り日数</th><th></th></tr></thead>
+    <tbody id="listing-body"></tbody>
+  </table>
+</section>
+
+<section>
+  <h2>データ管理</h2>
+  <div class="toolbar" style="margin-top:0;">
+    <button class="btn-sub" onclick="exportCsv()">CSVエクスポート(バックアップ用)</button>
+    <button class="btn-danger" onclick="wipeAll()">保存データを全削除</button>
+  </div>
+</section>
+
+<script>
+const KEY='kyujin-tracker-v1';
+let db={months:{},listings:[]};
+function $(id){return document.getElementById(id);}
+function load(){try{db=JSON.parse(localStorage.getItem(KEY))||db;}catch(e){}}
+function persist(){localStorage.setItem(KEY,JSON.stringify(db));flash('保存しました ✓');}
+function flash(t){const m=$('saved-msg');m.textContent=t;setTimeout(()=>m.textContent='',1500);}
+function monthKey(){return $('month').value;}
+function monthData(k){if(!db.months[k])db.months[k]={rows:[],memo:''};return db.months[k];}
+function fmt(n){return n==null||isNaN(n)?'—':Math.round(n).toLocaleString('ja-JP');}
+function toNum(v){const n=parseFloat(String(v).replace(/[,，円]/g,''));return isNaN(n)?0:n;}
+
+function prevMonthKey(k){
+  const[y,m]=k.split('-').map(Number);
+  const d=new Date(y,m-2,1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+function renderTable(){
+  const k=monthKey();if(!k)return;
+  const md=monthData(k);
+  const tb=$('tbody');tb.innerHTML='';
+  md.rows.forEach((r,i)=>{
+    const tr=document.createElement('tr');
+    ['media','store','shortage','apply','hire','cost'].forEach(f=>{
+      const td=document.createElement('td');
+      const inp=document.createElement('input');
+      inp.value=r[f]||'';
+      if(['shortage','apply','hire','cost'].includes(f)){td.className='num';inp.style.textAlign='right';}
+      inp.onchange=()=>{r[f]=inp.value;persist();renderTable();};
+      td.appendChild(inp);tr.appendChild(td);
+    });
+    const cpa=toNum(r.hire)>0?toNum(r.cost)/toNum(r.hire):null;
+    const tdC=document.createElement('td');tdC.className='num';tdC.textContent=cpa!=null?fmt(cpa)+'円':'—';tr.appendChild(tdC);
+    const tdD=document.createElement('td');
+    const del=document.createElement('button');del.className='btn-mini';del.textContent='削除';
+    del.onclick=()=>{if(confirm('この行を削除しますか?')){md.rows.splice(i,1);persist();renderTable();}};
+    tdD.appendChild(del);tr.appendChild(tdD);
+    tb.appendChild(tr);
+  });
+  // 合計
+  const t=totals(md.rows);
+  $('tfoot').innerHTML='<tr class="total-row"><td colspan="2">合計</td><td class="num">'+fmt(t.shortage)+'</td><td class="num">'+fmt(t.apply)+'</td><td class="num">'+fmt(t.hire)+'</td><td class="num">'+fmt(t.cost)+'</td><td class="num">'+(t.hire>0?fmt(t.cost/t.hire)+'円':'—')+'</td><td></td></tr>';
+  $('memo').value=md.memo||'';
+  renderCompare();
+}
+
+function totals(rows){
+  return rows.reduce((a,r)=>({shortage:a.shortage+toNum(r.shortage),apply:a.apply+toNum(r.apply),hire:a.hire+toNum(r.hire),cost:a.cost+toNum(r.cost)}),{shortage:0,apply:0,hire:0,cost:0});
+}
+
+function renderCompare(){
+  const k=monthKey(),pk=prevMonthKey(k);
+  const box=$('compare');
+  if(!db.months[pk]||!db.months[pk].rows.length){box.innerHTML='<span style="color:var(--sub);">前月('+pk+')のデータはまだありません。</span>';return;}
+  const c=totals(monthData(k).rows),p=totals(db.months[pk].rows);
+  const d=(cur,prev,unit,invert)=>{
+    const diff=cur-prev;if(!prev&&!cur)return '—';
+    const cls=diff===0?'':(diff>0)!==!!invert?'cmp-up':'cmp-down';
+    return '<span class="'+cls+'">'+(diff>=0?'+':'')+fmt(diff)+unit+'</span>';
+  };
+  const cpaC=c.hire>0?c.cost/c.hire:null,cpaP=p.hire>0?p.cost/p.hire:null;
+  box.innerHTML='<strong>前月('+pk+')比:</strong> 応募 '+d(c.apply,p.apply,'件')+' / 採用 '+d(c.hire,p.hire,'名')+' / 費用 '+d(c.cost,p.cost,'円',true)+' / 採用単価 '+(cpaC!=null&&cpaP!=null?d(cpaC,cpaP,'円',true):'—');
+}
+
+function addRow(){const k=monthKey();if(!k){alert('対象月を選択してください');return;}monthData(k).rows.push({});persist();renderTable();}
+
+function copyPrevRows(){
+  const k=monthKey(),pk=prevMonthKey(k);
+  if(!db.months[pk]||!db.months[pk].rows.length){alert('前月('+pk+')のデータがありません');return;}
+  const md=monthData(k);
+  db.months[pk].rows.forEach(r=>md.rows.push({media:r.media,store:r.store}));
+  persist();renderTable();
+}
+
+function saveMemo(){const k=monthKey();if(!k)return;monthData(k).memo=$('memo').value;persist();}
+
+function makeReport(){
+  const k=monthKey();if(!k){alert('対象月を選択してください');return;}
+  const md=monthData(k),t=totals(md.rows),pk=prevMonthKey(k);
+  const p=db.months[pk]?totals(db.months[pk].rows):null;
+  const cmp=(cur,prev,unit)=>p&&prev?'(前月比 '+(cur-prev>=0?'+':'')+fmt(cur-prev)+unit+')':'';
+  // 媒体別に集約
+  const byMedia={};
+  md.rows.forEach(r=>{
+    const m=r.media||'(媒体未入力)';
+    if(!byMedia[m])byMedia[m]={apply:0,hire:0,cost:0};
+    byMedia[m].apply+=toNum(r.apply);byMedia[m].hire+=toNum(r.hire);byMedia[m].cost+=toNum(r.cost);
+  });
+  let lines='【求人応募状況('+k.replace('-','年')+'月分)】\n■全体\n';
+  lines+='・応募:'+fmt(t.apply)+'件 '+cmp(t.apply,p&&p.apply,'件')+'\n';
+  lines+='・採用:'+fmt(t.hire)+'名 '+cmp(t.hire,p&&p.hire,'名')+'\n';
+  lines+='・掲載費用:'+fmt(t.cost)+'円\n';
+  lines+='・採用単価:'+(t.hire>0?fmt(t.cost/t.hire)+'円':'—')+'\n\n■媒体別\n';
+  Object.keys(byMedia).forEach(m=>{
+    const b=byMedia[m];
+    lines+='・'+m+':応募'+fmt(b.apply)+'件 / 採用'+fmt(b.hire)+'名 / 単価'+(b.hire>0?fmt(b.cost/b.hire)+'円':'—')+'\n';
+  });
+  if(md.memo)lines+='\n■所感・次のアクション\n'+md.memo+'\n';
+  $('report').value=lines;
+}
+
+function makeProposal(){
+  $('gen-out').value=
+'【求人掲載のご相談】\n以下の内容で掲載を進めたいと考えています。ご確認をお願いします。\n\n'+
+'■掲載媒体:'+($('g-media').value||'◯◯')+'\n'+
+'■掲載店舗:'+($('g-store').value||'◯◯')+'\n'+
+'■プラン:'+($('g-plan').value||'◯◯')+'\n'+
+'■予算:'+($('g-budget').value||'◯◯')+'円\n'+
+'■期間:'+($('g-period').value||'◯月◯日〜◯月◯日')+'\n\n'+
+'■背景\n・'+($('g-bg').value||'◯◯店の不足人数:◯名')+'\n\n'+
+'問題なければ「OK」の一言で大丈夫です。よろしくお願いします。';
+}
+
+function makeRequest(){
+  $('gen-out').value=
+'いつもお世話になっております。\n以下の内容で掲載をお願いいたします。\n\n'+
+'■店舗:'+($('g-store').value||'◯◯')+'\n'+
+'■プラン:'+($('g-plan').value||'◯◯')+'\n'+
+'■予算:'+($('g-budget').value||'◯◯')+'円\n'+
+'■期間:'+($('g-period').value||'◯月◯日〜◯月◯日')+'\n'+
+'■原稿:前回と同じ内容でお願いします\n\n'+
+'お手数ですが、掲載開始日が確定しましたらご連絡ください。\nよろしくお願いいたします。';
+}
+
+function addListing(){
+  const media=$('l-media').value.trim(),store=$('l-store').value.trim(),end=$('l-end').value;
+  if(!media||!store||!end){alert('媒体・店舗・終了日をすべて入力してください');return;}
+  db.listings.push({media,store,end});
+  $('l-media').value='';$('l-store').value='';$('l-end').value='';
+  persist();renderListings();
+}
+
+function renderListings(){
+  const tb=$('listing-body');tb.innerHTML='';
+  const today=new Date();today.setHours(0,0,0,0);
+  const sorted=db.listings.map((l,i)=>({...l,i})).sort((a,b)=>a.end.localeCompare(b.end));
+  let warnCount=0;
+  sorted.forEach(l=>{
+    const days=Math.round((new Date(l.end)-today)/86400000);
+    const cls=days<0?'expired':days<=7?'soon':'';
+    if(days<=7)warnCount++;
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td>'+esc(l.media)+'</td><td>'+esc(l.store)+'</td><td>'+l.end+'</td>'+
+      '<td class="'+cls+'">'+(days<0?'終了('+(-days)+'日超過)':days===0?'本日終了':'あと'+days+'日')+'</td>';
+    const td=document.createElement('td');
+    const del=document.createElement('button');del.className='btn-mini';del.textContent='削除';
+    del.onclick=()=>{db.listings.splice(l.i,1);persist();renderListings();};
+    td.appendChild(del);tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+  $('ending-alert').innerHTML=warnCount?'<div class="alert"><strong>⚠ 終了日まで7日以内(または終了済み)の掲載が '+warnCount+' 件あります。</strong> 更新・切替・次の掲載店舗の検討を進めてください。</div>':'';
+}
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+function exportCsv(){
+  let csv='月,媒体,店舗,不足人数,応募数,採用数,掲載費用,採用単価\n';
+  Object.keys(db.months).sort().forEach(k=>{
+    db.months[k].rows.forEach(r=>{
+      const cpa=toNum(r.hire)>0?Math.round(toNum(r.cost)/toNum(r.hire)):'';
+      csv+=[k,r.media||'',r.store||'',r.shortage||'',r.apply||'',r.hire||'',r.cost||'',cpa].join(',')+'\n';
+    });
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
+  a.download='kyujin-tracker.csv';a.click();
+}
+
+function wipeAll(){
+  if(!confirm('全データ(全月の記録・掲載中リスト)を削除します。よろしいですか?'))return;
+  localStorage.removeItem(KEY);location.reload();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  load();
+  const now=new Date();
+  $('month').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  renderTable();renderListings();
+});
+</script>
+</body>
+</html>

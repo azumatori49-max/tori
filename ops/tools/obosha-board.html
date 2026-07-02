@@ -72,13 +72,14 @@
 <section>
   <h2>1-2. まとめて登録(応募通知を貼り付けるだけ)</h2>
   <div class="hint">
-    媒体からの応募通知メールやLINEの文面をそのまま貼り付けて「解析する」を押すと、氏名・店舗・職種・媒体・応募日を自動で読み取ります。
-    複数人分は空行で区切って一度に貼り付けOK。「氏名:◯◯」「店舗:◯◯」のようなラベル付きの行を読み取ります。
-    「山田太郎,難波店,ホール,バイトル」のようなカンマ区切りの1行でも登録できます。
+    <strong>媒体の管理画面の応募者一覧を、そのまま範囲選択してコピー&貼り付けでOK。</strong>
+    日時・氏名・年齢/性別・職種・店舗を自動で読み取り、「編集」「削除」「未対応」などの画面上の文字は自動で除外します。
+    通知メール(「氏名:◯◯」形式)や「山田太郎,難波店,ホール,バイトル」のようなカンマ区切りにも対応しています。複数人まとめて貼り付けOK。
   </div>
-  <textarea id="bulk-in" rows="8" placeholder="【応募がありました】&#10;氏名:山田 太郎&#10;応募店舗:難波店&#10;応募職種:ホールスタッフ&#10;応募媒体:バイトル&#10;応募日時:2026/07/02 10:23&#10;&#10;氏名:佐藤 花子&#10;..."></textarea>
+  <textarea id="bulk-in" rows="8" placeholder="2026/7/2 11:35&#10;&#10;山田 太郎&#10;&#10;19歳／男性&#10;&#10;正社員&#10;[9059585]居酒屋ホール・キッチンスタッフ&#10;&#10;◯◯店&#10;(管理画面の一覧をそのままコピペ)"></textarea>
   <div class="toolbar">
     <button class="btn-main" onclick="parseBulk()">解析する ▼</button>
+    <input type="text" id="bulk-media" placeholder="媒体名(例:バイトル)※全員に適用">
   </div>
   <div id="bulk-preview"></div>
 </section>
@@ -152,10 +153,47 @@ function parseDate(s){
   if(m)return new Date().getFullYear()+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');
   return today();
 }
+// 管理画面の応募者一覧形式(日時行で始まるレコードの繰り返し)
+const LIST_DT_RE=/^20\d{2}\/\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}/;
+const LIST_NOISE_RE=/^(未対応|対応中|対応済み?|新規|New|編集|削除|メモを入力できます|応募者|求人内容|対応状況|面接日／メモ)$/;
+function parseListFormat(text){
+  const lines=text.split('\n').map(l=>l.trim());
+  const recs=[];let cur=null;
+  lines.forEach(l=>{
+    if(LIST_DT_RE.test(l)){if(cur)recs.push(cur);cur={date:l,lines:[]};return;}
+    if(!cur||!l)return;
+    if(LIST_NOISE_RE.test(l)||/\t/.test(l))return;
+    cur.lines.push(l);
+  });
+  if(cur)recs.push(cur);
+  return recs.map(r=>{
+    const m=r.date.match(/(20\d{2})\/(\d{1,2})\/(\d{1,2})/);
+    const applied=m?m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'):today();
+    let name='',age='',emp='',job='',jobId='',store='',jobLineIdx=-1;
+    r.lines.forEach((l,i)=>{
+      if(/^\d{1,3}歳/.test(l)){age=l;return;}
+      if(/^(正社員|契約社員|アルバイト|パート|派遣|業務委託)$/.test(l)){emp=l;return;}
+      const jm=l.match(/^\[(\d+)\]\s*(.+)/);
+      if(jm){jobId=jm[1];job=jm[2].trim();jobLineIdx=i;return;}
+      if(jobLineIdx>=0&&i>jobLineIdx&&!store){store=l;return;}
+      if(!name)name=l.replace(/\s*様$/,'');
+    });
+    // 全店共通の屋号は省いて店舗名だけにする
+    store=store.replace(/^それゆけ[!！]?\s*鶏ヤロー[!！]?[\s　]*/,'');
+    const memo=[age,emp,jobId?'求人ID '+jobId:''].filter(Boolean).join('・');
+    return {name,store,job,media:'',applied,memo};
+  }).filter(r=>r.name);
+}
 function parseBulk(){
   const text=$('bulk-in').value;
-  const blocks=text.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean);
   bulkRows=[];const skipped=[];
+  if(LIST_DT_RE.test(text)||text.split('\n').some(l=>LIST_DT_RE.test(l.trim()))){
+    bulkRows=parseListFormat(text);
+    applyBulkMedia();
+    renderBulkPreview(skipped);
+    return;
+  }
+  const blocks=text.split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean);
   const grab=(block,re)=>{const m=block.match(re);return m?m[1].trim().replace(/\s*様$/,''):'';};
   blocks.forEach(b=>{
     // カンマ・タブ区切りの1行(ラベルなし)
@@ -170,10 +208,16 @@ function parseBulk(){
       store:grab(b,/(?:応募店舗|応募先|勤務地|勤務先|店舗)\s*[::]\s*(.+)/),
       job:grab(b,/(?:応募職種|希望職種|職種)\s*[::]\s*(.+)/),
       media:grab(b,/(?:応募媒体|応募経路|媒体|経由)\s*[::]\s*(.+)/),
-      applied:parseDate(grab(b,/(?:応募日時|応募日|受付日|日時)\s*[::]\s*(.+)/))
+      applied:parseDate(grab(b,/(?:応募日時|応募日|受付日|日時)\s*[::]\s*(.+)/)),
+      memo:''
     });
   });
+  applyBulkMedia();
   renderBulkPreview(skipped);
+}
+function applyBulkMedia(){
+  const bm=$('bulk-media').value.trim();
+  if(bm)bulkRows.forEach(r=>{if(!r.media)r.media=bm;});
 }
 function renderBulkPreview(skipped){
   const box=$('bulk-preview');
@@ -181,9 +225,9 @@ function renderBulkPreview(skipped){
     box.innerHTML='<div class="alert" style="margin-top:10px;"><strong>読み取れませんでした。</strong>「氏名:◯◯」のようなラベル付きの行、またはカンマ区切り(名前,店舗,職種,媒体)で貼り付けてください。</div>';
     return;
   }
-  let html='<table style="margin-top:10px;"><thead><tr><th>氏名</th><th>店舗</th><th>職種</th><th>媒体</th><th>応募日</th></tr></thead><tbody>';
+  let html='<table style="margin-top:10px;"><thead><tr><th>氏名</th><th>店舗</th><th>職種</th><th>媒体</th><th>応募日</th><th>メモ</th></tr></thead><tbody>';
   bulkRows.forEach((r,i)=>{
-    html+='<tr>'+['name','store','job','media','applied'].map(f=>'<td><input data-i="'+i+'" data-f="'+f+'" value="'+esc(r[f]).replace(/"/g,'&quot;')+'"></td>').join('')+'</tr>';
+    html+='<tr>'+['name','store','job','media','applied','memo'].map(f=>'<td><input data-i="'+i+'" data-f="'+f+'" value="'+esc(r[f]||'').replace(/"/g,'&quot;')+'"></td>').join('')+'</tr>';
   });
   html+='</tbody></table>';
   if(skipped.length)html+='<div class="alert" style="margin-top:10px;">読み取れなかったブロックが'+skipped.length+'件あります('+esc(skipped.join(' / '))+'…)。上の登録欄から手動で追加してください。</div>';
@@ -194,7 +238,7 @@ function renderBulkPreview(skipped){
 function commitBulk(){
   bulkRows.forEach((r,idx)=>{
     if(!r.name)return;
-    db.applicants.push({id:Date.now()+idx,name:r.name,store:r.store,job:r.job,media:r.media,applied:r.applied||today(),status:'新規応募',updated:today(),interview:'',memo:'',done:''});
+    db.applicants.push({id:Date.now()+idx,name:r.name,store:r.store,job:r.job,media:r.media,applied:r.applied||today(),status:'新規応募',updated:today(),interview:'',memo:r.memo||'',done:''});
   });
   $('bulk-in').value='';$('bulk-preview').innerHTML='';bulkRows=[];
   persist();render();

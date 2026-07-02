@@ -64,6 +64,16 @@
   </table>
   </div>
   <div id="compare" style="margin-top:10px;font-size:13px;"></div>
+  <div class="grid2" style="margin-top:6px;">
+    <div>
+      <label>来月時点の不足見込み人数(例:4〜5人)</label><input type="text" id="m-shortage" onchange="saveExtras()" style="width:100%;">
+      <label>リファラル採用(名)</label><input type="text" id="m-referral" onchange="saveExtras()" style="width:100%;">
+    </div>
+    <div>
+      <label>今月の面接予定者数(名)</label><input type="text" id="m-planned" onchange="saveExtras()" style="width:100%;">
+      <label>うち面接実施済(名)</label><input type="text" id="m-done" onchange="saveExtras()" style="width:100%;">
+    </div>
+  </div>
   <label>掲載判断メモ(この月の判断理由を書き残す → 判断基準が資産になります)</label>
   <textarea id="memo" rows="3" onchange="saveMemo()" placeholder="例:◯◯店はA媒体の単価が高騰しているためB媒体へ切替。◯◯店は充足したため掲載停止。"></textarea>
 </section>
@@ -166,7 +176,23 @@ function renderTable(){
   const t=totals(md.rows);
   $('tfoot').innerHTML='<tr class="total-row"><td colspan="2">合計</td><td class="num">'+fmt(t.shortage)+'</td><td class="num">'+fmt(t.apply)+'</td><td class="num">'+fmt(t.hire)+'</td><td class="num">'+fmt(t.cost)+'</td><td class="num">'+(t.hire>0?fmt(t.cost/t.hire)+'円':'—')+'</td><td></td></tr>';
   $('memo').value=md.memo||'';
+  const ex=md.extras||{};
+  $('m-shortage').value=ex.shortage||'';
+  $('m-referral').value=ex.referral||'';
+  $('m-planned').value=ex.planned||'';
+  $('m-done').value=ex.done||'';
   renderCompare();
+}
+
+function saveExtras(){
+  const k=monthKey();if(!k)return;
+  monthData(k).extras={
+    shortage:$('m-shortage').value.trim(),
+    referral:$('m-referral').value.trim(),
+    planned:$('m-planned').value.trim(),
+    done:$('m-done').value.trim()
+  };
+  persist();
 }
 
 function totals(rows){
@@ -201,27 +227,21 @@ function saveMemo(){const k=monthKey();if(!k)return;monthData(k).memo=$('memo').
 
 function makeReport(){
   const k=monthKey();if(!k){alert('対象月を選択してください');return;}
-  const md=monthData(k),t=totals(md.rows),pk=prevMonthKey(k);
-  const p=db.months[pk]?totals(db.months[pk].rows):null;
-  const cmp=(cur,prev,unit)=>p&&prev?'(前月比 '+(cur-prev>=0?'+':'')+fmt(cur-prev)+unit+')':'';
-  // 媒体別に集約
-  const byMedia={};
-  md.rows.forEach(r=>{
-    const m=r.media||'(媒体未入力)';
-    if(!byMedia[m])byMedia[m]={apply:0,hire:0,cost:0};
-    byMedia[m].apply+=toNum(r.apply);byMedia[m].hire+=toNum(r.hire);byMedia[m].cost+=toNum(r.cost);
-  });
-  let lines='【求人応募状況('+k.replace('-','年')+'月分)】\n■全体\n';
-  lines+='・応募:'+fmt(t.apply)+'件 '+cmp(t.apply,p&&p.apply,'件')+'\n';
-  lines+='・採用:'+fmt(t.hire)+'名 '+cmp(t.hire,p&&p.hire,'名')+'\n';
-  lines+='・掲載費用:'+fmt(t.cost)+'円\n';
-  lines+='・採用単価:'+(t.hire>0?fmt(t.cost/t.hire)+'円':'—')+'\n\n■媒体別\n';
-  Object.keys(byMedia).forEach(m=>{
-    const b=byMedia[m];
-    lines+='・'+m+':応募'+fmt(b.apply)+'件 / 採用'+fmt(b.hire)+'名 / 単価'+(b.hire>0?fmt(b.cost/b.hire)+'円':'—')+'\n';
-  });
-  if(md.memo)lines+='\n■所感・次のアクション\n'+md.memo+'\n';
-  $('report').value=lines;
+  const md=monthData(k),t=totals(md.rows);
+  const m=parseInt(k.split('-')[1],10);
+  const nextM=m===12?1:m+1;
+  const ex=md.extras||{};
+  const medias=[...new Set(md.rows.map(r=>r.media).filter(Boolean))];
+  const costStr=t.cost>=10000?'約'+fmt(t.cost/10000)+'万円':fmt(t.cost)+'円';
+  const cpa=t.hire>0?'約'+fmt(t.cost/t.hire)+'円':'—';
+  let out='お疲れ様です！\nこちら'+m+'月求人状況です！\n\n';
+  out+='■ '+nextM+'月時点の不足見込み人数\n    　・'+(ex.shortage||'◯〜◯人')+'\n';
+  out+='■ '+m+'月採用実績\n    　・求人媒体経由：'+fmt(t.hire)+'名\n    　・リファラル採用：'+(ex.referral||'◯')+'名\n';
+  out+='■ 選考進捗\n    　・'+m+'月面接予定者数：'+(ex.planned||'◯')+'名\n    　（うち面接実施済：'+(ex.done||'◯')+'名）\n';
+  out+='■ 掲載費用\n    　・合計：'+costStr+'／月\n'+(medias.length?'（'+medias.join('・')+'）\n':'');
+  out+='■ 採用単価（求人媒体経由）\n    　・'+cpa+'／名';
+  if(md.memo)out+='\n\n■ 所感・次のアクション\n'+md.memo;
+  $('report').value=out;
 }
 
 function makeProposal(){

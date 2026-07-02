@@ -72,7 +72,7 @@
         <div class="limits-row"><span>料理内容 上限</span><input type="number" id="lim-hp-items" min="0"> 文字</div>
       </div>
     </div>
-    <div class="hint">0または空欄にすると、その欄はチェック対象外(文字数表示のみ)になります。設定は自動保存されます。</div>
+    <div class="hint">確認済みの上限(食べログ:コース名100・説明文300 / ホットペッパー:コース名45・説明文180)は入力済みです。料理内容は1品あたり1000文字のため、欄全体の上限チェックは未設定(文字数表示のみ)にしています。0または空欄にすると、その欄はチェック対象外になります。設定は自動保存されます。</div>
   </details>
 </section>
 
@@ -171,6 +171,8 @@
 
 <script>
 const KEY='course-helper-v1';
+// サイト別仕様メモ.md で確認済みの上限値(変更があれば設定パネルで上書き可能)
+const DEFAULT_LIMITS={'lim-tb-name':100,'lim-tb-desc':300,'lim-hp-name':45,'lim-hp-desc':180};
 const CHECKS=[
   '幹部LINEの原文から 価格・品数・条件 を正しく転記した',
   '食べログに入力した',
@@ -209,6 +211,7 @@ function load(){
   try{data=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
   buildChecklist(data&&data.checks);
   if(data&&data.fields)FIELD_IDS.forEach(id=>{if(data.fields[id]!=null)$(id).value=data.fields[id];});
+  Object.keys(DEFAULT_LIMITS).forEach(id=>{if(!$(id).value)$(id).value=DEFAULT_LIMITS[id];});
   updateCounters();
 }
 

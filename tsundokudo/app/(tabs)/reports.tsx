@@ -1,9 +1,9 @@
 /**
  * レポート一覧（ホーム）
- * - 保存済みメンテナンスレポートを新しい順に表示
+ * - 会社ごとのフォルダ（開閉グループ）にまとめて表示
  * - 「＋新規作成」で入力フォームへ
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -13,14 +13,85 @@ import { useReportStore } from '@/store/reportStore';
 import { calcBilling, yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import { formatWorkDate } from '@/lib/format';
+import type { MaintenanceReport } from '@/types/report';
+
+const NO_COMPANY = '未分類';
+
+function ReportCard({ r }: { r: MaintenanceReport }) {
+  const billing = calcBilling(r);
+  const doneCount = r.checklist.filter((c) => c.checked).length;
+  const allPhotos = [
+    ...r.photos,
+    ...r.checklist.flatMap((c) => c.photos),
+    ...r.pestControl.photos,
+    ...r.diy.flatMap((d) => d.photos),
+    ...r.annualSchedule.photos,
+  ];
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
+      onPress={() => router.push(`/report/${r.id}`)}
+    >
+      <View style={styles.itemTop}>
+        <Text style={styles.itemStore} numberOfLines={1}>
+          {r.storeName || '（店舗未設定）'}
+          {r.company ? <Text style={styles.itemCompany}>　{r.company}</Text> : null}
+        </Text>
+        <Text style={styles.itemDate}>{formatWorkDate(r.workDate) || '日付未設定'}</Text>
+      </View>
+      <View style={styles.itemRow}>
+        <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
+        <Text style={styles.itemMeta}>
+          点検 {doneCount}/{r.checklist.length}
+        </Text>
+        {allPhotos.length > 0 && <Text style={styles.itemMeta}>写真 {allPhotos.length}枚</Text>}
+      </View>
+      {allPhotos.length > 0 && (
+        <View style={styles.thumbStrip}>
+          {allPhotos.slice(0, 4).map((ph) => (
+            <Image key={ph.id} source={{ uri: ph.uri }} style={styles.thumb} contentFit="cover" />
+          ))}
+        </View>
+      )}
+      <View style={styles.itemBottom}>
+        <Text style={styles.itemPlan}>{r.contractPlan || 'プラン未設定'}</Text>
+        <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const reports = useReportStore((s) => s.reports);
-  const sorted = useMemo(
-    () => [...reports].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [reports],
-  );
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // 会社ごとにグループ化（各グループ内は新しい順）
+  const groups = useMemo(() => {
+    const sorted = [...reports].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const map = new Map<string, MaintenanceReport[]>();
+    for (const r of sorted) {
+      const key = r.company || NO_COMPANY;
+      const list = map.get(key);
+      if (list) list.push(r);
+      else map.set(key, [r]);
+    }
+    // 会社名順（未分類は最後）
+    return [...map.entries()].sort(([a], [b]) => {
+      if (a === NO_COMPANY) return 1;
+      if (b === NO_COMPANY) return -1;
+      return a.localeCompare(b, 'ja');
+    });
+  }, [reports]);
+
+  function toggle(company: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(company)) next.delete(company);
+      else next.add(company);
+      return next;
+    });
+  }
 
   return (
     <View style={styles.root}>
@@ -29,61 +100,26 @@ export default function ReportsScreen() {
         <Text style={styles.headerSub}>定期点検・作業記録</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 6 }}
-      >
-        {sorted.length === 0 ? (
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 6 }}>
+        {groups.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>まだレポートがありません</Text>
             <Text style={styles.emptySub}>右下のボタンから作成できます</Text>
           </View>
         ) : (
-          sorted.map((r) => {
-            const billing = calcBilling(r);
-            const doneCount = r.checklist.filter((c) => c.checked).length;
-            const allPhotos = [
-              ...r.photos,
-              ...r.checklist.flatMap((c) => c.photos),
-              ...r.pestControl.photos,
-              ...r.diy.flatMap((d) => d.photos),
-              ...r.annualSchedule.photos,
-            ];
+          groups.map(([company, list]) => {
+            const isOpen = !collapsed.has(company);
             return (
-              <Pressable
-                key={r.id}
-                style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push(`/report/${r.id}`)}
-              >
-                <View style={styles.itemTop}>
-                  <Text style={styles.itemStore} numberOfLines={1}>
-                    {r.storeName || '（店舗未設定）'}
+              <View key={company}>
+                <Pressable style={styles.folder} onPress={() => toggle(company)}>
+                  <Text style={styles.folderCaret}>{isOpen ? '▾' : '▸'}</Text>
+                  <Text style={styles.folderName} numberOfLines={1}>
+                    {company}
                   </Text>
-                  <Text style={styles.itemDate}>{formatWorkDate(r.workDate) || '日付未設定'}</Text>
-                </View>
-                <View style={styles.itemRow}>
-                  <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
-                  <Text style={styles.itemMeta}>点検 {doneCount}/{r.checklist.length}</Text>
-                  {allPhotos.length > 0 && (
-                    <Text style={styles.itemMeta}>写真 {allPhotos.length}枚</Text>
-                  )}
-                </View>
-                {allPhotos.length > 0 && (
-                  <View style={styles.thumbStrip}>
-                    {allPhotos.slice(0, 4).map((ph) => (
-                      <Image
-                        key={ph.id}
-                        source={{ uri: ph.uri }}
-                        style={styles.thumb}
-                        contentFit="cover"
-                      />
-                    ))}
-                  </View>
-                )}
-                <View style={styles.itemBottom}>
-                  <Text style={styles.itemPlan}>{r.contractPlan || 'プラン未設定'}</Text>
-                  <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
-                </View>
-              </Pressable>
+                  <Text style={styles.folderCount}>{list.length}件</Text>
+                </Pressable>
+                {isOpen && list.map((r) => <ReportCard key={r.id} r={r} />)}
+              </View>
             );
           })
         )}
@@ -114,6 +150,22 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', marginTop: 80 },
   emptyText: { fontSize: 16, color: C.textSub, marginTop: 10, fontWeight: '600' },
   emptySub: { fontSize: 13, color: C.textFaint, marginTop: 4 },
+  folder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 2,
+    marginHorizontal: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: C.primaryLight,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BFE6E0',
+  },
+  folderCaret: { fontSize: 14, color: C.primaryDark, width: 20 },
+  folderName: { flex: 1, fontSize: 15, fontWeight: '800', color: C.primaryDark },
+  folderCount: { fontSize: 12, fontWeight: '700', color: C.primaryDark },
   item: {
     backgroundColor: C.card,
     borderRadius: 14,
@@ -125,6 +177,7 @@ const styles = StyleSheet.create({
   },
   itemTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   itemStore: { fontSize: 16, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
+  itemCompany: { fontSize: 12, fontWeight: '600', color: C.textSub },
   itemDate: { fontSize: 13, color: C.primaryDark, fontWeight: '600' },
   itemRow: { flexDirection: 'row', gap: 16, marginTop: 6 },
   itemMeta: { fontSize: 12, color: C.textSub },

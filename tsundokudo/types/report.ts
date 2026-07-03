@@ -101,6 +101,8 @@ export interface MaintenanceReport {
   id: string;
   /** 作業店舗 */
   storeName: string;
+  /** 会社名（例: 株式会社鶏ヤロー）。一覧のフォルダ分けに使用 */
+  company: string;
   /** 作業日（ISO: YYYY-MM-DD） */
   workDate: string;
   /** 契約プラン（例: メンテナンス） */
@@ -154,6 +156,8 @@ export interface AppSettings {
   technicians: string[];
   /** 店舗マスタ */
   stores: string[];
+  /** 会社マスタ */
+  companies: string[];
   /** 電球プライスなどの単価メモ（表示用） */
   priceNotes: { label: string; price: number }[];
 }

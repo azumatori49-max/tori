@@ -4,6 +4,7 @@ import type { MaintenanceReport } from '@/types/report';
 export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
   return {
     ...r,
+    company: r.company ?? '',
     photos: r.photos ?? [],
     checklist: (r.checklist ?? []).map((c) => ({ ...c, photos: c.photos ?? [] })),
     pestControl: {

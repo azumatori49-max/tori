@@ -221,7 +221,7 @@ export function buildReportHtml(report: ReportLike): string {
 
   <div class="head">
     <div class="col-info">
-      <div class="kv"><div class="k">作業店舗</div><div class="v">${esc(report.storeName)}</div></div>
+      <div class="kv"><div class="k">作業店舗</div><div class="v">${esc(report.storeName)}${report.company ? '　' + esc(report.company) : ''}</div></div>
       <div class="kv"><div class="k">契約プラン</div><div class="v orange">${esc(report.contractPlan)}</div></div>
       <div class="kv"><div class="k">施工担当者</div><div class="v">${esc(report.technician)}</div></div>
       <div class="kv"><div class="k">御請求先</div><div class="v">${esc(report.billingTo)}</div></div>

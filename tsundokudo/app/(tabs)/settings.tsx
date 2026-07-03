@@ -96,6 +96,17 @@ export default function SettingsScreen() {
           <Text style={styles.hint}>※ レポート作成時に新しい店舗名を入力すると自動で追加されます</Text>
         </Card>
 
+        <SectionTitle>会社</SectionTitle>
+        <Card>
+          {settings.companies.map((c) => (
+            <View key={c} style={styles.listRow}>
+              <Text style={styles.listDot}>•</Text>
+              <Text style={styles.listText}>{c}</Text>
+            </View>
+          ))}
+          <Text style={styles.hint}>※ レポート作成時に新しい会社名を入力すると自動で追加されます</Text>
+        </Card>
+
         <SectionTitle>単価メモ（電球プライス等）</SectionTitle>
         <Card>
           {settings.priceNotes.map((p) => (

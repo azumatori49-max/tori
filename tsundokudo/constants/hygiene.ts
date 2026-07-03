@@ -78,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultMaintenanceFee: 50000,
   technicians: ['佐藤　真人', '近藤　光蕃'],
   stores: ['まる助東松山駅前店', '池袋店', '歌舞伎町店', '錦糸町店', '秋葉原店'],
+  companies: ['株式会社Belief', '株式会社鶏ヤロー'],
   priceNotes: [
     { label: 'E26', price: 260 },
     { label: 'E17', price: 714 },
@@ -90,6 +91,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export function makeDefaultReport(settings: AppSettings): MaintenanceReportInsert {
   return {
     storeName: '',
+    company: '',
     workDate: '',
     contractPlan: settings.defaultContractPlan,
     technician: settings.technicians[0] ?? '',

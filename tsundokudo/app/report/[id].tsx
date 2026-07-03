@@ -240,6 +240,19 @@ export default function ReportFormScreen() {
                 onChange={(v) => patch({ storeName: v })}
               />
             </Field>
+            <Field label="会社名">
+              <Input
+                value={form.company}
+                onChangeText={(v) => patch({ company: v })}
+                placeholder="例: 株式会社鶏ヤロー"
+              />
+              <View style={{ height: 8 }} />
+              <ChipSelect
+                options={store.settings.companies}
+                value={form.company}
+                onChange={(v) => patch({ company: v })}
+              />
+            </Field>
             <Field label="作業日">
               <DatePicker value={form.workDate} onChange={(v) => patch({ workDate: v })} />
             </Field>

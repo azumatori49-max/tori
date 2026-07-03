@@ -13,14 +13,32 @@ import { useReportStore } from '@/store/reportStore';
 import { calcBilling, yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import { formatWorkDate } from '@/lib/format';
+import { confirmAsync, notify } from '@/lib/dialog';
 import logoAsset from '@/assets/logo.png';
 import type { MaintenanceReport } from '@/types/report';
 
 const NO_COMPANY = '未分類';
 
 function ReportCard({ r }: { r: MaintenanceReport }) {
+  const deleteReport = useReportStore((s) => s.deleteReport);
   const billing = calcBilling(r);
   const doneCount = r.checklist.filter((c) => c.checked).length;
+
+  async function onDelete() {
+    const label = `${r.storeName || '（店舗未設定）'}${
+      formatWorkDate(r.workDate) ? '（' + formatWorkDate(r.workDate) + '）' : ''
+    }`;
+    const ok = await confirmAsync(
+      'レポートを削除',
+      `${label} のレポートを削除します。この操作は取り消せません。`,
+      '削除',
+    );
+    if (!ok) return;
+    const done = await deleteReport(r.id);
+    if (!done) {
+      notify('削除できませんでした', useReportStore.getState().error ?? '');
+    }
+  }
   const allPhotos = [
     ...r.photos,
     ...r.checklist.flatMap((c) => c.photos),
@@ -56,7 +74,18 @@ function ReportCard({ r }: { r: MaintenanceReport }) {
       )}
       <View style={styles.itemBottom}>
         <Text style={styles.itemPlan}>{r.contractPlan || 'プラン未設定'}</Text>
-        <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
+        <View style={styles.itemBottomRight}>
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation?.();
+              void onDelete();
+            }}
+            hitSlop={10}
+          >
+            <Text style={styles.itemDelete}>削除</Text>
+          </Pressable>
+          <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -211,6 +240,8 @@ const styles = StyleSheet.create({
     borderTopColor: C.border,
   },
   itemPlan: { fontSize: 12, color: C.textSub },
+  itemBottomRight: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  itemDelete: { fontSize: 13, fontWeight: '600', color: C.danger },
   itemAmount: { fontSize: 18, fontWeight: '800', color: C.primary },
   fab: {
     position: 'absolute',

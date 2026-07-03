@@ -43,6 +43,8 @@ export default function ReportsScreen() {
             const doneCount = r.checklist.filter((c) => c.checked).length;
             const allPhotos = [
               ...r.photos,
+              ...r.checklist.flatMap((c) => c.photos),
+              ...r.pestControl.photos,
               ...r.diy.flatMap((d) => d.photos),
               ...r.annualSchedule.photos,
             ];

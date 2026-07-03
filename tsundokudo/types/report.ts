@@ -22,9 +22,12 @@ export interface ChecklistItem {
   condition: ConditionLabel | '';
   /** 備考 */
   note: string;
-  /** 次回作業予定日（例: 6/14） */
-  nextDate: string;
+  /** 写真（最大6枚） */
+  photos: ReportPhoto[];
 }
+
+/** 害虫の状況（いるかいないか） */
+export type PestPresence = '多い' | '少ない' | '見ない';
 
 /** 害虫駆除 */
 export interface PestControl {
@@ -34,6 +37,10 @@ export interface PestControl {
   antiDrug: boolean;
   /** 強殺虫剤 */
   strongPesticide: boolean;
+  /** 害虫の状況（多い/少ない/見ない） */
+  presence: PestPresence | '';
+  /** 写真（最大6枚） */
+  photos: ReportPhoto[];
 }
 
 /** トッピング（追加作業）。1レポートにつき複数選択可。 */
@@ -45,7 +52,7 @@ export interface ToppingItem {
   fee: number;
 }
 
-/** プチDIY項目（写真・追加費用付き） */
+/** プチDIY項目（自分で追加する。コメント・金額・写真付き） */
 export interface DiyItem {
   name: string;
   checked: boolean;

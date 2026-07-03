@@ -23,13 +23,10 @@ export default function StoresScreen() {
         .filter((r) => r.storeName === name)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const last = list[0];
-      const nextDate =
-        last?.checklist.find((c) => c.nextDate)?.nextDate ?? '';
       return {
         name,
         count: list.length,
         lastDate: last?.workDate ?? '',
-        nextDate,
       };
     });
   }, [stores, reports]);
@@ -58,14 +55,7 @@ export default function StoresScreen() {
               </Text>
             </View>
             <View style={styles.itemRight}>
-              {row.nextDate ? (
-                <>
-                  <Text style={styles.nextLabel}>次回予定</Text>
-                  <Text style={styles.nextDate}>{formatWorkDate(row.nextDate)}</Text>
-                </>
-              ) : (
-                <Text style={styles.add}>＋作成</Text>
-              )}
+              <Text style={styles.add}>＋作成</Text>
             </View>
           </Pressable>
         ))}
@@ -100,7 +90,5 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 16, fontWeight: '700', color: C.text },
   meta: { fontSize: 12, color: C.textSub, marginTop: 4 },
   itemRight: { alignItems: 'flex-end', minWidth: 64 },
-  nextLabel: { fontSize: 10, color: C.textFaint },
-  nextDate: { fontSize: 16, fontWeight: '800', color: C.warn },
   add: { fontSize: 13, fontWeight: '700', color: C.primary },
 });

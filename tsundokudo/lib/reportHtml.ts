@@ -59,7 +59,6 @@ export function buildReportHtml(report: ReportLike): string {
         <td class="ctr">${cb(c.checked)}</td>
         <td>${esc(c.condition)}</td>
         <td>${esc(c.note)}</td>
-        <td class="ctr">${esc(formatWorkDate(c.nextDate))}</td>
       </tr>`,
     )
     .join('');
@@ -111,11 +110,20 @@ export function buildReportHtml(report: ReportLike): string {
   const headerPhoto =
     report.photos.find((p) => p.category === '店舗外観') ?? report.photos[0];
 
-  // 写真ページ：全セクションの写真を集約
+  // 写真ページ：全セクションの写真を集約（メモ未入力なら項目名をラベルに）
   const allPhotos: ReportPhoto[] = [
     ...report.photos,
-    ...report.diy.flatMap((d) => d.photos),
-    ...report.annualSchedule.photos,
+    ...report.checklist.flatMap((c) =>
+      c.photos.map((p) => ({ ...p, caption: p.caption || c.name })),
+    ),
+    ...report.pestControl.photos.map((p) => ({ ...p, caption: p.caption || '害虫駆除' })),
+    ...report.diy.flatMap((d) =>
+      d.photos.map((p) => ({ ...p, caption: p.caption || d.name || 'プチDIY' })),
+    ),
+    ...report.annualSchedule.photos.map((p) => ({
+      ...p,
+      caption: p.caption || '年間スケジュール',
+    })),
   ];
 
   const annual = report.annualSchedule;
@@ -242,11 +250,10 @@ export function buildReportHtml(report: ReportLike): string {
 
   <table class="grid mt">
     <tr>
-      <th style="width:24%">項目</th>
+      <th style="width:26%">項目</th>
       <th style="width:9%">作業<br/>チェック</th>
-      <th style="width:20%">状況</th>
+      <th style="width:22%">状況</th>
       <th>備考</th>
-      <th style="width:13%">次回作業<br/>予定日</th>
     </tr>
     ${checklistRows}
   </table>
@@ -256,6 +263,7 @@ export function buildReportHtml(report: ReportLike): string {
     <div class="pi">基本駆除 ${cb(pest.basic)}</div>
     <div class="pi">対抗薬剤使用 ${cb(pest.antiDrug)}</div>
     <div class="pi">強殺虫剤 ${cb(pest.strongPesticide)}</div>
+    <div class="pi">害虫の状況：<b>${esc(pest.presence) || '—'}</b></div>
   </div>
 
   <div class="band cream mt">トッピング（追加作業）</div>

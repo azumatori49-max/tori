@@ -44,11 +44,8 @@ export const DEFAULT_TOPPING_NAMES: string[] = [
   'グリスト下流高圧洗浄',
 ];
 
-/** プチDIYの定型項目 */
-export const DEFAULT_DIY_NAMES: string[] = [
-  '冷蔵庫パッキン清掃・点検',
-  '冷蔵庫パネル清掃',
-];
+/** 害虫の状況（いるかいないか）の選択肢 */
+export const PEST_PRESENCE_OPTIONS = ['多い', '少ない', '見ない'] as const;
 
 export function makeDefaultChecklist(): ChecklistItem[] {
   return DEFAULT_CHECKLIST_NAMES.map((name) => ({
@@ -56,7 +53,7 @@ export function makeDefaultChecklist(): ChecklistItem[] {
     checked: false,
     condition: '',
     note: '',
-    nextDate: '',
+    photos: [],
   }));
 }
 
@@ -69,14 +66,9 @@ export function makeDefaultToppings(): ToppingItem[] {
   }));
 }
 
+/** プチDIYは自分で追加する方式のため初期は空 */
 export function makeDefaultDiy(): DiyItem[] {
-  return DEFAULT_DIY_NAMES.map((name) => ({
-    name,
-    checked: false,
-    comment: '',
-    fee: 0,
-    photos: [],
-  }));
+  return [];
 }
 
 /** 初期設定（マスタ）。スプレッドシートの実例を初期値に。 */
@@ -105,7 +97,13 @@ export function makeDefaultReport(settings: AppSettings): MaintenanceReportInser
     maintenanceFee: settings.defaultMaintenanceFee,
     taxRate: 0.1,
     checklist: makeDefaultChecklist(),
-    pestControl: { basic: false, antiDrug: false, strongPesticide: false },
+    pestControl: {
+      basic: false,
+      antiDrug: false,
+      strongPesticide: false,
+      presence: '',
+      photos: [],
+    },
     toppings: makeDefaultToppings(),
     diy: makeDefaultDiy(),
     supplies: [],

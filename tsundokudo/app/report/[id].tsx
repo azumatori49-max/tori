@@ -32,7 +32,11 @@ import {
 } from '@/components/ui';
 import { PhotoSection } from '@/components/report/PhotoSection';
 import { DatePicker } from '@/components/report/DatePicker';
-import { CONDITION_OPTIONS, DEFAULT_TOPPING_NAMES } from '@/constants/hygiene';
+import {
+  CONDITION_OPTIONS,
+  DEFAULT_TOPPING_NAMES,
+  PEST_PRESENCE_OPTIONS,
+} from '@/constants/hygiene';
 import { C, CONDITION_COLOR } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { exportReportPdf } from '@/lib/exportPdf';
@@ -41,6 +45,7 @@ import type {
   ChecklistItem,
   DiyItem,
   MaintenanceReportInsert,
+  PestPresence,
   ReportPhoto,
   SupplyLine,
   ToppingItem,
@@ -116,6 +121,17 @@ export default function ReportFormScreen() {
       ...f,
       diy: f.diy.map((d, i) => (i === idx ? { ...d, ...p } : d)),
     }));
+  }
+
+  function addDiy() {
+    setForm((f) => ({
+      ...f,
+      diy: [...f.diy, { name: '', checked: true, comment: '', fee: 0, photos: [] }],
+    }));
+  }
+
+  function removeDiy(idx: number) {
+    setForm((f) => ({ ...f, diy: f.diy.filter((_, i) => i !== idx) }));
   }
 
   function patchAnnual(p: Partial<AnnualSchedule>) {
@@ -343,11 +359,12 @@ export default function ReportFormScreen() {
                     onChangeText={(v) => patchChecklist(idx, { note: v })}
                     placeholder="備考"
                   />
-                  <View style={{ height: 8 }} />
-                  <Input
-                    value={item.nextDate}
-                    onChangeText={(v) => patchChecklist(idx, { nextDate: v })}
-                    placeholder="次回作業予定日（例: 6/14）"
+                  <Text style={styles.subLabel}>写真（最大6枚）</Text>
+                  <PhotoSection
+                    photos={item.photos}
+                    onChange={(photos: ReportPhoto[]) => patchChecklist(idx, { photos })}
+                    max={6}
+                    defaultCategory="作業後"
                   />
                 </View>
               )}
@@ -391,6 +408,28 @@ export default function ReportFormScreen() {
                 label="強殺虫剤"
               />
             </View>
+            <Text style={styles.subLabel}>害虫の状況（いるかいないか）</Text>
+            <ChipSelect
+              options={[...PEST_PRESENCE_OPTIONS]}
+              value={form.pestControl.presence}
+              onChange={(v) =>
+                patch({
+                  pestControl: {
+                    ...form.pestControl,
+                    presence: v as PestPresence | '',
+                  },
+                })
+              }
+            />
+            <Text style={styles.subLabel}>写真（最大6枚）</Text>
+            <PhotoSection
+              photos={form.pestControl.photos}
+              onChange={(photos: ReportPhoto[]) =>
+                patch({ pestControl: { ...form.pestControl, photos } })
+              }
+              max={6}
+              defaultCategory="その他"
+            />
           </Card>
 
           {/* ── トッピング ── */}
@@ -444,42 +483,54 @@ export default function ReportFormScreen() {
             <Button title="＋ トッピングを追加" variant="ghost" onPress={addTopping} />
           </View>
 
-          {/* ── プチDIY ── */}
+          {/* ── プチDIY（自分で追加） ── */}
           <SectionTitle>プチDIY</SectionTitle>
+          {form.diy.length === 0 && (
+            <Card>
+              <Text style={styles.emptyLine}>下のボタンから作業内容を登録できます</Text>
+            </Card>
+          )}
           {form.diy.map((d, idx) => (
-            <Card key={d.name}>
-              <CheckBox
-                checked={d.checked}
-                onToggle={() => patchDiy(idx, { checked: !d.checked })}
-                label={d.name}
-              />
-              {d.checked && (
-                <View style={styles.checklistBody}>
+            <Card key={`diy-${idx}`}>
+              <View style={styles.rowInline}>
+                <Input
+                  value={d.name}
+                  onChangeText={(v) => patchDiy(idx, { name: v })}
+                  placeholder="作業名（例: 冷蔵庫パッキン清掃）"
+                  style={styles.inlineInput}
+                />
+                <Pressable onPress={() => removeDiy(idx)} hitSlop={8}>
+                  <Text style={styles.removeBtn}>削除</Text>
+                </Pressable>
+              </View>
+              <View style={styles.checklistBody}>
+                <Input
+                  value={d.comment}
+                  onChangeText={(v) => patchDiy(idx, { comment: v })}
+                  placeholder="コメント（例: 交換なし、清掃完了）"
+                  multiline
+                />
+                <View style={{ height: 8 }} />
+                <Field label="金額（税抜・円）">
                   <Input
-                    value={d.comment}
-                    onChangeText={(v) => patchDiy(idx, { comment: v })}
-                    placeholder="コメント（例: 交換なし、清掃完了）"
-                    multiline
+                    value={String(d.fee)}
+                    onChangeText={(v) => patchDiy(idx, { fee: toNum(v) })}
+                    keyboardType="number-pad"
                   />
-                  <View style={{ height: 8 }} />
-                  <Field label="追加費用（税抜・円）">
-                    <Input
-                      value={String(d.fee)}
-                      onChangeText={(v) => patchDiy(idx, { fee: toNum(v) })}
-                      keyboardType="number-pad"
-                    />
-                  </Field>
-                  <Text style={styles.subLabel}>写真（最大6枚）</Text>
-                  <PhotoSection
-                    photos={d.photos}
-                    onChange={(photos: ReportPhoto[]) => patchDiy(idx, { photos })}
-                    max={6}
-                    defaultCategory="作業後"
-                  />
-                </View>
-              )}
+                </Field>
+                <Text style={styles.subLabel}>写真（最大6枚）</Text>
+                <PhotoSection
+                  photos={d.photos}
+                  onChange={(photos: ReportPhoto[]) => patchDiy(idx, { photos })}
+                  max={6}
+                  defaultCategory="作業後"
+                />
+              </View>
             </Card>
           ))}
+          <View style={styles.addInline}>
+            <Button title="＋ プチDIYを追加" variant="ghost" onPress={addDiy} />
+          </View>
 
           {/* ── 年間スケジュール ── */}
           <SectionTitle>年間スケジュール</SectionTitle>

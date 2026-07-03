@@ -13,6 +13,7 @@ import { useReportStore } from '@/store/reportStore';
 import { calcBilling, yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import { formatWorkDate } from '@/lib/format';
+import logoAsset from '@/assets/logo.png';
 import type { MaintenanceReport } from '@/types/report';
 
 const NO_COMPANY = '未分類';
@@ -96,8 +97,15 @@ export default function ReportsScreen() {
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={styles.headerTitle}>WINWIN メンテナンス報告書</Text>
-        <Text style={styles.headerSub}>定期点検・作業記録</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.logoWrap}>
+            <Image source={logoAsset} style={styles.logo} contentFit="contain" />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>らくらく店舗メンテナンス</Text>
+            <Text style={styles.headerSub}>定期点検・作業記録</Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 6 }}>
@@ -145,8 +153,18 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 18,
   },
-  headerTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
-  headerSub: { color: '#D6F2EE', fontSize: 13, marginTop: 2 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: { width: 42, height: 42 },
+  headerTitle: { color: '#FFF', fontSize: 21, fontWeight: '800' },
+  headerSub: { color: '#D8E7FA', fontSize: 13, marginTop: 2 },
   empty: { alignItems: 'center', marginTop: 80 },
   emptyText: { fontSize: 16, color: C.textSub, marginTop: 10, fontWeight: '600' },
   emptySub: { fontSize: 13, color: C.textFaint, marginTop: 4 },
@@ -161,7 +179,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.primaryLight,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#BFE6E0',
+    borderColor: '#C7DCF7',
   },
   folderCaret: { fontSize: 14, color: C.primaryDark, width: 20 },
   folderName: { flex: 1, fontSize: 15, fontWeight: '800', color: C.primaryDark },

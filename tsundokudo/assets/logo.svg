@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ring" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1565D8"/>
+      <stop offset="100%" stop-color="#2E9BF0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 円リング（左下が太いスウッシュ） -->
+  <path fill="url(#ring)" fill-rule="evenodd" d="
+    M512,82 a430,430 0 1,0 0.1,0 Z
+    M538,126 a360,360 0 1,1 -0.1,0 Z"/>
+
+  <!-- 店舗本体 -->
+  <g>
+    <!-- 窓 -->
+    <rect x="392" y="598" width="152" height="142" rx="10" fill="#1565D8"/>
+    <!-- ドア -->
+    <rect x="588" y="598" width="118" height="284" rx="10" fill="#1565D8"/>
+    <circle cx="614" cy="748" r="11" fill="#FFFFFF"/>
+  </g>
+
+  <!-- オーニング（5枚ストライプ＋スカラップ） -->
+  <g>
+    <!-- ストライプ台形 -->
+    <path d="M372,292 L438,292 L412,468 L330,468 Z" fill="#1565D8"/>
+    <path d="M438,292 L504,292 L494,468 L412,468 Z" fill="#F4F9FF"/>
+    <path d="M504,292 L570,292 L576,468 L494,468 Z" fill="#1565D8"/>
+    <path d="M570,292 L636,292 L658,468 L576,468 Z" fill="#F4F9FF"/>
+    <path d="M636,292 L702,292 L740,468 L658,468 Z" fill="#1565D8"/>
+    <!-- スカラップ（半円） -->
+    <path d="M330,468 a41,41 0 0,0 82,0 Z" fill="#1565D8"/>
+    <path d="M412,468 a41,41 0 0,0 82,0 Z" fill="#E7F1FD"/>
+    <path d="M494,468 a41,41 0 0,0 82,0 Z" fill="#1565D8"/>
+    <path d="M576,468 a41,41 0 0,0 82,0 Z" fill="#E7F1FD"/>
+    <path d="M658,468 a41,41 0 0,0 82,0 Z" fill="#1565D8"/>
+  </g>
+
+  <!-- クリップボード（右へ傾け） -->
+  <g transform="rotate(9 835 750)">
+    <rect x="700" y="556" width="272" height="382" rx="24" fill="#FFFFFF" stroke="#1565D8" stroke-width="18"/>
+    <rect x="784" y="524" width="104" height="52" rx="14" fill="#1565D8"/>
+    <circle cx="836" cy="548" r="12" fill="#FFFFFF"/>
+    <!-- チェック行 x3 -->
+    <g stroke="#1565D8" fill="none" stroke-width="11">
+      <rect x="738" y="628" width="46" height="46" rx="8"/>
+      <rect x="738" y="712" width="46" height="46" rx="8"/>
+      <rect x="738" y="796" width="46" height="46" rx="8"/>
+    </g>
+    <g stroke="#1565D8" fill="none" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M747,650 l12,13 l22,-24"/>
+      <path d="M747,734 l12,13 l22,-24"/>
+      <path d="M747,818 l12,13 l22,-24"/>
+    </g>
+    <g fill="#1565D8">
+      <rect x="806" y="642" width="120" height="14" rx="7"/>
+      <rect x="806" y="726" width="120" height="14" rx="7"/>
+      <rect x="806" y="810" width="120" height="14" rx="7"/>
+    </g>
+  </g>
+
+  <!-- レンチ（開口ジョーを左上に、柄を右下に） -->
+  <g transform="translate(950,846) rotate(45)">
+    <path fill="#1565D8" d="M35.6,-50.8 A62,62 0 1,1 -35.6,-50.8 L-14,-16 A21,21 0 0,0 14,-16 Z"/>
+    <rect x="-17" y="30" width="34" height="158" rx="17" fill="#1565D8"/>
+    <circle cx="0" cy="162" r="10" fill="#FFFFFF"/>
+  </g>
+</svg>

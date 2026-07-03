@@ -10,11 +10,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/store/authStore';
 import { Button, Field, Input } from '@/components/ui';
 import { C } from '@/constants/colors';
+import logoAsset from '@/assets/logo.png';
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -37,7 +39,10 @@ export function LoginScreen() {
     >
       <View style={[styles.inner, { paddingTop: insets.top }]}>
         <View style={styles.brand}>
-          <Text style={styles.title}>WINWIN メンテナンス報告書</Text>
+          <View style={styles.logoWrap}>
+            <Image source={logoAsset} style={styles.logo} contentFit="contain" />
+          </View>
+          <Text style={styles.title}>らくらく店舗メンテナンス</Text>
           <Text style={styles.sub}>定期点検・作業記録</Text>
         </View>
 
@@ -88,8 +93,18 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.headerBg },
   inner: { flex: 1, padding: 24, justifyContent: 'center' },
   brand: { alignItems: 'center', marginBottom: 28 },
+  logoWrap: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  logo: { width: 78, height: 78 },
   title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  sub: { color: '#D6F2EE', fontSize: 13, marginTop: 4 },
+  sub: { color: '#D8E7FA', fontSize: 13, marginTop: 4 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
   cardTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 14 },
   error: { color: C.danger, fontSize: 13, marginTop: 2 },
@@ -99,5 +114,5 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: 'center',
   },
-  note: { color: '#D6F2EE', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 18 },
+  note: { color: '#D8E7FA', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 18 },
 });

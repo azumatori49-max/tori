@@ -117,7 +117,7 @@ export default function SettingsScreen() {
           ))}
         </Card>
 
-        <Text style={styles.footer}>WINWIN メンテナンス報告書</Text>
+        <Text style={styles.footer}>らくらく店舗メンテナンス</Text>
       </ScrollView>
     </View>
   );
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 18,
   },
   headerTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
-  headerSub: { color: '#D6F2EE', fontSize: 13, marginTop: 2 },
+  headerSub: { color: '#D8E7FA', fontSize: 13, marginTop: 2 },
   listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
   listDot: { color: C.primary, fontSize: 16, marginRight: 8 },
   listText: { fontSize: 15, color: C.text },

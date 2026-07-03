@@ -7,6 +7,7 @@
  */
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { formatWorkDate } from '@/lib/format';
+import { LOGO_DATA_URI } from '@/lib/logoSvg';
 import type { MaintenanceReport, MaintenanceReportInsert, ReportPhoto } from '@/types/report';
 
 /** HTMLエスケープ（XSS / 体裁崩れ防止） */
@@ -149,9 +150,11 @@ export function buildReportHtml(report: ReportLike): string {
   }
 
   .title {
-    text-align:center; font-size:16px; font-weight:800; padding:6px 0;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    font-size:16px; font-weight:800; padding:5px 0;
     border:1px solid var(--bd); border-bottom:none; background:#fff;
   }
+  .title img { height:34px; width:34px; }
 
   /* ヘッダー（情報 + 請求 + 写真） */
   .head { display:flex; border:1px solid var(--bd); }
@@ -217,7 +220,10 @@ export function buildReportHtml(report: ReportLike): string {
 </style>
 </head>
 <body>
-  <div class="title">WINWIN メンテナンス報告書</div>
+  <div class="title">
+    <img src="${LOGO_DATA_URI}" alt="" />
+    <span>メンテナンス報告書</span>
+  </div>
 
   <div class="head">
     <div class="col-info">
@@ -295,9 +301,9 @@ export function buildReportHtml(report: ReportLike): string {
 </html>`;
 }
 
-/** 共有時のファイル名（例: WINWINメンテナンス報告書_まる助東松山駅前店_5-15） */
+/** 共有時のファイル名（例: メンテナンス報告書_まる助東松山駅前店_5-15） */
 export function reportFileName(report: ReportLike): string {
   const date = formatWorkDate(report.workDate).replace(/\//g, '-');
   const store = report.storeName || '店舗未設定';
-  return `WINWINメンテナンス報告書_${store}${date ? '_' + date : ''}`;
+  return `メンテナンス報告書_${store}${date ? '_' + date : ''}`;
 }

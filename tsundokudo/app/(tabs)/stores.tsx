@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 18,
   },
   headerTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
-  headerSub: { color: '#D6F2EE', fontSize: 13, marginTop: 2 },
+  headerSub: { color: '#D8E7FA', fontSize: 13, marginTop: 2 },
   item: {
     backgroundColor: C.card,
     borderRadius: 14,

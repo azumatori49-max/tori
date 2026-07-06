@@ -1,10 +1,15 @@
-name: Deploy Web (GitHub Pages)
+name: Deploy Web
 
-# 衛生管理レポートアプリ（tsundokudo/）の Web 版を GitHub Pages へ公開する。
-# 公開URL: https://azumatori49-max.github.io/tori/
+# らくらく店舗メンテナンス（tsundokudo/）の Web 版を公開する。
 #
-# 事前準備（リポジトリ設定 → Pages）:
-#   Settings → Pages → Build and deployment → Source: "GitHub Actions"
+# 公開先（両方にデプロイ）:
+#   1. GitHub Pages: https://azumatori49-max.github.io/tori/
+#   2. Cloudflare Pages: https://<project>.pages.dev （Secrets 設定時のみ）
+#
+# Cloudflare Pages を使う場合はリポジトリの Secrets に以下を設定する:
+#   Settings → Secrets and variables → Actions → 「Secrets」タブ
+#   CLOUDFLARE_API_TOKEN  … Cloudflare Pages 編集権限のAPIトークン
+#   CLOUDFLARE_ACCOUNT_ID … CloudflareのアカウントID
 
 on:
   push:
@@ -23,6 +28,10 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  # Cloudflare Pages のプロジェクト名（URLの先頭部分になる）
+  CF_PAGES_PROJECT: rakuraku-maintenance
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,10 +41,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # 注: GitHub Pages の有効化は事前に1回だけ手動設定が必要。
-      #   Settings → Pages → Build and deployment → Source: "GitHub Actions"
-      #   （Actions の標準トークンでは Pages サイトを自動作成できないため）
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -52,11 +57,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Export web build
-        # Supabase を使う場合はリポジトリの Variables に以下を設定する
-        #   Settings → Secrets and variables → Actions → Variables
-        #   EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY
-        # 未設定なら従来どおりローカル保存で動作する
+      # ── 1) GitHub Pages 向け（/tori 配下） ──────────────────
+      - name: Export web build (GitHub Pages)
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
@@ -69,6 +71,28 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: tsundokudo/dist
+
+      # ── 2) Cloudflare Pages 向け（ルート配信。Secrets 設定時のみ） ──
+      - name: Export web build (Cloudflare Pages)
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        env:
+          WEB_BASE_URL: ''
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        # 404.html を置かないことで Cloudflare Pages の SPAフォールバックが有効になる
+        run: |
+          rm -rf dist-cf
+          npx expo export --platform web --clear --output-dir dist-cf
+
+      - name: Deploy to Cloudflare Pages
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # プロジェクトが無ければ作成（既存ならエラーを無視）
+          npx wrangler@4 pages project create "$CF_PAGES_PROJECT" --production-branch=main 2>/dev/null || true
+          npx wrangler@4 pages deploy dist-cf --project-name="$CF_PAGES_PROJECT" --branch=main
 
   deploy:
     needs: build

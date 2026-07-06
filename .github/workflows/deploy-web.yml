@@ -38,6 +38,9 @@ jobs:
     defaults:
       run:
         working-directory: tsundokudo
+    env:
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,7 +77,7 @@ jobs:
 
       # ── 2) Cloudflare Pages 向け（ルート配信。Secrets 設定時のみ） ──
       - name: Export web build (Cloudflare Pages)
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: ${{ env.CF_API_TOKEN != '' }}
         env:
           WEB_BASE_URL: ''
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
@@ -85,10 +88,10 @@ jobs:
           npx expo export --platform web --clear --output-dir dist-cf
 
       - name: Deploy to Cloudflare Pages
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        if: ${{ env.CF_API_TOKEN != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ env.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT_ID }}
         run: |
           # プロジェクトが無ければ作成（既存ならエラーを無視）
           npx wrangler@4 pages project create "$CF_PAGES_PROJECT" --production-branch=main 2>/dev/null || true

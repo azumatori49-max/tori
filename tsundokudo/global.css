@@ -8,3 +8,24 @@
   font-family: 'Noto Sans JP', 'Noto Sans CJK JP', 'Hiragino Kaku Gothic ProN',
     sans-serif !important;
 }
+
+/*
+ * モバイルSafari対策:
+ * アドレスバーの伸縮で 100% の高さが実際の表示領域とズレ、
+ * 下部タブバーが画面外に隠れるのを防ぐ。
+ * dvh（動的ビューポート高さ）対応ブラウザでは常に見えている領域に合わせる。
+ */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+#root {
+  height: 100%;
+}
+@supports (height: 100dvh) {
+  #root {
+    height: 100dvh;
+  }
+}

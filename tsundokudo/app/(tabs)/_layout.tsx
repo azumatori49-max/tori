@@ -1,10 +1,15 @@
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { C } from '@/constants/colors';
 import { useIsViewer } from '@/store/authStore';
 
 export default function TabsLayout() {
   const isViewer = useIsViewer();
+  const insets = useSafeAreaInsets();
+  // iPhoneのホームバー等と重ならないよう、セーフエリア分を高さに含める
+  const bottomPad = Math.max(insets.bottom, 6);
+
   return (
     <Tabs
       screenOptions={{
@@ -13,8 +18,8 @@ export default function TabsLayout() {
           backgroundColor: '#FFFFFF',
           borderTopColor: C.border,
           borderTopWidth: 1,
-          height: 56,
-          paddingBottom: 6,
+          height: 50 + bottomPad,
+          paddingBottom: bottomPad,
           paddingTop: 6,
         },
         tabBarActiveTintColor: C.primary,
@@ -25,7 +30,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="reports" options={{ title: 'レポート' }} />
-      {/* 閲覧専用アカウントには店舗タブ（新規作成導線）を出さない */}
+      {/* 閲覧専用には店舗タブ（新規作成導線）を出さない */}
       <Tabs.Screen name="stores" options={{ title: '店舗', href: isViewer ? null : undefined }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
     </Tabs>

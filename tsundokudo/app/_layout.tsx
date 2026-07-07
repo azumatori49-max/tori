@@ -41,6 +41,7 @@ export default function RootLayout() {
   const authInit = useAuthStore((s) => s.init);
   const authReady = useAuthStore((s) => s.ready);
   const session = useAuthStore((s) => s.session);
+  const guestViewer = useAuthStore((s) => s.guestViewer);
 
   // 起動時
   useEffect(() => {
@@ -52,16 +53,16 @@ export default function RootLayout() {
     }
   }, [authInit, hydrate]);
 
-  // クラウド時: ログイン状態に応じてデータを読み込み／クリア
+  // クラウド時: ログイン／閲覧モードに応じてデータを読み込み／クリア
   useEffect(() => {
     if (!isSupabaseEnabled) return;
-    if (session) {
+    if (session || guestViewer) {
       void hydrate();
     } else {
       // サインアウト時はメモリ上のデータをクリア
       useReportStore.setState({ reports: [], hydrated: false });
     }
-  }, [session, hydrate]);
+  }, [session, guestViewer, hydrate]);
 
   let content: React.ReactNode;
   if (isSupabaseEnabled && !authReady) {
@@ -70,7 +71,7 @@ export default function RootLayout() {
         <ActivityIndicator color="#fff" />
       </View>
     );
-  } else if (isSupabaseEnabled && !session) {
+  } else if (isSupabaseEnabled && !session && !guestViewer) {
     content = <LoginScreen />;
   } else {
     content = <MainStack />;

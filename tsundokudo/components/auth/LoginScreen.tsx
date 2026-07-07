@@ -1,8 +1,8 @@
 /**
  * ログイン画面（クラウド有効時、未ログインなら表示）
  *
- * - 担当者: メールアドレス＋パスワード
- * - 閲覧（店長）: 閲覧コード（合言葉）のみ。メールアドレス不要
+ * - 担当者: メールアドレス＋パスワードでログイン（編集可）
+ * - 店長: 下部の「閲覧用で開く」からログイン不要で閲覧のみ
  */
 import { useState } from 'react';
 import {
@@ -22,34 +22,19 @@ import { Button, Field, Input } from '@/components/ui';
 import { C } from '@/constants/colors';
 import logoAsset from '@/assets/logo.png';
 
-type Mode = 'staff' | 'viewer';
-
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const signIn = useAuthStore((s) => s.signIn);
-  const signInWithCode = useAuthStore((s) => s.signInWithCode);
+  const enterGuestViewer = useAuthStore((s) => s.enterGuestViewer);
   const loading = useAuthStore((s) => s.loading);
   const error = useAuthStore((s) => s.error);
-  const clearError = useAuthStore((s) => s.clearError);
 
-  const [mode, setMode] = useState<Mode>('staff');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
-
-  function switchMode(m: Mode) {
-    setMode(m);
-    clearError();
-  }
 
   async function onSubmit() {
-    if (mode === 'staff') {
-      if (!email.trim() || !password) return;
-      await signIn(email, password);
-    } else {
-      if (!code.trim()) return;
-      await signInWithCode(code);
-    }
+    if (!email.trim() || !password) return;
+    await signIn(email, password);
   }
 
   return (
@@ -67,65 +52,27 @@ export function LoginScreen() {
         </View>
 
         <View style={styles.card}>
-          {/* モード切替 */}
-          <View style={styles.tabs}>
-            <Pressable
-              style={[styles.tab, mode === 'staff' && styles.tabActive]}
-              onPress={() => switchMode('staff')}
-            >
-              <Text style={[styles.tabText, mode === 'staff' && styles.tabTextActive]}>
-                担当者
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.tab, mode === 'viewer' && styles.tabActive]}
-              onPress={() => switchMode('viewer')}
-            >
-              <Text style={[styles.tabText, mode === 'viewer' && styles.tabTextActive]}>
-                閲覧（店長）
-              </Text>
-            </Pressable>
-          </View>
-
-          {mode === 'staff' ? (
-            <>
-              <Field label="メールアドレス">
-                <Input
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="example@example.com"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                />
-              </Field>
-              <Field label="パスワード">
-                <Input
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="パスワード"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoComplete="password"
-                />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="閲覧コード">
-                <Input
-                  value={code}
-                  onChangeText={setCode}
-                  placeholder="閲覧コードを入力"
-                  autoCapitalize="none"
-                />
-              </Field>
-              <Text style={styles.viewerNote}>
-                閲覧コードは施工担当者から共有されます。{'\n'}
-                レポートの閲覧・PDF出力のみ可能です。
-              </Text>
-            </>
-          )}
+          <Text style={styles.cardTitle}>ログイン</Text>
+          <Field label="メールアドレス">
+            <Input
+              value={email}
+              onChangeText={setEmail}
+              placeholder="example@example.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+          </Field>
+          <Field label="パスワード">
+            <Input
+              value={password}
+              onChangeText={setPassword}
+              placeholder="パスワード"
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+            />
+          </Field>
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -135,17 +82,24 @@ export function LoginScreen() {
               <ActivityIndicator color="#fff" />
             </View>
           ) : (
-            <Button
-              title={mode === 'staff' ? 'ログイン' : '閲覧をはじめる'}
-              onPress={() => void onSubmit()}
-            />
+            <Button title="ログイン" onPress={() => void onSubmit()} />
           )}
+
+          {/* ── 閲覧用（ログイン不要） ── */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>閲覧の方</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <Pressable style={styles.viewerBtn} onPress={enterGuestViewer}>
+            <Text style={styles.viewerBtnText}>閲覧用で開く（ログイン不要）</Text>
+          </Pressable>
+          <Text style={styles.viewerNote}>レポートの閲覧・PDF出力のみ可能です</Text>
         </View>
 
         <Text style={styles.note}>
-          {mode === 'staff'
-            ? 'アカウントは管理者が発行します。\nログインできない場合は管理者へお問い合わせください。'
-            : '閲覧コードが分からない場合は施工担当者へお問い合わせください。'}
+          担当者アカウントは管理者が発行します。{'\n'}
+          ログインできない場合は管理者へお問い合わせください。
         </Text>
       </View>
     </KeyboardAvoidingView>
@@ -169,23 +123,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 22, fontWeight: '800' },
   sub: { color: '#D8E7FA', fontSize: 13, marginTop: 4 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: '#EEF2F7',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 9,
-    alignItems: 'center',
-  },
-  tabActive: { backgroundColor: '#FFFFFF' },
-  tabText: { fontSize: 14, fontWeight: '600', color: C.textSub },
-  tabTextActive: { color: C.primaryDark, fontWeight: '800' },
-  viewerNote: { fontSize: 12, color: C.textSub, lineHeight: 18, marginBottom: 4 },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 14 },
   error: { color: C.danger, fontSize: 13, marginTop: 2 },
   loadingBtn: {
     backgroundColor: C.primary,
@@ -193,5 +131,18 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: 'center',
   },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: C.border },
+  dividerText: { fontSize: 12, color: C.textFaint },
+  viewerBtn: {
+    borderWidth: 1.5,
+    borderColor: C.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: C.primaryLight,
+  },
+  viewerBtnText: { color: C.primaryDark, fontSize: 15, fontWeight: '700' },
+  viewerNote: { fontSize: 11, color: C.textFaint, textAlign: 'center', marginTop: 8 },
   note: { color: '#D8E7FA', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 18 },
 });

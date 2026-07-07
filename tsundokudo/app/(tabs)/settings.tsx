@@ -24,7 +24,9 @@ export default function SettingsScreen() {
   const isViewer = useIsViewer();
 
   async function onSignOut() {
-    const ok = await confirmAsync('ログアウト', 'ログアウトしますか？', 'ログアウト');
+    const ok = isViewer
+      ? await confirmAsync('閲覧を終了', 'ログイン画面に戻りますか？', '戻る')
+      : await confirmAsync('ログアウト', 'ログアウトしますか？', 'ログアウト');
     if (ok) await signOut();
   }
 
@@ -41,18 +43,22 @@ export default function SettingsScreen() {
             <SectionTitle>アカウント</SectionTitle>
             <Card>
               <Text style={styles.accountLabel}>
-                ログイン中{isViewer ? '（閲覧専用）' : ''}
+                {isViewer ? '閲覧モード' : 'ログイン中'}
               </Text>
               <Text style={styles.accountEmail}>
-                {isViewer ? '閲覧コードを利用中' : (session?.user.email ?? '—')}
+                {isViewer ? '閲覧専用（ログインなし）' : (session?.user.email ?? '—')}
               </Text>
               <Text style={styles.accountNote}>
                 {isViewer
-                  ? 'このアカウントはレポートの閲覧のみ可能です。'
+                  ? 'レポートの閲覧・PDF出力のみ可能です。'
                   : 'データは全員で共有されます（クラウド保存）。'}
               </Text>
               <View style={{ height: 12 }} />
-              <Button title="ログアウト" variant="ghost" onPress={() => void onSignOut()} />
+              <Button
+                title={isViewer ? 'ログイン画面へ戻る' : 'ログアウト'}
+                variant="ghost"
+                onPress={() => void onSignOut()}
+              />
             </Card>
           </>
         )}

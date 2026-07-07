@@ -15,10 +15,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
+import { useIsViewer } from '@/store/authStore';
 import { confirmAsync, notify } from '@/lib/dialog';
 import {
   Button,
@@ -66,6 +67,7 @@ export default function ReportFormScreen() {
   const params = useLocalSearchParams<{ id: string; store?: string }>();
   const id = params.id;
   const isNew = id === 'new';
+  const isViewer = useIsViewer();
 
   const store = useReportStore();
   const existing = isNew ? undefined : store.getReport(id);
@@ -86,6 +88,11 @@ export default function ReportFormScreen() {
   });
 
   const billing = useMemo(() => calcBilling(form), [form]);
+
+  // 閲覧専用アカウントは編集画面に入れない（閲覧画面へ振り替え）
+  if (isViewer) {
+    return <Redirect href={isNew ? '/reports' : `/report/view/${id}`} />;
+  }
 
   function patch(p: Partial<MaintenanceReportInsert>) {
     setForm((f) => ({ ...f, ...p }));

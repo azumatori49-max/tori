@@ -8,7 +8,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, useIsViewer } from '@/store/authStore';
 import { isSupabaseEnabled } from '@/lib/supabase';
 import { confirmAsync } from '@/lib/dialog';
 import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
@@ -21,6 +21,7 @@ export default function SettingsScreen() {
   const updateSettings = useReportStore((s) => s.updateSettings);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
+  const isViewer = useIsViewer();
 
   async function onSignOut() {
     const ok = await confirmAsync('ログアウト', 'ログアウトしますか？', 'ログアウト');
@@ -39,16 +40,26 @@ export default function SettingsScreen() {
           <>
             <SectionTitle>アカウント</SectionTitle>
             <Card>
-              <Text style={styles.accountLabel}>ログイン中</Text>
+              <Text style={styles.accountLabel}>
+                ログイン中{isViewer ? '（閲覧専用）' : ''}
+              </Text>
               <Text style={styles.accountEmail}>{session?.user.email ?? '—'}</Text>
-              <Text style={styles.accountNote}>データは全員で共有されます（クラウド保存）。</Text>
+              <Text style={styles.accountNote}>
+                {isViewer
+                  ? 'このアカウントはレポートの閲覧のみ可能です。'
+                  : 'データは全員で共有されます（クラウド保存）。'}
+              </Text>
               <View style={{ height: 12 }} />
               <Button title="ログアウト" variant="ghost" onPress={() => void onSignOut()} />
             </Card>
           </>
         )}
 
-        <SectionTitle>既定値</SectionTitle>
+        {isViewer ? (
+          <Text style={styles.footer}>らくらく店舗メンテナンス</Text>
+        ) : (
+          <>
+            <SectionTitle>既定値</SectionTitle>
         <Card>
           <Field label="御請求先">
             <Input
@@ -107,17 +118,19 @@ export default function SettingsScreen() {
           <Text style={styles.hint}>※ レポート作成時に新しい会社名を入力すると自動で追加されます</Text>
         </Card>
 
-        <SectionTitle>単価メモ（電球プライス等）</SectionTitle>
-        <Card>
-          {settings.priceNotes.map((p) => (
-            <View key={p.label} style={styles.priceRow}>
-              <Text style={styles.priceLabel}>{p.label}</Text>
-              <Text style={styles.priceVal}>¥{yen(p.price)}</Text>
-            </View>
-          ))}
-        </Card>
+            <SectionTitle>単価メモ（電球プライス等）</SectionTitle>
+            <Card>
+              {settings.priceNotes.map((p) => (
+                <View key={p.label} style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>{p.label}</Text>
+                  <Text style={styles.priceVal}>¥{yen(p.price)}</Text>
+                </View>
+              ))}
+            </Card>
 
-        <Text style={styles.footer}>らくらく店舗メンテナンス</Text>
+            <Text style={styles.footer}>らくらく店舗メンテナンス</Text>
+          </>
+        )}
       </ScrollView>
     </View>
   );

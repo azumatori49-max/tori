@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
+import { useIsViewer } from '@/store/authStore';
 import { calcBilling, yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import { formatWorkDate } from '@/lib/format';
@@ -19,7 +20,7 @@ import type { MaintenanceReport } from '@/types/report';
 
 const NO_COMPANY = '未分類';
 
-function ReportCard({ r }: { r: MaintenanceReport }) {
+function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }) {
   const deleteReport = useReportStore((s) => s.deleteReport);
   const billing = calcBilling(r);
   const doneCount = r.checklist.filter((c) => c.checked).length;
@@ -49,7 +50,7 @@ function ReportCard({ r }: { r: MaintenanceReport }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.item, pressed && { opacity: 0.7 }]}
-      onPress={() => router.push(`/report/${r.id}`)}
+      onPress={() => router.push(readOnly ? `/report/view/${r.id}` : `/report/${r.id}`)}
     >
       <View style={styles.itemTop}>
         <Text style={styles.itemStore} numberOfLines={1}>
@@ -75,15 +76,17 @@ function ReportCard({ r }: { r: MaintenanceReport }) {
       <View style={styles.itemBottom}>
         <Text style={styles.itemPlan}>{r.contractPlan || 'プラン未設定'}</Text>
         <View style={styles.itemBottomRight}>
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              void onDelete();
-            }}
-            hitSlop={10}
-          >
-            <Text style={styles.itemDelete}>削除</Text>
-          </Pressable>
+          {!readOnly && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                void onDelete();
+              }}
+              hitSlop={10}
+            >
+              <Text style={styles.itemDelete}>削除</Text>
+            </Pressable>
+          )}
           <Text style={styles.itemAmount}>¥{yen(billing.taxIncluded)}</Text>
         </View>
       </View>
@@ -94,6 +97,7 @@ function ReportCard({ r }: { r: MaintenanceReport }) {
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const reports = useReportStore((s) => s.reports);
+  const isViewer = useIsViewer();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // 会社ごとにグループ化（各グループ内は新しい順）
@@ -155,20 +159,22 @@ export default function ReportsScreen() {
                   </Text>
                   <Text style={styles.folderCount}>{list.length}件</Text>
                 </Pressable>
-                {isOpen && list.map((r) => <ReportCard key={r.id} r={r} />)}
+                {isOpen && list.map((r) => <ReportCard key={r.id} r={r} readOnly={isViewer} />)}
               </View>
             );
           })
         )}
       </ScrollView>
 
-      <Pressable
-        style={[styles.fab, { bottom: insets.bottom + 20 }]}
-        onPress={() => router.push('/report/new')}
-      >
-        <Text style={styles.fabPlus}>＋</Text>
-        <Text style={styles.fabText}>新規作成</Text>
-      </Pressable>
+      {!isViewer && (
+        <Pressable
+          style={[styles.fab, { bottom: insets.bottom + 20 }]}
+          onPress={() => router.push('/report/new')}
+        >
+          <Text style={styles.fabPlus}>＋</Text>
+          <Text style={styles.fabText}>新規作成</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

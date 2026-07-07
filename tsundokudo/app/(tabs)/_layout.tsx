@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
 
 import { C } from '@/constants/colors';
+import { useIsViewer } from '@/store/authStore';
 
 export default function TabsLayout() {
+  const isViewer = useIsViewer();
   return (
     <Tabs
       screenOptions={{
@@ -23,7 +25,8 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="reports" options={{ title: 'レポート' }} />
-      <Tabs.Screen name="stores" options={{ title: '店舗' }} />
+      {/* 閲覧専用アカウントには店舗タブ（新規作成導線）を出さない */}
+      <Tabs.Screen name="stores" options={{ title: '店舗', href: isViewer ? null : undefined }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
     </Tabs>
   );

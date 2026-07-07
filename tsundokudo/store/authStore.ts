@@ -19,6 +19,17 @@ interface AuthState {
   clearError: () => void;
 }
 
+/** 閲覧専用（店長）アカウントか。app_metadata.role === 'viewer' で判定 */
+export function sessionIsViewer(session: Session | null): boolean {
+  const meta = session?.user.app_metadata as Record<string, unknown> | undefined;
+  return meta?.role === 'viewer';
+}
+
+/** 現在のログインが閲覧専用かを返すフック */
+export function useIsViewer(): boolean {
+  return useAuthStore((s) => sessionIsViewer(s.session));
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   ready: false,

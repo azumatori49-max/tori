@@ -39,8 +39,9 @@ jobs:
       run:
         working-directory: tsundokudo
     env:
-      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Secrets を優先し、無ければ Variables から読む（どちらに登録してもOK）
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

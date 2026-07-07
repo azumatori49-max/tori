@@ -24,15 +24,25 @@ create policy "reports_delete" on public.reports
   for delete to authenticated
   using (coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') <> 'viewer');
 
--- ── ロール付与（店長アカウントを閲覧専用にする） ──────────────
--- メールアドレスを店長のものに書き換えて実行:
+-- ── 閲覧コードの仕組み ─────────────────────────────────────────
+-- 店長はメールアドレス不要。アプリの「閲覧（店長）」タブで
+-- 閲覧コード（合言葉）を入力すると、内部的に下記の共通アカウントで
+-- ログインする（store/authStore.ts の VIEWER_LOGIN_EMAIL と一致させること）。
+--
+-- 手順:
+--   1. Authentication → Add user で
+--        Email:    tencho-viewer@example.com
+--        Password: （閲覧コードにしたい文字列。6文字以上）
+--      を作成し「Auto Confirm User」にチェック
+--   2. 下記を実行して閲覧専用ロールを付与:
 --
 -- update auth.users
 --   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
 --     || '{"role":"viewer"}'::jsonb
---   where email = 'tencho@example.com';
+--   where email = 'tencho-viewer@example.com';
 --
+-- 閲覧コードの変更: Authentication → 該当ユーザー → Reset password
 -- ── ロール解除（フル編集に戻す） ──────────────────────────────
 -- update auth.users
 --   set raw_app_meta_data = raw_app_meta_data - 'role'
---   where email = 'tencho@example.com';
+--   where email = 'tencho-viewer@example.com';

@@ -43,7 +43,9 @@ export default function SettingsScreen() {
               <Text style={styles.accountLabel}>
                 ログイン中{isViewer ? '（閲覧専用）' : ''}
               </Text>
-              <Text style={styles.accountEmail}>{session?.user.email ?? '—'}</Text>
+              <Text style={styles.accountEmail}>
+                {isViewer ? '閲覧コードを利用中' : (session?.user.email ?? '—')}
+              </Text>
               <Text style={styles.accountNote}>
                 {isViewer
                   ? 'このアカウントはレポートの閲覧のみ可能です。'

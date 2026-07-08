@@ -45,6 +45,13 @@ function toOrgInfo(row: OrgRow): OrgInfo {
   };
 }
 
+/** このアプリの公開URL（GitHub Pages はサブパス /tori 付き） */
+function appOrigin(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const sub = window.location.hostname.endsWith('github.io') ? '/tori' : '';
+  return window.location.origin + sub;
+}
+
 interface RpcResult<T> {
   data: T | T[] | null;
   error: { message: string } | null;
@@ -160,6 +167,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      // 確認メールのリンクからこのアプリのURLへ戻す（localhostへ飛ぶのを防ぐ）
+      options: { emailRedirectTo: appOrigin() },
     });
     if (error) {
       set({

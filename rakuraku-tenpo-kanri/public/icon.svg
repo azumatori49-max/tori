@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="lg-ring" x1="10" y1="20" x2="110" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d65d8"/>
+    </linearGradient>
+    <linearGradient id="lg-store" x1="30" y1="30" x2="90" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f8af0"/>
+      <stop offset="1" stop-color="#1d65d8"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" fill="#ffffff"/>
+  <path d="M60 6a54 54 0 1 0 42.5 87.3l-7.6-6A44.4 44.4 0 1 1 60 15.6Z" fill="url(#lg-ring)"/>
+  <path d="M36 38h48l8 16H28Z" fill="url(#lg-store)"/>
+  <path d="M28 54h13a6.5 6.5 0 0 1-13 0Zm16 0h13a6.5 6.5 0 0 1-13 0Zm16 0h13a6.5 6.5 0 0 1-13 0Zm16 0h13a6.5 6.5 0 0 1-13 0Z" fill="url(#lg-store)"/>
+  <rect x="38" y="66" width="16" height="14" rx="1.5" fill="url(#lg-store)"/>
+  <path d="M60 66h14v26H60Z" fill="url(#lg-store)"/>
+  <circle cx="63.5" cy="79" r="1.6" fill="#fff"/>
+  <g transform="rotate(12 91 82)">
+    <rect x="79" y="58" width="24" height="46" rx="6" fill="#fff" stroke="url(#lg-ring)" stroke-width="4"/>
+    <circle cx="91" cy="79" r="9" fill="#1d65d8"/>
+    <path d="M86.5 79l3.2 3.2 5.8-6" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="87" y="62" width="8" height="1.8" rx="0.9" fill="#1d65d8"/>
+  </g>
+</svg>

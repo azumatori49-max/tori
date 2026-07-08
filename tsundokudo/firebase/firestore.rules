@@ -1,0 +1,110 @@
+rules_version = '2';
+
+// らくらく店舗メンテナンス — Firestore セキュリティルール
+//
+// マルチテナント分離:
+//   - レポートは orgs/{orgId}/reports 配下。読み書きはその組織のメンバーのみ
+//   - 閲覧リンク: 匿名ログイン + viewerSessions の「入場券」で読み取りのみ許可
+//   - 招待コード / 閲覧トークンは「値を知っている人」だけが逆引きできる
+//     （一覧取得 list は誰にも許可しない）
+
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // ── 所属判定 ─────────────────────────────
+    function userPath() {
+      return /databases/$(db)/documents/users/$(request.auth.uid);
+    }
+    function isMember(orgId) {
+      return signedIn()
+        && exists(userPath())
+        && get(userPath()).data.orgId == orgId;
+    }
+    function isAdmin(orgId) {
+      return isMember(orgId) && get(userPath()).data.role == 'admin';
+    }
+
+    // ── 閲覧リンク判定（匿名ユーザーの入場券） ──
+    function sessionPath() {
+      return /databases/$(db)/documents/viewerSessions/$(request.auth.uid);
+    }
+    function isViewer(orgId) {
+      return signedIn()
+        && exists(sessionPath())
+        && get(sessionPath()).data.orgId == orgId
+        // トークンが再発行されていたら入場券も無効になる
+        && exists(/databases/$(db)/documents/viewerLinks/$(get(sessionPath()).data.token));
+    }
+
+    // ── ユーザー（所属情報） ─────────────────
+    match /users/{uid} {
+      allow get: if request.auth.uid == uid;
+      // 作成は「組織の新規作成（同一バッチでorgsを作る）」または
+      // 「正しい招待コードでの参加」のみ
+      allow create: if request.auth.uid == uid && (
+        (
+          request.resource.data.role == 'admin'
+          && getAfter(/databases/$(db)/documents/orgs/$(request.resource.data.orgId)).data.createdBy == uid
+        ) || (
+          request.resource.data.role == 'member'
+          && exists(/databases/$(db)/documents/inviteCodes/$(request.resource.data.inviteCode))
+          && get(/databases/$(db)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.orgId
+             == request.resource.data.orgId
+        )
+      );
+    }
+
+    // ── 組織 ─────────────────────────────────
+    match /orgs/{orgId} {
+      allow get: if isMember(orgId);
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+      // 更新はコード再発行のみ（admin限定）
+      allow update: if isAdmin(orgId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['inviteCode', 'viewerToken']);
+
+      // ── レポート ────────────────────────────
+      match /reports/{reportId} {
+        allow read: if isMember(orgId) || isViewer(orgId);
+        allow create, update, delete: if isMember(orgId);
+      }
+    }
+
+    // ── 招待コードの逆引き（コードを知っている人のみ get 可） ──
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn() && (
+        isAdmin(request.resource.data.orgId)
+        || getAfter(/databases/$(db)/documents/orgs/$(request.resource.data.orgId)).data.createdBy
+           == request.auth.uid
+      );
+      allow delete: if isAdmin(resource.data.orgId);
+    }
+
+    // ── 閲覧トークンの逆引き（トークンを知っている人のみ get 可・未ログインも可） ──
+    match /viewerLinks/{token} {
+      allow get: if true;
+      allow create: if signedIn() && (
+        isAdmin(request.resource.data.orgId)
+        || getAfter(/databases/$(db)/documents/orgs/$(request.resource.data.orgId)).data.createdBy
+           == request.auth.uid
+      );
+      allow delete: if isAdmin(resource.data.orgId);
+    }
+
+    // ── 閲覧の入場券（正しいトークンを知っていれば自分の分だけ作れる） ──
+    match /viewerSessions/{uid} {
+      allow get: if request.auth.uid == uid;
+      allow create, update: if request.auth.uid == uid
+        && exists(/databases/$(db)/documents/viewerLinks/$(request.resource.data.token))
+        && get(/databases/$(db)/documents/viewerLinks/$(request.resource.data.token)).data.orgId
+           == request.resource.data.orgId;
+      allow delete: if request.auth.uid == uid;
+    }
+  }
+}

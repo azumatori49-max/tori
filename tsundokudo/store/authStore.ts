@@ -1,15 +1,39 @@
 /**
- * 認証・組織ストア（Supabase）。クラウド有効時のみ使用。
+ * 認証・組織ストア（Firebase / Google Cloud）。クラウド有効時のみ使用。
  *
  * マルチテナント:
  *   - ログインユーザーは「組織（会社）」に所属し、データは組織ごとに分離される
  *   - 新規登録後は「組織を作成」or「招待コードで参加」
- *   - 閲覧は組織ごとの閲覧用リンク（トークン）から。ログイン不要・読み取りのみ
+ *   - 閲覧は組織ごとの閲覧用リンク（トークン）から。
+ *     匿名認証＋viewerSessions で読み取りのみ許可される
+ *
+ * Firestore 構成:
+ *   users/{uid}            … { orgId, role, inviteCode?, createdAt }
+ *   orgs/{orgId}           … { name, inviteCode, viewerToken, createdBy, createdAt }
+ *   inviteCodes/{code}     … { orgId }（招待コード→組織の逆引き）
+ *   viewerLinks/{token}    … { orgId, orgName }（閲覧トークン→組織の逆引き）
+ *   viewerSessions/{uid}   … { orgId, token, createdAt }（匿名閲覧者の入場券）
  */
 import { create } from 'zustand';
-import type { Session } from '@supabase/supabase-js';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signOut as fbSignOut,
+  type User,
+} from 'firebase/auth';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
-import { supabase } from '@/lib/supabase';
+import { fbAuth, fbDb } from '@/lib/firebase';
 import { persist } from '@/lib/persist';
 
 const GUEST_ORG_KEY = 'auth:guestOrg';
@@ -25,49 +49,19 @@ export interface OrgInfo {
 interface GuestOrg {
   token: string;
   name: string;
+  orgId: string;
 }
 
-interface OrgRow {
-  id: string;
-  name: string;
-  role: string;
-  invite_code: string;
-  viewer_token: string;
-}
-
-function toOrgInfo(row: OrgRow): OrgInfo {
-  return {
-    id: row.id,
-    name: row.name,
-    role: row.role === 'admin' ? 'admin' : 'member',
-    inviteCode: row.invite_code,
-    viewerToken: row.viewer_token,
-  };
-}
-
-/** このアプリの公開URL（GitHub Pages はサブパス /tori 付き） */
-function appOrigin(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const sub = window.location.hostname.endsWith('github.io') ? '/tori' : '';
-  return window.location.origin + sub;
-}
-
-interface RpcResult<T> {
-  data: T | T[] | null;
-  error: { message: string } | null;
-}
-
-/** RPC を呼び、先頭行を返す（supabase-js の rpc は単一行/配列どちらもあり得る） */
-async function rpcRow<T>(fn: string, args?: Record<string, unknown>): Promise<T | null> {
-  if (!supabase) return null;
-  const res = (await supabase.rpc(fn, args)) as RpcResult<T>;
-  if (res.error) return null;
-  const row = Array.isArray(res.data) ? res.data[0] : res.data;
-  return row ?? null;
+/** ランダムな16進文字列（bytes×2文字） */
+function randomHex(bytes: number): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 interface AuthState {
-  session: Session | null;
+  /** ログイン中のユーザー（匿名閲覧者は含まない） */
+  user: User | null;
   /** 所属組織（未所属なら null） */
   org: OrgInfo | null;
   /** 所属確認が完了したか（ログイン後） */
@@ -81,8 +75,7 @@ interface AuthState {
 
   init: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<boolean>;
-  /** 新規登録。'ok'=即ログイン / 'confirm'=確認メール送信 / 'error' */
-  signUp: (email: string, password: string) => Promise<'ok' | 'confirm' | 'error'>;
+  signUp: (email: string, password: string) => Promise<boolean>;
   /** 組織を新規作成（作成者はadmin） */
   createOrg: (name: string) => Promise<boolean>;
   /** 招待コードで組織に参加 */
@@ -100,8 +93,11 @@ export function useIsViewer(): boolean {
   return useAuthStore((s) => s.guestOrg != null);
 }
 
+/** enterGuestByToken 実行中フラグ（匿名ログイン直後の誤サインアウト防止） */
+let guestEntryInProgress = false;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  session: null,
+  user: null,
   org: null,
   orgChecked: false,
   guestOrg: null,
@@ -110,144 +106,248 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
 
   init: async () => {
-    if (!supabase) {
+    if (!fbAuth) {
       set({ ready: true, orgChecked: true });
       return;
     }
-    const [{ data }, guestRaw] = await Promise.all([
-      supabase.auth.getSession(),
-      persist.getItem(GUEST_ORG_KEY),
-    ]);
-    let guestOrg: GuestOrg | null = null;
-    if (!data.session && guestRaw) {
+    const guestRaw = await persist.getItem(GUEST_ORG_KEY);
+    let storedGuest: GuestOrg | null = null;
+    if (guestRaw) {
       try {
-        guestOrg = JSON.parse(guestRaw) as GuestOrg;
+        storedGuest = JSON.parse(guestRaw) as GuestOrg;
       } catch {
-        guestOrg = null;
+        storedGuest = null;
       }
     }
-    set({ session: data.session, guestOrg });
-    if (data.session) {
-      await loadOrg(set);
-    } else {
-      set({ orgChecked: true });
-    }
-    set({ ready: true });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ session });
-      if (session) {
-        set({ guestOrg: null, orgChecked: false });
+    onAuthStateChanged(fbAuth, (user) => {
+      if (user && !user.isAnonymous) {
+        // 通常ログイン
+        set({ user, guestOrg: null, orgChecked: false });
         void persist.removeItem(GUEST_ORG_KEY);
-        void loadOrg(set);
+        void loadOrg(set, user.uid);
+      } else if (user && user.isAnonymous) {
+        // 匿名（閲覧リンク）。保存済みのゲスト情報がなければ破棄
+        const guest = get().guestOrg ?? storedGuest;
+        if (guest) {
+          set({ user: null, guestOrg: guest, orgChecked: true });
+        } else if (!guestEntryInProgress) {
+          void fbSignOut(fbAuth!);
+          set({ user: null, orgChecked: true });
+        }
       } else {
-        set({ org: null, orgChecked: true });
+        set({ user: null, org: null, orgChecked: true });
       }
+      set({ ready: true });
     });
   },
 
   signIn: async (email, password) => {
-    if (!supabase) return false;
+    if (!fbAuth) return false;
     set({ loading: true, error: null });
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (error) {
+    try {
+      await signInWithEmailAndPassword(fbAuth, email.trim(), password);
+      set({ loading: false });
+      return true;
+    } catch {
       set({ loading: false, error: 'メールアドレスまたはパスワードが正しくありません。' });
       return false;
     }
-    set({ loading: false });
-    return true;
   },
 
   signUp: async (email, password) => {
-    if (!supabase) return 'error';
+    if (!fbAuth) return false;
     set({ loading: true, error: null });
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      // 確認メールのリンクからこのアプリのURLへ戻す（localhostへ飛ぶのを防ぐ）
-      options: { emailRedirectTo: appOrigin() },
-    });
-    if (error) {
+    try {
+      await createUserWithEmailAndPassword(fbAuth, email.trim(), password);
+      set({ loading: false });
+      return true;
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
       set({
         loading: false,
-        error: error.message.includes('at least')
+        error: code.includes('weak-password')
           ? 'パスワードは6文字以上にしてください。'
-          : '登録に失敗しました。すでに登録済みの可能性があります。',
+          : code.includes('email-already-in-use')
+            ? 'このメールアドレスは登録済みです。ログインしてください。'
+            : code.includes('invalid-email')
+              ? 'メールアドレスの形式が正しくありません。'
+              : '登録に失敗しました。時間をおいて再度お試しください。',
       });
-      return 'error';
+      return false;
     }
-    set({ loading: false });
-    return data.session ? 'ok' : 'confirm';
   },
 
   createOrg: async (name) => {
-    if (!supabase) return false;
+    const uid = fbAuth?.currentUser?.uid;
+    if (!fbDb || !uid) return false;
     set({ loading: true, error: null });
-    const row = await rpcRow<OrgRow>('create_org', { org_name: name.trim() });
-    if (!row) {
+    try {
+      const orgRef = doc(collection(fbDb, 'orgs'));
+      const inviteCode = randomHex(6);
+      const viewerToken = randomHex(16);
+      const orgName = name.trim();
+      const batch = writeBatch(fbDb);
+      batch.set(orgRef, {
+        name: orgName,
+        inviteCode,
+        viewerToken,
+        createdBy: uid,
+        createdAt: serverTimestamp(),
+      });
+      batch.set(doc(fbDb, 'inviteCodes', inviteCode), { orgId: orgRef.id });
+      batch.set(doc(fbDb, 'viewerLinks', viewerToken), { orgId: orgRef.id, orgName });
+      batch.set(doc(fbDb, 'users', uid), {
+        orgId: orgRef.id,
+        role: 'admin',
+        createdAt: serverTimestamp(),
+      });
+      await batch.commit();
+      set({
+        org: { id: orgRef.id, name: orgName, role: 'admin', inviteCode, viewerToken },
+        orgChecked: true,
+        loading: false,
+      });
+      return true;
+    } catch {
       set({ loading: false, error: '会社の作成に失敗しました。' });
       return false;
     }
-    set({ org: toOrgInfo(row), orgChecked: true, loading: false });
-    return true;
   },
 
   joinOrg: async (code) => {
-    if (!supabase) return false;
+    const uid = fbAuth?.currentUser?.uid;
+    if (!fbDb || !uid) return false;
     set({ loading: true, error: null });
-    const row = await rpcRow<OrgRow>('join_org', { code: code.trim() });
-    if (!row) {
+    try {
+      const trimmed = code.trim();
+      const inviteSnap = await getDoc(doc(fbDb, 'inviteCodes', trimmed));
+      if (!inviteSnap.exists()) throw new Error('invalid');
+      const orgId = (inviteSnap.data() as { orgId: string }).orgId;
+      await setDoc(doc(fbDb, 'users', uid), {
+        orgId,
+        role: 'member',
+        inviteCode: trimmed,
+        createdAt: serverTimestamp(),
+      });
+      const org = await fetchOrgInfo(orgId, 'member');
+      if (!org) throw new Error('org');
+      set({ org, orgChecked: true, loading: false });
+      return true;
+    } catch {
       set({ loading: false, error: '招待コードが正しくありません。' });
       return false;
     }
-    set({ org: toOrgInfo(row), orgChecked: true, loading: false });
-    return true;
   },
 
   enterGuestByToken: async (token) => {
-    if (!supabase) return false;
+    if (!fbAuth || !fbDb) return false;
     const t = token.trim();
     if (!t) return false;
-    const row = await rpcRow<{ id: string; name: string }>('get_org_by_viewer_token', { t });
-    if (!row) return false;
-    const guestOrg: GuestOrg = { token: t, name: row.name };
-    set({ guestOrg });
-    void persist.setItem(GUEST_ORG_KEY, JSON.stringify(guestOrg));
-    return true;
+    // 通常ログイン中はゲスト化しない（既存セッションを壊さない）
+    if (fbAuth.currentUser && !fbAuth.currentUser.isAnonymous) return false;
+    guestEntryInProgress = true;
+    try {
+      const cred = fbAuth.currentUser?.isAnonymous
+        ? { user: fbAuth.currentUser }
+        : await signInAnonymously(fbAuth);
+      const linkSnap = await getDoc(doc(fbDb, 'viewerLinks', t));
+      if (!linkSnap.exists()) return false;
+      const { orgId, orgName } = linkSnap.data() as { orgId: string; orgName: string };
+      await setDoc(doc(fbDb, 'viewerSessions', cred.user.uid), {
+        orgId,
+        token: t,
+        createdAt: serverTimestamp(),
+      });
+      const guestOrg: GuestOrg = { token: t, name: orgName, orgId };
+      set({ guestOrg });
+      void persist.setItem(GUEST_ORG_KEY, JSON.stringify(guestOrg));
+      return true;
+    } catch {
+      return false;
+    } finally {
+      guestEntryInProgress = false;
+    }
   },
 
   rotateOrgCode: async (kind) => {
     const org = get().org;
-    if (!supabase || !org) return false;
-    const row = await rpcRow<OrgRow>('rotate_org_code', { p_org: org.id, kind });
-    if (!row) {
+    if (!fbDb || !org) return false;
+    try {
+      const batch = writeBatch(fbDb);
+      if (kind === 'invite') {
+        const next = randomHex(6);
+        batch.delete(doc(fbDb, 'inviteCodes', org.inviteCode));
+        batch.set(doc(fbDb, 'inviteCodes', next), { orgId: org.id });
+        batch.update(doc(fbDb, 'orgs', org.id), { inviteCode: next });
+        await batch.commit();
+        set({ org: { ...org, inviteCode: next } });
+      } else {
+        const next = randomHex(16);
+        batch.delete(doc(fbDb, 'viewerLinks', org.viewerToken));
+        batch.set(doc(fbDb, 'viewerLinks', next), { orgId: org.id, orgName: org.name });
+        batch.update(doc(fbDb, 'orgs', org.id), { viewerToken: next });
+        await batch.commit();
+        set({ org: { ...org, viewerToken: next } });
+      }
+      return true;
+    } catch {
       set({ error: '再発行に失敗しました。' });
       return false;
     }
-    set({ org: toOrgInfo(row) });
-    return true;
   },
 
   signOut: async () => {
     if (get().guestOrg) {
+      // 閲覧終了: 入場券を消して匿名セッションも破棄
+      const uid = fbAuth?.currentUser?.uid;
+      if (fbDb && uid) {
+        void deleteDoc(doc(fbDb, 'viewerSessions', uid)).catch(() => undefined);
+      }
+      if (fbAuth) await fbSignOut(fbAuth).catch(() => undefined);
       set({ guestOrg: null });
       void persist.removeItem(GUEST_ORG_KEY);
       return;
     }
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    set({ session: null, org: null });
+    if (!fbAuth) return;
+    await fbSignOut(fbAuth);
+    set({ user: null, org: null });
   },
 
   clearError: () => set({ error: null }),
 }));
 
+/** 組織情報を取得して OrgInfo に整形 */
+async function fetchOrgInfo(orgId: string, role: 'admin' | 'member'): Promise<OrgInfo | null> {
+  if (!fbDb) return null;
+  const snap = await getDoc(doc(fbDb, 'orgs', orgId));
+  if (!snap.exists()) return null;
+  const d = snap.data() as { name: string; inviteCode: string; viewerToken: string };
+  return {
+    id: orgId,
+    name: d.name,
+    role,
+    inviteCode: d.inviteCode,
+    viewerToken: d.viewerToken,
+  };
+}
+
 /** 所属組織を取得して state に反映 */
-async function loadOrg(set: (partial: Partial<AuthState>) => void): Promise<void> {
-  if (!supabase) return;
-  const row = await rpcRow<OrgRow>('my_org');
-  set(row ? { org: toOrgInfo(row), orgChecked: true } : { org: null, orgChecked: true });
+async function loadOrg(
+  set: (partial: Partial<AuthState>) => void,
+  uid: string,
+): Promise<void> {
+  if (!fbDb) return;
+  try {
+    const userSnap = await getDoc(doc(fbDb, 'users', uid));
+    if (!userSnap.exists()) {
+      set({ org: null, orgChecked: true });
+      return;
+    }
+    const { orgId, role } = userSnap.data() as { orgId: string; role: string };
+    const org = await fetchOrgInfo(orgId, role === 'admin' ? 'admin' : 'member');
+    set({ org, orgChecked: true });
+  } catch {
+    set({ org: null, orgChecked: true });
+  }
 }

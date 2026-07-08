@@ -62,8 +62,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ── 1) GitHub Pages 向け（/tori 配下） ──────────────────
+      # SUPABASE の2つは旧システムからのデータ引っ越し用（無ければ引っ越し機能が非表示になるだけ）
       - name: Export web build (GitHub Pages)
         env:
+          EXPO_PUBLIC_FIREBASE_CONFIG: ${{ vars.EXPO_PUBLIC_FIREBASE_CONFIG }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: npx expo export --platform web --clear
@@ -81,6 +83,7 @@ jobs:
         if: ${{ env.CF_API_TOKEN != '' }}
         env:
           WEB_BASE_URL: ''
+          EXPO_PUBLIC_FIREBASE_CONFIG: ${{ vars.EXPO_PUBLIC_FIREBASE_CONFIG }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         # 404.html を置かないことで Cloudflare Pages の SPAフォールバックが有効になる

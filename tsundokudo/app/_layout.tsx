@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { useAuthStore } from '@/store/authStore';
-import { isSupabaseEnabled } from '@/lib/supabase';
+import { isCloudEnabled } from '@/lib/firebase';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { OrgSetupScreen } from '@/components/auth/OrgSetupScreen';
 import { C } from '@/constants/colors';
@@ -42,7 +42,7 @@ export default function RootLayout() {
   const hydrate = useReportStore((s) => s.hydrate);
   const authInit = useAuthStore((s) => s.init);
   const authReady = useAuthStore((s) => s.ready);
-  const session = useAuthStore((s) => s.session);
+  const user = useAuthStore((s) => s.user);
   const org = useAuthStore((s) => s.org);
   const orgChecked = useAuthStore((s) => s.orgChecked);
   const guestOrg = useAuthStore((s) => s.guestOrg);
@@ -50,7 +50,7 @@ export default function RootLayout() {
   // 起動時
   useEffect(() => {
     loadWebFont();
-    if (isSupabaseEnabled) {
+    if (isCloudEnabled) {
       void authInit();
     } else {
       void hydrate();
@@ -59,28 +59,28 @@ export default function RootLayout() {
 
   // クラウド時: ログイン／閲覧モードに応じてデータを読み込み／クリア
   useEffect(() => {
-    if (!isSupabaseEnabled) return;
-    if ((session && org) || guestOrg) {
+    if (!isCloudEnabled) return;
+    if ((user && org) || guestOrg) {
       void hydrate();
     } else {
       // サインアウト時はメモリ上のデータをクリア
       useReportStore.setState({ reports: [], hydrated: false });
     }
-  }, [session, org, guestOrg, hydrate]);
+  }, [user, org, guestOrg, hydrate]);
 
   // 閲覧用リンク（/v/xxx）は未ログインでも開ける
   const isViewerRoute = pathname?.startsWith('/v/') ?? false;
 
   let content: React.ReactNode;
-  if (isSupabaseEnabled && (!authReady || (session && !orgChecked))) {
+  if (isCloudEnabled && (!authReady || (user && !orgChecked))) {
     content = (
       <View style={{ flex: 1, backgroundColor: C.headerBg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#fff" />
       </View>
     );
-  } else if (isSupabaseEnabled && !session && !guestOrg && !isViewerRoute) {
+  } else if (isCloudEnabled && !user && !guestOrg && !isViewerRoute) {
     content = <LoginScreen />;
-  } else if (isSupabaseEnabled && session && !org) {
+  } else if (isCloudEnabled && user && !org) {
     content = <OrgSetupScreen />;
   } else {
     content = <MainStack />;

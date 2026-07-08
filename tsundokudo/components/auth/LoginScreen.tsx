@@ -34,27 +34,19 @@ export function LoginScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [info, setInfo] = useState<string | null>(null);
 
   function switchMode(next: 'login' | 'signup') {
     setMode(next);
-    setInfo(null);
     clearError();
   }
 
   async function onSubmit() {
     if (!email.trim() || !password) return;
-    setInfo(null);
+    // 登録・ログインに成功すると認証リスナー経由で自動的に画面が切り替わる
     if (mode === 'login') {
       await signIn(email, password);
-      return;
-    }
-    const result = await signUp(email, password);
-    if (result === 'confirm') {
-      setInfo(
-        '確認メールを送信しました。メール内のリンクを開いてから、ログインしてください。',
-      );
-      setMode('login');
+    } else {
+      await signUp(email, password);
     }
   }
 
@@ -101,7 +93,6 @@ export function LoginScreen() {
           </Field>
 
           {error && <Text style={styles.error}>{error}</Text>}
-          {info && <Text style={styles.info}>{info}</Text>}
 
           <View style={{ height: 6 }} />
           {loading ? (

@@ -11,7 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { useAuthStore, useIsViewer } from '@/store/authStore';
-import { isSupabaseEnabled } from '@/lib/supabase';
+import { isCloudEnabled } from '@/lib/firebase';
+import { cloudUpsertReport } from '@/lib/cloudReports';
+import { canImportLegacy, fetchLegacyReports } from '@/lib/legacyImport';
 import { confirmAsync, notify } from '@/lib/dialog';
 import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
 import { C } from '@/constants/colors';
@@ -147,11 +149,72 @@ function PriceNotesEditor({
   );
 }
 
+/** 旧システム（Supabase）からのデータ引っ越しカード */
+function LegacyImportCard({ orgId }: { orgId: string }) {
+  const [link, setLink] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
+
+  async function run() {
+    if (!link.trim() || busy) return;
+    setBusy(true);
+    setProgress('旧システムからデータを取得中…');
+    try {
+      const reports = await fetchLegacyReports(link);
+      if (reports.length === 0) {
+        setProgress('引っ越せるレポートが見つかりませんでした。リンクを確認してください。');
+        return;
+      }
+      let done = 0;
+      for (const report of reports) {
+        done += 1;
+        setProgress(`引っ越し中… ${done} / ${reports.length} 件`);
+        await cloudUpsertReport(report, orgId);
+      }
+      // 取り込み後に一覧を再読み込み
+      useReportStore.setState({ hydrated: false });
+      await useReportStore.getState().hydrate();
+      setProgress(`完了！ ${reports.length} 件のレポートを引っ越しました。`);
+      setLink('');
+    } catch (e) {
+      setProgress(e instanceof Error ? e.message : '引っ越しに失敗しました。');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <SectionTitle>旧システムからの引っ越し</SectionTitle>
+      <Card>
+        <Text style={styles.accountNote}>
+          以前のシステムのレポートをこちらへコピーします。旧アプリの設定画面にあった
+          「閲覧用リンク」を貼り付けて実行してください（何度実行しても重複しません）。
+        </Text>
+        <View style={{ height: 10 }} />
+        <Field label="旧・閲覧用リンク">
+          <Input
+            value={link}
+            onChangeText={setLink}
+            placeholder="https://…/v/xxxxxxxx"
+            autoCapitalize="none"
+          />
+        </Field>
+        <Button
+          title={busy ? '引っ越し中…' : 'データを引っ越す'}
+          onPress={() => void run()}
+        />
+        {progress !== '' && <Text style={styles.importProgress}>{progress}</Text>}
+      </Card>
+    </>
+  );
+}
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const settings = useReportStore((s) => s.settings);
   const updateSettings = useReportStore((s) => s.updateSettings);
-  const session = useAuthStore((s) => s.session);
+  const user = useAuthStore((s) => s.user);
   const org = useAuthStore((s) => s.org);
   const guestOrg = useAuthStore((s) => s.guestOrg);
   const rotateOrgCode = useAuthStore((s) => s.rotateOrgCode);
@@ -186,7 +249,7 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
-        {isSupabaseEnabled && (
+        {isCloudEnabled && (
           <>
             <SectionTitle>アカウント</SectionTitle>
             <Card>
@@ -196,7 +259,7 @@ export default function SettingsScreen() {
               <Text style={styles.accountEmail}>
                 {isViewer
                   ? (guestOrg?.name ?? '閲覧専用（ログインなし）')
-                  : (session?.user.email ?? '—')}
+                  : (user?.email ?? '—')}
               </Text>
               <Text style={styles.accountNote}>
                 {isViewer
@@ -267,6 +330,10 @@ export default function SettingsScreen() {
                     </>
                   )}
                 </Card>
+
+                {canImportLegacy && org.role === 'admin' && (
+                  <LegacyImportCard orgId={org.id} />
+                )}
               </>
             )}
           </>
@@ -405,6 +472,7 @@ const styles = StyleSheet.create({
   },
   addBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   footer: { textAlign: 'center', color: C.textFaint, fontSize: 12, marginTop: 24 },
+  importProgress: { fontSize: 13, color: C.primaryDark, marginTop: 10, lineHeight: 19 },
   accountLabel: { fontSize: 12, color: C.textSub },
   accountEmail: { fontSize: 16, fontWeight: '700', color: C.text, marginTop: 2 },
   accountNote: { fontSize: 12, color: C.textFaint, marginTop: 8, lineHeight: 18 },

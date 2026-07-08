@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// らくらく店舗メンテナンス — Storage（写真）セキュリティルール
+//
+// 写真は orgs/{orgId}/photos/ 配下に保存される。
+//   - アップロード: その組織のメンバーのみ（10MBまで・画像のみ）
+//   - 読み取り: 組織メンバー（アプリからのダウンロードURL取得に必要）
+//     ※閲覧リンクの利用者はダウンロードURL（推測不可能なトークン付き）
+//       経由で写真を表示する
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /orgs/{orgId}/photos/{photoId} {
+      allow read: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.orgId == orgId;
+      allow write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.orgId == orgId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

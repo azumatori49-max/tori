@@ -9,11 +9,10 @@
 import { create } from 'zustand';
 
 import { persist } from '@/lib/persist';
-import { isSupabaseEnabled } from '@/lib/supabase';
+import { isCloudEnabled } from '@/lib/firebase';
 import {
   cloudDeleteReport,
   cloudFetchReports,
-  cloudFetchReportsByToken,
   cloudUpsertReport,
 } from '@/lib/cloudReports';
 import { useAuthStore } from '@/store/authStore';
@@ -106,13 +105,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
     settings.billingTos =
       settings.billingTos ?? (settings.defaultBillingTo ? [settings.defaultBillingTo] : []);
 
-    if (isSupabaseEnabled) {
-      // クラウド: 組織のレポートを取得（閲覧リンク時はトークン経由）
+    if (isCloudEnabled) {
+      // クラウド: 組織のレポートを取得（閲覧リンク時はゲスト組織のID）
       try {
-        const guestOrg = useAuthStore.getState().guestOrg;
-        const reports = guestOrg
-          ? await cloudFetchReportsByToken(guestOrg.token)
-          : await cloudFetchReports();
+        const auth = useAuthStore.getState();
+        const orgId = auth.guestOrg?.orgId ?? auth.org?.id;
+        const reports = orgId ? await cloudFetchReports(orgId) : [];
         // 取得したレポートから店舗・担当者をマスタへ取り込む
         for (const r of reports) settings = mergeMaster(settings, r);
         set({ reports, settings, hydrated: true });
@@ -154,8 +152,10 @@ export const useReportStore = create<ReportState>((set, get) => ({
     const prevSettings = get().settings;
     set({ reports, settings, error: null });
     try {
-      if (isSupabaseEnabled) {
-        await cloudUpsertReport(report, requireOrgId());
+      if (isCloudEnabled) {
+        // 写真アップロード後（URL置換済み）のレポートで差し替える
+        const saved = await cloudUpsertReport(report, requireOrgId());
+        set({ reports: get().reports.map((r) => (r.id === saved.id ? saved : r)) });
       } else {
         await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
       }
@@ -179,8 +179,11 @@ export const useReportStore = create<ReportState>((set, get) => ({
     const prevSettings = get().settings;
     set({ reports, settings, error: null });
     try {
-      if (isSupabaseEnabled) {
-        if (updated) await cloudUpsertReport(updated, requireOrgId());
+      if (isCloudEnabled) {
+        if (updated) {
+          const saved = await cloudUpsertReport(updated, requireOrgId());
+          set({ reports: get().reports.map((r) => (r.id === saved.id ? saved : r)) });
+        }
       } else {
         await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
       }
@@ -199,8 +202,8 @@ export const useReportStore = create<ReportState>((set, get) => ({
     const reports = prev.filter((r) => r.id !== id);
     set({ reports, error: null });
     try {
-      if (isSupabaseEnabled) {
-        await cloudDeleteReport(id);
+      if (isCloudEnabled) {
+        await cloudDeleteReport(id, requireOrgId());
       } else {
         await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
       }

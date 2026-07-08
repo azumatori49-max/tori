@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { router, useLocalSearchParams } from 'expo-router';
 
 import { useAuthStore } from '@/store/authStore';
-import { isSupabaseEnabled } from '@/lib/supabase';
+import { isCloudEnabled } from '@/lib/firebase';
 import { C } from '@/constants/colors';
 
 export default function ViewerEntryScreen() {
@@ -18,11 +18,11 @@ export default function ViewerEntryScreen() {
 
   useEffect(() => {
     // クラウド無効時は ready を待たない（authInit が呼ばれないため）
-    if (isSupabaseEnabled && !ready) return;
+    if (isCloudEnabled && !ready) return;
     let cancelled = false;
     void (async () => {
       const ok =
-        isSupabaseEnabled && token ? await enterGuestByToken(String(token)) : false;
+        isCloudEnabled && token ? await enterGuestByToken(String(token)) : false;
       if (cancelled) return;
       if (ok) {
         router.replace('/(tabs)/reports');

@@ -88,6 +88,8 @@ export const useReportStore = create<ReportState>((set, get) => ({
       ...parse<Partial<AppSettings>>(settingsRaw, {}),
     };
     settings.companies = settings.companies ?? [];
+    settings.billingTos =
+      settings.billingTos ?? (settings.defaultBillingTo ? [settings.defaultBillingTo] : []);
 
     if (isSupabaseEnabled) {
       // クラウド: 共有テーブルから取得
@@ -204,11 +206,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
-/** レポートに含まれる店舗名・会社名・担当者をマスタへ取り込む（重複は無視） */
+/** レポートに含まれる店舗名・会社名・御請求先・担当者をマスタへ取り込む（重複は無視） */
 function mergeMaster(settings: AppSettings, report: MaintenanceReport): AppSettings {
   let changed = false;
   const stores = [...settings.stores];
   const companies = [...(settings.companies ?? [])];
+  const billingTos = [...(settings.billingTos ?? [])];
   const technicians = [...settings.technicians];
 
   if (report.storeName && !stores.includes(report.storeName)) {
@@ -219,6 +222,11 @@ function mergeMaster(settings: AppSettings, report: MaintenanceReport): AppSetti
     companies.push(report.company);
     changed = true;
   }
+  const billingTo = report.billingTo.trim();
+  if (billingTo && !billingTos.includes(billingTo)) {
+    billingTos.push(billingTo);
+    changed = true;
+  }
   // 「、」区切りの複数担当者をそれぞれ取り込む
   for (const name of report.technician.split('、').map((s) => s.trim()).filter(Boolean)) {
     if (!technicians.includes(name)) {
@@ -226,5 +234,5 @@ function mergeMaster(settings: AppSettings, report: MaintenanceReport): AppSetti
       changed = true;
     }
   }
-  return changed ? { ...settings, stores, companies, technicians } : settings;
+  return changed ? { ...settings, stores, companies, billingTos, technicians } : settings;
 }

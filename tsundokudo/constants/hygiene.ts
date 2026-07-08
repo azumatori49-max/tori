@@ -78,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   technicians: ['佐藤　真人', '近藤　光蕃'],
   stores: ['まる助東松山駅前店', '池袋店', '歌舞伎町店', '錦糸町店', '秋葉原店'],
   companies: ['株式会社Belief', '株式会社鶏ヤロー'],
+  billingTos: ['株式会社Belief　〒270-0176千葉県流山市加1-1593'],
   priceNotes: [
     { label: 'E26', price: 260 },
     { label: 'E17', price: 714 },

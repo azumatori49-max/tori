@@ -126,6 +126,19 @@ export default function SettingsScreen() {
           <Text style={styles.hint}>※ レポート作成時に新しい会社名を入力すると自動で追加されます</Text>
         </Card>
 
+            <SectionTitle>御請求先</SectionTitle>
+            <Card>
+              {settings.billingTos.map((b) => (
+                <View key={b} style={styles.listRow}>
+                  <Text style={styles.listDot}>•</Text>
+                  <Text style={styles.listText}>{b}</Text>
+                </View>
+              ))}
+              <Text style={styles.hint}>
+                ※ レポート作成時に新しい御請求先を入力すると自動で追加されます
+              </Text>
+            </Card>
+
             <SectionTitle>単価メモ（電球プライス等）</SectionTitle>
             <Card>
               {settings.priceNotes.map((p) => (

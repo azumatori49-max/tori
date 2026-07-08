@@ -158,6 +158,8 @@ export interface AppSettings {
   stores: string[];
   /** 会社マスタ */
   companies: string[];
+  /** 御請求先マスタ */
+  billingTos: string[];
   /** 電球プライスなどの単価メモ（表示用） */
   priceNotes: { label: string; price: number }[];
 }

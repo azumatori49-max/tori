@@ -298,6 +298,12 @@ export default function ReportFormScreen() {
                 onChangeText={(v) => patch({ billingTo: v })}
                 multiline
               />
+              <View style={{ height: 8 }} />
+              <ChipSelect
+                options={store.settings.billingTos}
+                value={form.billingTo}
+                onChange={(v) => patch({ billingTo: v })}
+              />
             </Field>
           </Card>
 

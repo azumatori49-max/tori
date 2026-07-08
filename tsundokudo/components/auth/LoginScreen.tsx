@@ -1,8 +1,8 @@
 /**
- * ログイン画面（クラウド有効時、未ログインなら表示）
+ * ログイン／新規登録画面（クラウド有効時、未ログインなら表示）
  *
- * - 担当者: メールアドレス＋パスワードでログイン（編集可）
- * - 店長: 下部の「閲覧用で開く」からログイン不要で閲覧のみ
+ * - 担当者: メールアドレス＋パスワードでログイン、または新規登録
+ * - 店長など閲覧のみの方: 担当者から共有される「閲覧用リンク」から開く（ログイン不要）
  */
 import { useState } from 'react';
 import {
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -25,16 +26,36 @@ import logoAsset from '@/assets/logo.png';
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const signIn = useAuthStore((s) => s.signIn);
-  const enterGuestViewer = useAuthStore((s) => s.enterGuestViewer);
+  const signUp = useAuthStore((s) => s.signUp);
+  const clearError = useAuthStore((s) => s.clearError);
   const loading = useAuthStore((s) => s.loading);
   const error = useAuthStore((s) => s.error);
 
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [info, setInfo] = useState<string | null>(null);
+
+  function switchMode(next: 'login' | 'signup') {
+    setMode(next);
+    setInfo(null);
+    clearError();
+  }
 
   async function onSubmit() {
     if (!email.trim() || !password) return;
-    await signIn(email, password);
+    setInfo(null);
+    if (mode === 'login') {
+      await signIn(email, password);
+      return;
+    }
+    const result = await signUp(email, password);
+    if (result === 'confirm') {
+      setInfo(
+        '確認メールを送信しました。メール内のリンクを開いてから、ログインしてください。',
+      );
+      setMode('login');
+    }
   }
 
   return (
@@ -42,7 +63,10 @@ export function LoginScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.inner, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={[styles.inner, { paddingTop: insets.top + 32 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.brand}>
           <View style={styles.logoWrap}>
             <Image source={logoAsset} style={styles.logo} contentFit="contain" />
@@ -52,7 +76,9 @@ export function LoginScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>ログイン</Text>
+          <Text style={styles.cardTitle}>
+            {mode === 'login' ? 'ログイン' : '新規登録'}
+          </Text>
           <Field label="メールアドレス">
             <Input
               value={email}
@@ -67,7 +93,7 @@ export function LoginScreen() {
             <Input
               value={password}
               onChangeText={setPassword}
-              placeholder="パスワード"
+              placeholder={mode === 'signup' ? '6文字以上' : 'パスワード'}
               secureTextEntry
               autoCapitalize="none"
               autoComplete="password"
@@ -75,6 +101,7 @@ export function LoginScreen() {
           </Field>
 
           {error && <Text style={styles.error}>{error}</Text>}
+          {info && <Text style={styles.info}>{info}</Text>}
 
           <View style={{ height: 6 }} />
           {loading ? (
@@ -82,33 +109,36 @@ export function LoginScreen() {
               <ActivityIndicator color="#fff" />
             </View>
           ) : (
-            <Button title="ログイン" onPress={() => void onSubmit()} />
+            <Button
+              title={mode === 'login' ? 'ログイン' : '登録して始める'}
+              onPress={() => void onSubmit()}
+            />
           )}
 
-          {/* ── 閲覧用（ログイン不要） ── */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>閲覧の方</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <Pressable style={styles.viewerBtn} onPress={enterGuestViewer}>
-            <Text style={styles.viewerBtnText}>閲覧用で開く（ログイン不要）</Text>
+          <Pressable
+            style={styles.switchBtn}
+            onPress={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+          >
+            <Text style={styles.switchText}>
+              {mode === 'login'
+                ? 'アカウントをお持ちでない方はこちら（新規登録）'
+                : 'すでにアカウントをお持ちの方はこちら（ログイン）'}
+            </Text>
           </Pressable>
-          <Text style={styles.viewerNote}>レポートの閲覧・PDF出力のみ可能です</Text>
         </View>
 
         <Text style={styles.note}>
-          担当者アカウントは管理者が発行します。{'\n'}
-          ログインできない場合は管理者へお問い合わせください。
+          閲覧のみの方（店長など）はログイン不要です。{'\n'}
+          担当者から共有される「閲覧用リンク」を開いてください。
         </Text>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.headerBg },
-  inner: { flex: 1, padding: 24, justifyContent: 'center' },
+  inner: { padding: 24, paddingBottom: 48 },
   brand: { alignItems: 'center', marginBottom: 28 },
   logoWrap: {
     width: 96,
@@ -125,24 +155,14 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
   cardTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 14 },
   error: { color: C.danger, fontSize: 13, marginTop: 2 },
+  info: { color: C.primaryDark, fontSize: 13, marginTop: 2, lineHeight: 19 },
   loadingBtn: {
     backgroundColor: C.primary,
     borderRadius: 12,
     paddingVertical: 13,
     alignItems: 'center',
   },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: C.border },
-  dividerText: { fontSize: 12, color: C.textFaint },
-  viewerBtn: {
-    borderWidth: 1.5,
-    borderColor: C.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: C.primaryLight,
-  },
-  viewerBtnText: { color: C.primaryDark, fontSize: 15, fontWeight: '700' },
-  viewerNote: { fontSize: 11, color: C.textFaint, textAlign: 'center', marginTop: 8 },
+  switchBtn: { alignItems: 'center', marginTop: 14 },
+  switchText: { color: C.primary, fontSize: 13, textDecorationLine: 'underline' },
   note: { color: '#D8E7FA', fontSize: 12, textAlign: 'center', marginTop: 22, lineHeight: 18 },
 });

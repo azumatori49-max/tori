@@ -1,7 +1,7 @@
 import '../global.css';
 import { useEffect } from 'react';
 import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -9,6 +9,7 @@ import { useReportStore } from '@/store/reportStore';
 import { useAuthStore } from '@/store/authStore';
 import { isSupabaseEnabled } from '@/lib/supabase';
 import { LoginScreen } from '@/components/auth/LoginScreen';
+import { OrgSetupScreen } from '@/components/auth/OrgSetupScreen';
 import { C } from '@/constants/colors';
 
 // Web プレビュー時のネイティブモジュール系エラーを抑制
@@ -37,11 +38,14 @@ function MainStack() {
 }
 
 export default function RootLayout() {
+  const pathname = usePathname();
   const hydrate = useReportStore((s) => s.hydrate);
   const authInit = useAuthStore((s) => s.init);
   const authReady = useAuthStore((s) => s.ready);
   const session = useAuthStore((s) => s.session);
-  const guestViewer = useAuthStore((s) => s.guestViewer);
+  const org = useAuthStore((s) => s.org);
+  const orgChecked = useAuthStore((s) => s.orgChecked);
+  const guestOrg = useAuthStore((s) => s.guestOrg);
 
   // 起動時
   useEffect(() => {
@@ -56,23 +60,28 @@ export default function RootLayout() {
   // クラウド時: ログイン／閲覧モードに応じてデータを読み込み／クリア
   useEffect(() => {
     if (!isSupabaseEnabled) return;
-    if (session || guestViewer) {
+    if ((session && org) || guestOrg) {
       void hydrate();
     } else {
       // サインアウト時はメモリ上のデータをクリア
       useReportStore.setState({ reports: [], hydrated: false });
     }
-  }, [session, guestViewer, hydrate]);
+  }, [session, org, guestOrg, hydrate]);
+
+  // 閲覧用リンク（/v/xxx）は未ログインでも開ける
+  const isViewerRoute = pathname?.startsWith('/v/') ?? false;
 
   let content: React.ReactNode;
-  if (isSupabaseEnabled && !authReady) {
+  if (isSupabaseEnabled && (!authReady || (session && !orgChecked))) {
     content = (
       <View style={{ flex: 1, backgroundColor: C.headerBg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#fff" />
       </View>
     );
-  } else if (isSupabaseEnabled && !session && !guestViewer) {
+  } else if (isSupabaseEnabled && !session && !guestOrg && !isViewerRoute) {
     content = <LoginScreen />;
+  } else if (isSupabaseEnabled && session && !org) {
+    content = <OrgSetupScreen />;
   } else {
     content = <MainStack />;
   }

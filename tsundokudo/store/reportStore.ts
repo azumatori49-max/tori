@@ -10,7 +10,13 @@ import { create } from 'zustand';
 
 import { persist } from '@/lib/persist';
 import { isSupabaseEnabled } from '@/lib/supabase';
-import { cloudDeleteReport, cloudFetchReports, cloudUpsertReport } from '@/lib/cloudReports';
+import {
+  cloudDeleteReport,
+  cloudFetchReports,
+  cloudFetchReportsByToken,
+  cloudUpsertReport,
+} from '@/lib/cloudReports';
+import { useAuthStore } from '@/store/authStore';
 import { normalizeReport } from '@/lib/reportNormalize';
 import { DEFAULT_SETTINGS, makeDefaultReport } from '@/constants/hygiene';
 import type {
@@ -63,6 +69,15 @@ interface ReportState {
   clearError: () => void;
 }
 
+/** クラウド保存時の組織ID（未所属ならエラー） */
+function requireOrgId(): string {
+  const org = useAuthStore.getState().org;
+  if (!org) {
+    throw new Error('組織情報が取得できません。一度ログアウトして再ログインしてください。');
+  }
+  return org.id;
+}
+
 /** 保存失敗時のメッセージ整形 */
 function persistErrorMessage(e: unknown): string {
   const name = e instanceof Error ? e.name : '';
@@ -92,9 +107,12 @@ export const useReportStore = create<ReportState>((set, get) => ({
       settings.billingTos ?? (settings.defaultBillingTo ? [settings.defaultBillingTo] : []);
 
     if (isSupabaseEnabled) {
-      // クラウド: 共有テーブルから取得
+      // クラウド: 組織のレポートを取得（閲覧リンク時はトークン経由）
       try {
-        const reports = await cloudFetchReports();
+        const guestOrg = useAuthStore.getState().guestOrg;
+        const reports = guestOrg
+          ? await cloudFetchReportsByToken(guestOrg.token)
+          : await cloudFetchReports();
         // 取得したレポートから店舗・担当者をマスタへ取り込む
         for (const r of reports) settings = mergeMaster(settings, r);
         set({ reports, settings, hydrated: true });
@@ -137,7 +155,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({ reports, settings, error: null });
     try {
       if (isSupabaseEnabled) {
-        await cloudUpsertReport(report);
+        await cloudUpsertReport(report, requireOrgId());
       } else {
         await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
       }
@@ -162,7 +180,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     set({ reports, settings, error: null });
     try {
       if (isSupabaseEnabled) {
-        if (updated) await cloudUpsertReport(updated);
+        if (updated) await cloudUpsertReport(updated, requireOrgId());
       } else {
         await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
       }

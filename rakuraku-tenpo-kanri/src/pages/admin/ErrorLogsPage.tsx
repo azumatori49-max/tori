@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '@/AppContext'
 import { Header } from '@/components/Header'
+import { AdminNav } from '@/components/AdminNav'
 import { Spinner } from '@/components/ui'
 import { formatTime } from '@/lib/businessDay'
 import type { ErrorLog } from '@/lib/types'
@@ -19,8 +20,8 @@ export function ErrorLogsPage() {
   }, [backend])
 
   return (
-    <div className="min-h-dvh bg-slate-50">
-      <Header title="自動エラーログ" backTo="/admin" />
+    <div className="min-h-dvh bg-slate-50 pb-24">
+      <Header title="自動エラーログ" backTo="/admin/settings" />
       <main className="mx-auto max-w-3xl px-4 py-5">
         <p className="mb-4 rounded-xl bg-sky-50 px-4 py-3 text-xs text-sky-800 ring-1 ring-sky-100">
           アップロードに失敗すると、店舗名・時刻・失敗した操作が自動でここに記録されます。
@@ -45,6 +46,7 @@ export function ErrorLogsPage() {
           </div>
         )}
       </main>
+      <AdminNav />
     </div>
   )
 }

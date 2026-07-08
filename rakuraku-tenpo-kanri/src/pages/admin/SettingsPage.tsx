@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useApp } from '@/AppContext'
 import { BRAND } from '@/branding'
 import { Header } from '@/components/Header'
+import { AdminNav } from '@/components/AdminNav'
 import { Button, Field, inputClass } from '@/components/ui'
 import type { CheckItem, CheckType } from '@/lib/types'
 
@@ -20,8 +22,8 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-slate-50">
-      <Header title="設定" backTo="/admin" />
+    <div className="min-h-dvh bg-slate-50 pb-24">
+      <Header title="設定" />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
         {savedMsg && (
           <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-200">
@@ -96,7 +98,15 @@ export function SettingsPage() {
             {cleaning ? '整理中…' : '今すぐ整理する'}
           </Button>
         </section>
+
+        <Link
+          to="/admin/errors"
+          className="block rounded-2xl bg-white p-5 text-center font-bold text-brand-700 shadow-sm ring-1 ring-slate-100 hover:bg-brand-50"
+        >
+          自動エラーログを見る（送信失敗の記録）
+        </Link>
       </main>
+      <AdminNav />
     </div>
   )
 }

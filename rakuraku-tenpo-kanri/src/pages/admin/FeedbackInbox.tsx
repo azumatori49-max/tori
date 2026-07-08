@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '@/AppContext'
 import { Header } from '@/components/Header'
+import { AdminNav } from '@/components/AdminNav'
 import { PhotoImg } from '@/components/PhotoImg'
 import { Badge, Button, Spinner, inputClass } from '@/components/ui'
 import { formatTime } from '@/lib/businessDay'
@@ -21,8 +22,8 @@ export function FeedbackInbox() {
   }, [])
 
   return (
-    <div className="min-h-dvh bg-slate-50">
-      <Header title="現場からの要望・不具合" backTo="/admin" />
+    <div className="min-h-dvh bg-slate-50 pb-24">
+      <Header title="現場からのご意見" />
       <main className="mx-auto max-w-3xl space-y-3 px-4 py-5">
         {!list ? (
           <div className="flex justify-center py-10"><Spinner className="text-brand-600" /></div>
@@ -84,6 +85,7 @@ export function FeedbackInbox() {
           ))
         )}
       </main>
+      <AdminNav />
     </div>
   )
 }

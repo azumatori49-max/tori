@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '@/AppContext'
 import { Header } from '@/components/Header'
+import { AdminNav } from '@/components/AdminNav'
 import { Badge, Button, Field, Modal, inputClass } from '@/components/ui'
 import { newId } from '@/lib/backend'
 import type { Store } from '@/lib/types'
@@ -26,8 +27,8 @@ export function StoresPage() {
   const allItems = [...config.defaultItems.daily, ...config.defaultItems.weekly]
 
   return (
-    <div className="min-h-dvh bg-slate-50">
-      <Header title="店舗管理" backTo="/admin" />
+    <div className="min-h-dvh bg-slate-50 pb-24">
+      <Header title="店舗管理" />
       <main className="mx-auto max-w-3xl space-y-4 px-4 py-5">
         <Button onClick={openNew}>＋ 店舗を追加</Button>
         <div className="space-y-2">
@@ -51,6 +52,7 @@ export function StoresPage() {
           ))}
         </div>
       </main>
+      <AdminNav />
 
       {editing && (
         <Modal

@@ -7,10 +7,12 @@ import { FeedbackWidget } from './FeedbackWidget'
 /** 全画面共通ヘッダー: 左上にフィードバックボタン、中央にロゴ、右にログアウト等 */
 export function Header({
   title,
+  subtitle,
   backTo,
   right,
 }: {
   title?: string
+  subtitle?: string
   backTo?: string
   right?: ReactNode
 }) {
@@ -38,10 +40,13 @@ export function Header({
           </button>
         )}
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-          <LogoMark size={26} />
-          <span className="truncate text-sm font-bold text-brand-800">
-            {title ?? 'らくらく店舗カンリ'}
-          </span>
+          <LogoMark size={subtitle ? 30 : 26} />
+          <div className="min-w-0 text-center">
+            <div className="truncate text-sm font-bold text-brand-800">
+              {title ?? 'らくらく店舗カンリ'}
+            </div>
+            {subtitle && <div className="truncate text-xs text-slate-400">{subtitle}</div>}
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           {right}

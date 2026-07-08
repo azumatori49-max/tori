@@ -1,7 +1,7 @@
 /** 表示用フォーマット関数 */
 
 /**
- * 作業日を「M/D」表記にする（スプレッドシート踏襲）。
+ * 施工日を「M/D」表記にする（スプレッドシート踏襲）。
  * 入力は "YYYY-MM-DD"、"M/D"、空文字いずれも許容。
  */
 export function formatWorkDate(value: string): string {

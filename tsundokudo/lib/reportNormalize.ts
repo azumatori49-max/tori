@@ -1,20 +1,36 @@
-import type { MaintenanceReport } from '@/types/report';
+import type { MaintenanceReport, PhotoCategory, ReportPhoto } from '@/types/report';
+
+/** 旧分類（作業前/作業中/作業後）→ 新分類（施工前/施工中/施工後） */
+const CATEGORY_MIGRATION: Record<string, PhotoCategory> = {
+  作業前: '施工前',
+  作業中: '施工中',
+  作業後: '施工後',
+};
+
+function normPhotos(photos: ReportPhoto[] | undefined): ReportPhoto[] {
+  return (photos ?? []).map((p) => {
+    const migrated = CATEGORY_MIGRATION[p.category];
+    return migrated ? { ...p, category: migrated } : p;
+  });
+}
 
 /** 旧データ・外部データに不足フィールドを補完する */
 export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
   return {
     ...r,
     company: r.company ?? '',
-    photos: r.photos ?? [],
-    checklist: (r.checklist ?? []).map((c) => ({ ...c, photos: c.photos ?? [] })),
+    photos: normPhotos(r.photos),
+    checklist: (r.checklist ?? []).map((c) => ({ ...c, photos: normPhotos(c.photos) })),
     pestControl: {
       basic: r.pestControl?.basic ?? false,
       antiDrug: r.pestControl?.antiDrug ?? false,
       strongPesticide: r.pestControl?.strongPesticide ?? false,
       presence: r.pestControl?.presence ?? '',
-      photos: r.pestControl?.photos ?? [],
+      photos: normPhotos(r.pestControl?.photos),
     },
-    diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: d.photos ?? [] })),
-    annualSchedule: r.annualSchedule ?? { comment: '', fee: 0, photos: [] },
+    diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: normPhotos(d.photos) })),
+    annualSchedule: r.annualSchedule
+      ? { ...r.annualSchedule, photos: normPhotos(r.annualSchedule.photos) }
+      : { comment: '', fee: 0, photos: [] },
   };
 }

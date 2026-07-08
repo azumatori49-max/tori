@@ -24,7 +24,6 @@ export const CONDITION_OPTIONS: ConditionLabel[] = [
 export const DEFAULT_CHECKLIST_NAMES: string[] = [
   'グリストラップ洗浄',
   'エアコンフィルター洗浄',
-  'ビール・コーラサーバー点検清掃',
   '看板電飾点検',
   '店内照明',
   '冷蔵庫フィルター清掃',
@@ -35,7 +34,7 @@ export const DEFAULT_CHECKLIST_NAMES: string[] = [
   '入口チャイム確認',
 ];
 
-/** トッピング（追加作業）の定型項目 */
+/** トッピング（追加施工）の定型項目 */
 export const DEFAULT_TOPPING_NAMES: string[] = [
   '粗大ゴミ回収',
   '蛇口の修繕',

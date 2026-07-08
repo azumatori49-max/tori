@@ -73,7 +73,7 @@ export interface AnnualSchedule {
 }
 
 /** 写真の分類 */
-export type PhotoCategory = '店舗外観' | '作業前' | '作業後' | 'その他';
+export type PhotoCategory = '店舗外観' | '施工前' | '施工中' | '施工後' | 'その他';
 
 /** レポートに添付する写真 */
 export interface ReportPhoto {

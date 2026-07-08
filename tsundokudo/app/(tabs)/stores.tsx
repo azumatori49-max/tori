@@ -1,6 +1,6 @@
 /**
  * 店舗一覧
- * - マスタ登録された店舗ごとに、最終作業日・レポート件数・次回予定を表示
+ * - マスタ登録された店舗ごとに、最終施工日・レポート件数・次回予定を表示
  * - タップでその店舗の新規レポート作成へ
  */
 import { useMemo } from 'react';
@@ -51,7 +51,7 @@ export default function StoresScreen() {
               <Text style={styles.storeName}>{row.name}</Text>
               <Text style={styles.meta}>
                 レポート {row.count}件
-                {row.lastDate ? `　/　最終作業 ${formatWorkDate(row.lastDate)}` : ''}
+                {row.lastDate ? `　/　最終施工 ${formatWorkDate(row.lastDate)}` : ''}
               </Text>
             </View>
             <View style={styles.itemRight}>

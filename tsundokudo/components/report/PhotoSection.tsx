@@ -1,7 +1,7 @@
 /**
  * 写真添付セクション
  * - 撮影 / ライブラリ選択で写真を追加
- * - 各写真に分類（店舗外観・作業前・作業後・その他）とメモを付与
+ * - 各写真に分類（店舗外観・施工前・施工中・施工後・その他）とメモを付与
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -12,7 +12,7 @@ import { C } from '@/constants/colors';
 import { CAMERA_SUPPORTED, capturePhoto, selectPhoto } from '@/lib/photos';
 import type { PhotoCategory, ReportPhoto } from '@/types/report';
 
-const CATEGORIES: PhotoCategory[] = ['店舗外観', '作業前', '作業後', 'その他'];
+const CATEGORIES: PhotoCategory[] = ['店舗外観', '施工前', '施工中', '施工後', 'その他'];
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

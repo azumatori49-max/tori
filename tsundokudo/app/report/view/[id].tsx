@@ -96,9 +96,9 @@ export default function ReportViewScreen() {
         {/* 基本情報 */}
         <SectionTitle>基本情報</SectionTitle>
         <Card>
-          <Row label="作業店舗" value={report.storeName} />
+          <Row label="施工店舗" value={report.storeName} />
           <Row label="会社名" value={report.company} />
-          <Row label="作業日" value={formatWorkDate(report.workDate)} />
+          <Row label="施工日" value={formatWorkDate(report.workDate)} />
           <Row label="契約プラン" value={report.contractPlan} />
           <Row label="施工担当者" value={report.technician} />
           <Row label="御請求先" value={report.billingTo} />
@@ -156,7 +156,7 @@ export default function ReportViewScreen() {
         </Card>
 
         {/* トッピング */}
-        <SectionTitle>トッピング（追加作業）</SectionTitle>
+        <SectionTitle>トッピング（追加施工）</SectionTitle>
         <Card>
           {toppings.length === 0 ? (
             <Text style={styles.empty}>なし</Text>

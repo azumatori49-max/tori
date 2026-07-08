@@ -48,7 +48,7 @@ export function LoginScreen() {
             <Image source={logoAsset} style={styles.logo} contentFit="contain" />
           </View>
           <Text style={styles.title}>らくらく店舗メンテナンス</Text>
-          <Text style={styles.sub}>定期点検・作業記録</Text>
+          <Text style={styles.sub}>定期点検・施工記録</Text>
         </View>
 
         <View style={styles.card}>

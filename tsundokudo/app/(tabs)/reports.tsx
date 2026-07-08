@@ -136,7 +136,7 @@ export default function ReportsScreen() {
           </View>
           <View>
             <Text style={styles.headerTitle}>らくらく店舗メンテナンス</Text>
-            <Text style={styles.headerSub}>定期点検・作業記録</Text>
+            <Text style={styles.headerSub}>定期点検・施工記録</Text>
           </View>
         </View>
       </View>

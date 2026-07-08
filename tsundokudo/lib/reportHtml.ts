@@ -27,7 +27,7 @@ function cb(checked: boolean): string {
   return `<span class="cb${checked ? ' on' : ''}">${checked ? '✓' : ''}</span>`;
 }
 
-/** 作業写真のコンタクトシート（ラベルを写真の上に表示する3列グリッド・専用ページ） */
+/** 施工写真のコンタクトシート（ラベルを写真の上に表示する3列グリッド・専用ページ） */
 function photoSheet(photos: { uri: string; category: string; caption: string }[]): string {
   if (!photos.length) return '';
   const cells = photos
@@ -40,7 +40,7 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
     )
     .join('');
   return `<section class="photo-page">
-    <div class="ps-title">作業写真</div>
+    <div class="ps-title">施工写真</div>
     <div class="sheet">${cells}</div>
   </section>`;
 }
@@ -48,7 +48,7 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
 export function buildReportHtml(report: ReportLike): string {
   const b = calcBilling(report);
 
-  // 請求ボックスに追加作業費（トッピング+DIY+年間）をまとめて表示
+  // 請求ボックスに追加施工費（トッピング+DIY+年間）をまとめて表示
   const extra = b.toppings + b.diy + b.annual;
 
   // 点検表
@@ -227,13 +227,13 @@ export function buildReportHtml(report: ReportLike): string {
 
   <div class="head">
     <div class="col-info">
-      <div class="kv"><div class="k">作業店舗</div><div class="v">${esc(report.storeName)}${report.company ? '　' + esc(report.company) : ''}</div></div>
+      <div class="kv"><div class="k">施工店舗</div><div class="v">${esc(report.storeName)}${report.company ? '　' + esc(report.company) : ''}</div></div>
       <div class="kv"><div class="k">契約プラン</div><div class="v orange">${esc(report.contractPlan)}</div></div>
       <div class="kv"><div class="k">施工担当者</div><div class="v">${esc(report.technician)}</div></div>
       <div class="kv"><div class="k">御請求先</div><div class="v">${esc(report.billingTo)}</div></div>
     </div>
     <div class="col-bill">
-      <div class="kv"><div class="k">作業日</div><div class="v">${esc(formatWorkDate(report.workDate))}</div></div>
+      <div class="kv"><div class="k">施工日</div><div class="v">${esc(formatWorkDate(report.workDate))}</div></div>
       <div class="invoice">
         <div class="inv-amt">
           <span class="inv-amt-k">ご請求金額（税込）</span>
@@ -246,7 +246,7 @@ export function buildReportHtml(report: ReportLike): string {
         </table>
         <div class="inv-break">
           <div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
-          ${extra ? `<div class="ibr"><span>追加作業</span><span>¥${yen(extra)}</span></div>` : ''}
+          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}
           <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
         </div>
       </div>
@@ -257,7 +257,7 @@ export function buildReportHtml(report: ReportLike): string {
   <table class="grid mt">
     <tr>
       <th style="width:26%">項目</th>
-      <th style="width:9%">作業<br/>チェック</th>
+      <th style="width:9%">施工<br/>チェック</th>
       <th style="width:22%">状況</th>
       <th>備考</th>
     </tr>
@@ -272,7 +272,7 @@ export function buildReportHtml(report: ReportLike): string {
     <div class="pi">害虫の状況：<b>${esc(pest.presence) || '—'}</b></div>
   </div>
 
-  <div class="band cream mt">トッピング（追加作業）</div>
+  <div class="band cream mt">トッピング（追加施工）</div>
   <table class="grid">
     <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
     ${toppingRows}

@@ -72,7 +72,7 @@ export default function ReportFormScreen() {
   const store = useReportStore();
   const existing = isNew ? undefined : store.getReport(id);
 
-  // 作業中のフォーム状態（保存するまでストアには反映しない）
+  // 施工中のフォーム状態（保存するまでストアには反映しない）
   const [form, setForm] = useState<MaintenanceReportInsert>(() => {
     if (existing) {
       // id / createdAt / updatedAt はフォームでは編集しないため除外
@@ -234,7 +234,7 @@ export default function ReportFormScreen() {
           {/* ── 基本情報 ── */}
           <SectionTitle>基本情報</SectionTitle>
           <Card>
-            <Field label="作業店舗">
+            <Field label="施工店舗">
               <Input
                 value={form.storeName}
                 onChangeText={(v) => patch({ storeName: v })}
@@ -260,7 +260,7 @@ export default function ReportFormScreen() {
                 onChange={(v) => patch({ company: v })}
               />
             </Field>
-            <Field label="作業日">
+            <Field label="施工日">
               <DatePicker value={form.workDate} onChange={(v) => patch({ workDate: v })} />
             </Field>
             <Field label="契約プラン">
@@ -384,7 +384,7 @@ export default function ReportFormScreen() {
                     photos={item.photos}
                     onChange={(photos: ReportPhoto[]) => patchChecklist(idx, { photos })}
                     max={6}
-                    defaultCategory="作業後"
+                    defaultCategory="施工後"
                   />
                 </View>
               )}
@@ -453,7 +453,7 @@ export default function ReportFormScreen() {
           </Card>
 
           {/* ── トッピング ── */}
-          <SectionTitle>トッピング（追加作業）</SectionTitle>
+          <SectionTitle>トッピング（追加施工）</SectionTitle>
           {form.toppings.map((t, idx) => {
             const isCustom = !DEFAULT_TOPPING_NAMES.includes(t.name);
             return (
@@ -507,7 +507,7 @@ export default function ReportFormScreen() {
           <SectionTitle>プチDIY</SectionTitle>
           {form.diy.length === 0 && (
             <Card>
-              <Text style={styles.emptyLine}>下のボタンから作業内容を登録できます</Text>
+              <Text style={styles.emptyLine}>下のボタンから施工内容を登録できます</Text>
             </Card>
           )}
           {form.diy.map((d, idx) => (
@@ -516,7 +516,7 @@ export default function ReportFormScreen() {
                 <Input
                   value={d.name}
                   onChangeText={(v) => patchDiy(idx, { name: v })}
-                  placeholder="作業名（例: 冷蔵庫パッキン清掃）"
+                  placeholder="施工名（例: 冷蔵庫パッキン清掃）"
                   style={styles.inlineInput}
                 />
                 <Pressable onPress={() => removeDiy(idx)} hitSlop={8}>
@@ -543,7 +543,7 @@ export default function ReportFormScreen() {
                   photos={d.photos}
                   onChange={(photos: ReportPhoto[]) => patchDiy(idx, { photos })}
                   max={6}
-                  defaultCategory="作業後"
+                  defaultCategory="施工後"
                 />
               </View>
             </Card>
@@ -648,6 +648,12 @@ export default function ReportFormScreen() {
             <Button title="PDF出力・共有" variant="ghost" onPress={() => void onExport()} />
             {!isNew && (
               <>
+                <View style={{ height: 10 }} />
+                <Button
+                  title="閲覧者用画面で確認"
+                  variant="ghost"
+                  onPress={() => router.push(`/report/view/${id}`)}
+                />
                 <View style={{ height: 10 }} />
                 <Button title="このレポートを削除" variant="danger" onPress={() => void onDelete()} />
               </>

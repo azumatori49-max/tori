@@ -5,18 +5,19 @@
  * data URL にすることで Web / ネイティブ どちらでも永続化でき、
  * ファイルURIの寿命問題を避けられる。
  *
- * 容量対策: 保存前に最大 1280px へ縮小し JPEG 60% に圧縮する。
+ * 容量対策: 保存前に最大 1000px へ縮小し JPEG 50% に圧縮する。
  * （スマホ写真をそのまま base64 化すると1枚数MBになり、
- *   クラウド送信やストレージの上限を超えて保存に失敗するため）
+ *   クラウド送信やストレージの上限・処理時間を超えて保存に失敗するため。
+ *   レポートPDFの縮小写真には十分な画質）
  */
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 /** 長辺の最大ピクセル数 */
-const MAX_DIMENSION = 1280;
+const MAX_DIMENSION = 1000;
 /** JPEG圧縮率 */
-const JPEG_QUALITY = 0.6;
+const JPEG_QUALITY = 0.5;
 
 const COMMON: ImagePicker.ImagePickerOptions = {
   quality: 1,

@@ -70,21 +70,20 @@ export function makeDefaultDiy(): DiyItem[] {
   return [];
 }
 
-/** 初期設定（マスタ）。スプレッドシートの実例を初期値に。 */
+/**
+ * 初期設定（マスタ）。
+ * 新規のお客様（会社）ごとに自分で設定するため空から始める。
+ * 値は設定画面で編集でき、レポート作成時にも自動で追加される。
+ */
 export const DEFAULT_SETTINGS: AppSettings = {
-  defaultBillingTo: '株式会社Belief　〒270-0176千葉県流山市加1-1593',
+  defaultBillingTo: '',
   defaultContractPlan: 'メンテナンス',
-  defaultMaintenanceFee: 50000,
-  technicians: ['佐藤　真人', '近藤　光蕃'],
-  stores: ['まる助東松山駅前店', '池袋店', '歌舞伎町店', '錦糸町店', '秋葉原店'],
-  companies: ['株式会社Belief', '株式会社鶏ヤロー'],
-  billingTos: ['株式会社Belief　〒270-0176千葉県流山市加1-1593'],
-  priceNotes: [
-    { label: 'E26', price: 260 },
-    { label: 'E17', price: 714 },
-    { label: 'E11', price: 475 },
-    { label: 'EZ10', price: 1082 },
-  ],
+  defaultMaintenanceFee: 0,
+  technicians: [],
+  stores: [],
+  companies: [],
+  billingTos: [],
+  priceNotes: [],
 };
 
 /** 新規レポートの初期値を設定（マスタ）から組み立てる */

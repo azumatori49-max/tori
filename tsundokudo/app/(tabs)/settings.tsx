@@ -5,6 +5,7 @@
  * - 担当者・店舗の一覧（レポート作成時に自動追加もされる）
  * - 電球プライスなどの単価メモ
  */
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,6 +35,116 @@ async function copyText(text: string, label: string): Promise<void> {
     // フォールバックへ
   }
   notify(label, text);
+}
+
+/** 追加・削除できる文字列リスト（担当者・店舗・会社・御請求先マスタ用） */
+function EditableList({
+  items,
+  placeholder,
+  onChange,
+  multiline,
+}: {
+  items: string[];
+  placeholder: string;
+  onChange: (items: string[]) => void;
+  multiline?: boolean;
+}) {
+  const [draft, setDraft] = useState('');
+
+  function add() {
+    const v = draft.trim();
+    if (!v || items.includes(v)) return;
+    onChange([...items, v]);
+    setDraft('');
+  }
+
+  return (
+    <>
+      {items.map((item) => (
+        <View key={item} style={styles.listRow}>
+          <Text style={styles.listDot}>•</Text>
+          <Text style={styles.listText}>{item}</Text>
+          <Pressable
+            onPress={() => onChange(items.filter((x) => x !== item))}
+            hitSlop={8}
+            style={styles.removeBtn}
+          >
+            <Text style={styles.removeBtnText}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+      {items.length === 0 && <Text style={styles.emptyText}>まだ登録がありません</Text>}
+      <View style={styles.addRow}>
+        <View style={{ flex: 1 }}>
+          <Input
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={placeholder}
+            multiline={multiline}
+          />
+        </View>
+        <Pressable style={styles.addBtn} onPress={add}>
+          <Text style={styles.addBtnText}>追加</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+/** 単価メモ（名前＋金額）の追加・削除 */
+function PriceNotesEditor({
+  items,
+  onChange,
+}: {
+  items: { label: string; price: number }[];
+  onChange: (items: { label: string; price: number }[]) => void;
+}) {
+  const [label, setLabel] = useState('');
+  const [price, setPrice] = useState('');
+
+  function add() {
+    const l = label.trim();
+    const p = Number(price.replace(/[^0-9]/g, '')) || 0;
+    if (!l || items.some((x) => x.label === l)) return;
+    onChange([...items, { label: l, price: p }]);
+    setLabel('');
+    setPrice('');
+  }
+
+  return (
+    <>
+      {items.map((p) => (
+        <View key={p.label} style={styles.priceRow}>
+          <Text style={styles.priceLabel}>{p.label}</Text>
+          <Text style={styles.priceVal}>¥{yen(p.price)}</Text>
+          <Pressable
+            onPress={() => onChange(items.filter((x) => x.label !== p.label))}
+            hitSlop={8}
+            style={styles.removeBtn}
+          >
+            <Text style={styles.removeBtnText}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+      {items.length === 0 && <Text style={styles.emptyText}>まだ登録がありません</Text>}
+      <View style={styles.addRow}>
+        <View style={{ flex: 2 }}>
+          <Input value={label} onChangeText={setLabel} placeholder="名前（例: E26）" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Input
+            value={price}
+            onChangeText={setPrice}
+            placeholder="金額"
+            keyboardType="number-pad"
+          />
+        </View>
+        <Pressable style={styles.addBtn} onPress={add}>
+          <Text style={styles.addBtnText}>追加</Text>
+        </Pressable>
+      </View>
+    </>
+  );
 }
 
 export default function SettingsScreen() {
@@ -193,45 +304,42 @@ export default function SettingsScreen() {
 
         <SectionTitle>担当者</SectionTitle>
         <Card>
-          {settings.technicians.map((t) => (
-            <View key={t} style={styles.listRow}>
-              <Text style={styles.listDot}>•</Text>
-              <Text style={styles.listText}>{t}</Text>
-            </View>
-          ))}
+          <EditableList
+            items={settings.technicians}
+            placeholder="担当者名を入力"
+            onChange={(technicians) => updateSettings({ technicians })}
+          />
           <Text style={styles.hint}>※ レポート作成時に新しい担当者名を入力すると自動で追加されます</Text>
         </Card>
 
         <SectionTitle>店舗</SectionTitle>
         <Card>
-          {settings.stores.map((s) => (
-            <View key={s} style={styles.listRow}>
-              <Text style={styles.listDot}>•</Text>
-              <Text style={styles.listText}>{s}</Text>
-            </View>
-          ))}
+          <EditableList
+            items={settings.stores}
+            placeholder="店舗名を入力"
+            onChange={(stores) => updateSettings({ stores })}
+          />
           <Text style={styles.hint}>※ レポート作成時に新しい店舗名を入力すると自動で追加されます</Text>
         </Card>
 
         <SectionTitle>会社</SectionTitle>
         <Card>
-          {settings.companies.map((c) => (
-            <View key={c} style={styles.listRow}>
-              <Text style={styles.listDot}>•</Text>
-              <Text style={styles.listText}>{c}</Text>
-            </View>
-          ))}
+          <EditableList
+            items={settings.companies}
+            placeholder="会社名を入力"
+            onChange={(companies) => updateSettings({ companies })}
+          />
           <Text style={styles.hint}>※ レポート作成時に新しい会社名を入力すると自動で追加されます</Text>
         </Card>
 
             <SectionTitle>御請求先</SectionTitle>
             <Card>
-              {settings.billingTos.map((b) => (
-                <View key={b} style={styles.listRow}>
-                  <Text style={styles.listDot}>•</Text>
-                  <Text style={styles.listText}>{b}</Text>
-                </View>
-              ))}
+              <EditableList
+                items={settings.billingTos}
+                placeholder="御請求先（社名・住所）を入力"
+                multiline
+                onChange={(billingTos) => updateSettings({ billingTos })}
+              />
               <Text style={styles.hint}>
                 ※ レポート作成時に新しい御請求先を入力すると自動で追加されます
               </Text>
@@ -239,12 +347,10 @@ export default function SettingsScreen() {
 
             <SectionTitle>単価メモ（電球プライス等）</SectionTitle>
             <Card>
-              {settings.priceNotes.map((p) => (
-                <View key={p.label} style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>{p.label}</Text>
-                  <Text style={styles.priceVal}>¥{yen(p.price)}</Text>
-                </View>
-              ))}
+              <PriceNotesEditor
+                items={settings.priceNotes}
+                onChange={(priceNotes) => updateSettings({ priceNotes })}
+              />
             </Card>
 
             <Text style={styles.footer}>らくらく店舗メンテナンス</Text>
@@ -268,17 +374,36 @@ const styles = StyleSheet.create({
   headerSub: { color: '#D8E7FA', fontSize: 13, marginTop: 2 },
   listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
   listDot: { color: C.primary, fontSize: 16, marginRight: 8 },
-  listText: { fontSize: 15, color: C.text },
+  listText: { flex: 1, fontSize: 15, color: C.text },
   hint: { fontSize: 11, color: C.textFaint, marginTop: 8 },
   priceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  priceLabel: { fontSize: 15, color: C.text, fontWeight: '600' },
+  priceLabel: { flex: 1, fontSize: 15, color: C.text, fontWeight: '600' },
   priceVal: { fontSize: 15, color: C.textSub },
+  removeBtn: {
+    marginLeft: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDECEC',
+  },
+  removeBtnText: { color: C.danger, fontSize: 13, fontWeight: '700' },
+  emptyText: { fontSize: 13, color: C.textFaint, paddingVertical: 4 },
+  addRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10 },
+  addBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  addBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   footer: { textAlign: 'center', color: C.textFaint, fontSize: 12, marginTop: 24 },
   accountLabel: { fontSize: 12, color: C.textSub },
   accountEmail: { fontSize: 16, fontWeight: '700', color: C.text, marginTop: 2 },

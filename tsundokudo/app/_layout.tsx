@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/authStore';
 import { isCloudEnabled } from '@/lib/firebase';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { OrgSetupScreen } from '@/components/auth/OrgSetupScreen';
+import { DefaultsSetupScreen } from '@/components/auth/DefaultsSetupScreen';
 import { PendingScreen } from '@/components/auth/PendingScreen';
 import { isOperatorUser } from '@/lib/operator';
 import { C } from '@/constants/colors';
@@ -42,6 +43,9 @@ function MainStack() {
 export default function RootLayout() {
   const pathname = usePathname();
   const hydrate = useReportStore((s) => s.hydrate);
+  const hydrateSettings = useReportStore((s) => s.hydrateSettings);
+  const settingsLoaded = useReportStore((s) => s.settingsLoaded);
+  const setupDone = useReportStore((s) => s.settings.setupDone);
   const authInit = useAuthStore((s) => s.init);
   const authReady = useAuthStore((s) => s.ready);
   const user = useAuthStore((s) => s.user);
@@ -59,6 +63,11 @@ export default function RootLayout() {
     }
   }, [authInit, hydrate]);
 
+  // クラウド時: 設定（マスタ）はログイン後すぐ読み込む（初期設定画面の判定用）
+  useEffect(() => {
+    if (isCloudEnabled && user) void hydrateSettings();
+  }, [user, hydrateSettings]);
+
   // クラウド時: ログイン／閲覧モードに応じてデータを読み込み／クリア
   useEffect(() => {
     if (!isCloudEnabled) return;
@@ -75,7 +84,7 @@ export default function RootLayout() {
   const isViewerRoute = pathname?.startsWith('/v/') ?? false;
 
   let content: React.ReactNode;
-  if (isCloudEnabled && (!authReady || (user && !orgChecked))) {
+  if (isCloudEnabled && (!authReady || (user && !orgChecked) || (user && org && !settingsLoaded))) {
     content = (
       <View style={{ flex: 1, backgroundColor: C.headerBg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#fff" />
@@ -85,6 +94,9 @@ export default function RootLayout() {
     content = <LoginScreen />;
   } else if (isCloudEnabled && user && !org) {
     content = <OrgSetupScreen />;
+  } else if (isCloudEnabled && user && org?.role === 'admin' && !setupDone) {
+    // 会社登録直後: レポートの既定値をまず決めてもらう
+    content = <DefaultsSetupScreen />;
   } else if (isCloudEnabled && user && org && !org.active && !isOperatorUser(user)) {
     // 運営の利用開始承認待ち（請求書払いの承認制）
     content = <PendingScreen />;

@@ -162,4 +162,6 @@ export interface AppSettings {
   billingTos: string[];
   /** 電球プライスなどの単価メモ（表示用） */
   priceNotes: { label: string; price: number }[];
+  /** 初期設定（既定値の入力）を済ませたか（会社登録直後の案内用） */
+  setupDone?: boolean;
 }

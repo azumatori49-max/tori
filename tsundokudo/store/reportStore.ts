@@ -50,11 +50,15 @@ interface ReportState {
   reports: MaintenanceReport[];
   settings: AppSettings;
   hydrated: boolean;
+  /** 設定（マスタ）の読み込みが完了したか */
+  settingsLoaded: boolean;
   /** 直近の保存エラー（容量超過など） */
   error: string | null;
 
   /** 起動時にストレージから読み込む */
   hydrate: () => Promise<void>;
+  /** 設定（マスタ）のみ先に読み込む（承認待ち中の初期設定画面用） */
+  hydrateSettings: () => Promise<void>;
 
   // CRUD（成功で true / 失敗で false）
   getReport: (id: string) => MaintenanceReport | undefined;
@@ -87,23 +91,40 @@ function persistErrorMessage(e: unknown): string {
   return `保存に失敗しました。\n${detail}`;
 }
 
+/** 保存済み設定を読み込み、旧データの不足キーをデフォルトで補完する */
+function normalizeSettings(raw: string | null): AppSettings {
+  const settings: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    ...parse<Partial<AppSettings>>(raw, {}),
+  };
+  settings.companies = settings.companies ?? [];
+  settings.billingTos =
+    settings.billingTos ?? (settings.defaultBillingTo ? [settings.defaultBillingTo] : []);
+  // 既に既定値が入っている（＝以前から使っている）場合は初期設定済み扱い
+  settings.setupDone =
+    settings.setupDone ??
+    (Boolean(settings.defaultBillingTo.trim()) || settings.technicians.length > 0);
+  return settings;
+}
+
 export const useReportStore = create<ReportState>((set, get) => ({
   reports: [],
   settings: DEFAULT_SETTINGS,
   hydrated: false,
+  settingsLoaded: false,
   error: null,
+
+  hydrateSettings: async () => {
+    if (get().settingsLoaded || get().hydrated) return;
+    const settingsRaw = await persist.getItem(SETTINGS_KEY);
+    set({ settings: normalizeSettings(settingsRaw), settingsLoaded: true });
+  },
 
   hydrate: async () => {
     if (get().hydrated) return;
-    // 設定（マスタ）は端末ローカルに保持。旧データの不足キーはデフォルトで補完
+    // 設定（マスタ）は端末ローカルに保持
     const settingsRaw = await persist.getItem(SETTINGS_KEY);
-    let settings: AppSettings = {
-      ...DEFAULT_SETTINGS,
-      ...parse<Partial<AppSettings>>(settingsRaw, {}),
-    };
-    settings.companies = settings.companies ?? [];
-    settings.billingTos =
-      settings.billingTos ?? (settings.defaultBillingTo ? [settings.defaultBillingTo] : []);
+    let settings = normalizeSettings(settingsRaw);
 
     if (isCloudEnabled) {
       // クラウド: 組織のレポートを取得（閲覧リンク時はゲスト組織のID）
@@ -113,10 +134,11 @@ export const useReportStore = create<ReportState>((set, get) => ({
         const reports = orgId ? await cloudFetchReports(orgId) : [];
         // 取得したレポートから店舗・担当者をマスタへ取り込む
         for (const r of reports) settings = mergeMaster(settings, r);
-        set({ reports, settings, hydrated: true });
+        set({ reports, settings, hydrated: true, settingsLoaded: true });
       } catch (e) {
         set({
           hydrated: true,
+          settingsLoaded: true,
           error: e instanceof Error ? e.message : 'データの取得に失敗しました。',
         });
       }
@@ -126,7 +148,7 @@ export const useReportStore = create<ReportState>((set, get) => ({
     // ローカル: IndexedDB / MMKV から取得
     const reportsRaw = await persist.getItem(REPORTS_KEY);
     const reports = parse<MaintenanceReport[]>(reportsRaw, []).map(normalizeReport);
-    set({ reports, settings, hydrated: true });
+    set({ reports, settings, hydrated: true, settingsLoaded: true });
   },
 
   getReport: (id) => get().reports.find((r) => r.id === id),

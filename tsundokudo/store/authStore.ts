@@ -44,6 +44,8 @@ export interface OrgInfo {
   role: 'admin' | 'member';
   inviteCode: string;
   viewerToken: string;
+  /** 運営承認済みで利用可能か（請求書払いの承認制） */
+  active: boolean;
 }
 
 interface GuestOrg {
@@ -84,6 +86,8 @@ interface AuthState {
   enterGuestByToken: (token: string) => Promise<boolean>;
   /** 招待コード/閲覧リンクの再発行（adminのみ） */
   rotateOrgCode: (kind: 'invite' | 'viewer') => Promise<boolean>;
+  /** 組織情報を再取得（承認待ち画面の「状態を確認」用） */
+  refreshOrg: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -193,6 +197,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         inviteCode,
         viewerToken,
         createdBy: uid,
+        // 新規申し込みは運営の承認待ちから始まる（請求書払いの承認制）
+        active: false,
         createdAt: serverTimestamp(),
       });
       batch.set(doc(fbDb, 'inviteCodes', inviteCode), { orgId: orgRef.id });
@@ -204,7 +210,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       await batch.commit();
       set({
-        org: { id: orgRef.id, name: orgName, role: 'admin', inviteCode, viewerToken },
+        org: {
+          id: orgRef.id,
+          name: orgName,
+          role: 'admin',
+          inviteCode,
+          viewerToken,
+          active: false,
+        },
         orgChecked: true,
         loading: false,
       });
@@ -297,6 +310,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  refreshOrg: async () => {
+    const org = get().org;
+    if (!org) return;
+    const next = await fetchOrgInfo(org.id, org.role);
+    if (next) set({ org: next });
+  },
+
   signOut: async () => {
     if (get().guestOrg) {
       // 閲覧終了: 入場券を消して匿名セッションも破棄
@@ -322,13 +342,20 @@ async function fetchOrgInfo(orgId: string, role: 'admin' | 'member'): Promise<Or
   if (!fbDb) return null;
   const snap = await getDoc(doc(fbDb, 'orgs', orgId));
   if (!snap.exists()) return null;
-  const d = snap.data() as { name: string; inviteCode: string; viewerToken: string };
+  const d = snap.data() as {
+    name: string;
+    inviteCode: string;
+    viewerToken: string;
+    active?: boolean;
+  };
   return {
     id: orgId,
     name: d.name,
     role,
     inviteCode: d.inviteCode,
     viewerToken: d.viewerToken,
+    // 旧データ（activeフィールドなし）は有効扱い
+    active: d.active !== false,
   };
 }
 

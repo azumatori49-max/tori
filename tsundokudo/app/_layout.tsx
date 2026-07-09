@@ -10,6 +10,8 @@ import { useAuthStore } from '@/store/authStore';
 import { isCloudEnabled } from '@/lib/firebase';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { OrgSetupScreen } from '@/components/auth/OrgSetupScreen';
+import { PendingScreen } from '@/components/auth/PendingScreen';
+import { isOperatorUser } from '@/lib/operator';
 import { C } from '@/constants/colors';
 
 // Web プレビュー時のネイティブモジュール系エラーを抑制
@@ -60,7 +62,8 @@ export default function RootLayout() {
   // クラウド時: ログイン／閲覧モードに応じてデータを読み込み／クリア
   useEffect(() => {
     if (!isCloudEnabled) return;
-    if ((user && org) || guestOrg) {
+    // 承認待ちの組織はデータ取得しない（ルールで拒否されるため）
+    if ((user && org && (org.active || isOperatorUser(user))) || guestOrg) {
       void hydrate();
     } else {
       // サインアウト時はメモリ上のデータをクリア
@@ -82,6 +85,9 @@ export default function RootLayout() {
     content = <LoginScreen />;
   } else if (isCloudEnabled && user && !org) {
     content = <OrgSetupScreen />;
+  } else if (isCloudEnabled && user && org && !org.active && !isOperatorUser(user)) {
+    // 運営の利用開始承認待ち（請求書払いの承認制）
+    content = <PendingScreen />;
   } else {
     content = <MainStack />;
   }

@@ -15,6 +15,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // ── 運営者（サービス提供者）。lib/operator.ts と揃えること ──
+    function isOperator() {
+      return signedIn()
+        && ('email' in request.auth.token)
+        && request.auth.token.email in ['azumatori49@gmail.com'];
+    }
+
+    // 組織が利用開始承認済みか（旧データ: activeフィールドなしは有効扱い）
+    function orgActive(orgId) {
+      return !('active' in get(/databases/$(db)/documents/orgs/$(orgId)).data)
+        || get(/databases/$(db)/documents/orgs/$(orgId)).data.active == true;
+    }
+
     // ── 所属判定 ─────────────────────────────
     function userPath() {
       return /databases/$(db)/documents/users/$(request.auth.uid);
@@ -60,18 +73,29 @@ service cloud.firestore {
 
     // ── 組織 ─────────────────────────────────
     match /orgs/{orgId} {
-      allow get: if isMember(orgId);
+      allow get: if isMember(orgId) || isOperator();
+      // 運営者は申し込み一覧を見られる
+      allow list: if isOperator();
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid;
-      // 更新はコード再発行のみ（admin限定）
-      allow update: if isAdmin(orgId)
+      allow update: if (
+        // 会社の管理者: コード再発行のみ
+        isAdmin(orgId)
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['inviteCode', 'viewerToken']);
+             .hasOnly(['inviteCode', 'viewerToken'])
+      ) || (
+        // 運営者: 利用開始の承認/停止のみ
+        isOperator()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['active'])
+      );
 
-      // ── レポート ────────────────────────────
+      // ── レポート（利用開始承認済みの組織のみ。運営者は常に可） ──
       match /reports/{reportId} {
-        allow read: if isMember(orgId) || isViewer(orgId);
-        allow create, update, delete: if isMember(orgId);
+        allow read: if ((isMember(orgId) || isViewer(orgId)) && orgActive(orgId))
+          || isOperator();
+        allow create, update, delete: if (isMember(orgId) && orgActive(orgId))
+          || isOperator();
       }
     }
 

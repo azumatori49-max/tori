@@ -2,10 +2,13 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { C } from '@/constants/colors';
-import { useIsViewer } from '@/store/authStore';
+import { useAuthStore, useIsViewer } from '@/store/authStore';
+import { isOperatorUser } from '@/lib/operator';
 
 export default function TabsLayout() {
   const isViewer = useIsViewer();
+  const user = useAuthStore((s) => s.user);
+  const isOperator = isOperatorUser(user);
   const insets = useSafeAreaInsets();
   // iPhoneのホームバー等と重ならないよう、セーフエリア分を高さに含める
   const bottomPad = Math.max(insets.bottom, 6);
@@ -33,6 +36,8 @@ export default function TabsLayout() {
       {/* 閲覧専用には店舗タブ（新規作成導線）を出さない */}
       <Tabs.Screen name="stores" options={{ title: '店舗', href: isViewer ? null : undefined }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
+      {/* 運営者（サービス提供者）専用ページ */}
+      <Tabs.Screen name="admin" options={{ title: '運営', href: isOperator ? undefined : null }} />
     </Tabs>
   );
 }

@@ -5,7 +5,7 @@
  * - 担当者・店舗の一覧（レポート作成時に自動追加もされる）
  * - 電球プライスなどの単価メモ
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,12 +14,6 @@ import { useAuthStore, useIsViewer } from '@/store/authStore';
 import { isCloudEnabled } from '@/lib/firebase';
 import { cloudUpsertReport } from '@/lib/cloudReports';
 import { canImportLegacy, fetchLegacyReports } from '@/lib/legacyImport';
-import {
-  fetchAllOrgs,
-  isOperatorUser,
-  setOrgActive,
-  type OperatorOrgRow,
-} from '@/lib/operator';
 import { confirmAsync, notify } from '@/lib/dialog';
 import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
 import { C } from '@/constants/colors';
@@ -151,85 +145,6 @@ function PriceNotesEditor({
           <Text style={styles.addBtnText}>追加</Text>
         </Pressable>
       </View>
-    </>
-  );
-}
-
-/** 運営管理: 申し込み（会社）一覧と利用開始の承認/停止 */
-function OperatorConsole() {
-  const [rows, setRows] = useState<OperatorOrgRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  async function reload() {
-    try {
-      setRows(await fetchAllOrgs());
-    } catch {
-      // ルール未更新などで読めない場合は空のまま
-    }
-    setLoaded(true);
-  }
-
-  useEffect(() => {
-    void (async () => {
-      await reload();
-    })();
-  }, []);
-
-  async function onToggle(row: OperatorOrgRow) {
-    const ok = await confirmAsync(
-      row.active ? '利用を停止' : '利用開始を承認',
-      row.active
-        ? `「${row.name}」の利用を停止しますか？（データは残ります）`
-        : `「${row.name}」の利用開始を承認しますか？`,
-      row.active ? '停止する' : '承認する',
-    );
-    if (!ok) return;
-    try {
-      await setOrgActive(row.id, !row.active);
-      await reload();
-      notify('更新しました', `「${row.name}」を${row.active ? '停止' : '利用開始'}にしました。`);
-    } catch {
-      notify('エラー', '更新に失敗しました。セキュリティルールが最新か確認してください。');
-    }
-  }
-
-  return (
-    <>
-      <SectionTitle>運営管理（あなたにのみ表示）</SectionTitle>
-      <Card>
-        <Text style={styles.accountNote}>
-          お申し込み（会社）の一覧です。内容を確認し請求書を送付したら「承認」してください。
-          承認するとその会社がアプリを使えるようになります。
-        </Text>
-        <View style={{ height: 8 }} />
-        {!loaded && <Text style={styles.emptyText}>読み込み中…</Text>}
-        {loaded && rows.length === 0 && (
-          <Text style={styles.emptyText}>まだ申し込みがありません</Text>
-        )}
-        {rows.map((row) => (
-          <View key={row.id} style={styles.opRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.opName}>{row.name}</Text>
-              <Text style={styles.opMeta}>
-                {row.createdAt
-                  ? `申込: ${row.createdAt.getFullYear()}/${row.createdAt.getMonth() + 1}/${row.createdAt.getDate()}`
-                  : ''}
-              </Text>
-            </View>
-            <View style={[styles.opBadge, row.active ? styles.opBadgeOn : styles.opBadgeOff]}>
-              <Text style={row.active ? styles.opBadgeOnText : styles.opBadgeOffText}>
-                {row.active ? '利用中' : '承認待ち'}
-              </Text>
-            </View>
-            <Pressable style={styles.opBtn} onPress={() => void onToggle(row)}>
-              <Text style={styles.opBtnText}>{row.active ? '停止' : '承認'}</Text>
-            </Pressable>
-          </View>
-        ))}
-        <Pressable style={styles.rotateBtn} onPress={() => void reload()}>
-          <Text style={styles.rotateText}>一覧を更新する</Text>
-        </Pressable>
-      </Card>
     </>
   );
 }
@@ -415,8 +330,6 @@ export default function SettingsScreen() {
                     </>
                   )}
                 </Card>
-
-                {isOperatorUser(user) && <OperatorConsole />}
 
                 {canImportLegacy && org.role === 'admin' && (
                   <LegacyImportCard orgId={org.id} />

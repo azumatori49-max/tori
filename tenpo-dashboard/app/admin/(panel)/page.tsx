@@ -1,11 +1,18 @@
 import { getProvider } from "@/lib/data";
 import { fmt1, fmtDateTime, submitState } from "@/lib/format";
+import { getLiveHygiene } from "@/lib/hygiene";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminOverviewPage() {
 	const provider = await getProvider();
-	const rows = await provider.listStoreOverview();
+	const baseRows = await provider.listStoreOverview();
+	// 衛生チェックは既存の衛生管理アプリからリアルタイム取得(不可ならシート同期値)
+	const liveHygiene = await getLiveHygiene(baseRows.map((r) => r.store));
+	const rows = baseRows.map((r) => ({
+		...r,
+		hygiene: liveHygiene.get(r.store.id) ?? r.hygiene,
+	}));
 	const sorted = [...rows].sort(
 		(a, b) => (a.today?.overallRank ?? 999) - (b.today?.overallRank ?? 999),
 	);

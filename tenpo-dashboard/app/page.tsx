@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import RankChart from "@/components/RankChart";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/data";
+import { getLiveHygiene } from "@/lib/hygiene";
 import {
 	fmt1,
 	fmtDateTime,
@@ -111,7 +112,8 @@ function HygieneItem({
 }
 
 function HygienePanel({ hygiene }: { hygiene: HygieneStatus | null }) {
-	const hygieneUrl = process.env.NEXT_PUBLIC_HYGIENE_APP_URL;
+	const hygieneUrl =
+		process.env.NEXT_PUBLIC_HYGIENE_APP_URL || "https://toriyaro-eisei-faf2e.web.app";
 	return (
 		<section className="card">
 			<h2 className="section-title">衛生チェックの状況</h2>
@@ -176,6 +178,9 @@ export default async function DashboardPage() {
 	if (!store) redirect("/login");
 
 	const data = await provider.getDashboard(store);
+	// 衛生チェックは既存の衛生管理アプリからリアルタイム取得(不可ならシート同期値)
+	const liveHygiene = await getLiveHygiene([store]);
+	const hygiene = liveHygiene.get(store.id) ?? data.hygiene;
 	const m: DailyMetrics | null = data.today;
 	const prev = data.yesterday;
 	const kpiDiff = m && prev ? m.kpiScore - prev.kpiScore : null;
@@ -296,7 +301,7 @@ export default async function DashboardPage() {
 				)}
 
 				<div className="main-grid">
-					<HygienePanel hygiene={data.hygiene} />
+					<HygienePanel hygiene={hygiene} />
 
 					<section className="card">
 						<h2 className="section-title">

@@ -183,6 +183,20 @@ export default function ReportFormScreen() {
       notify('店舗名を入力してください');
       return;
     }
+    if (!form.pestControl.presence) {
+      notify(
+        '害虫の状況を選択してください',
+        '害虫駆除の「多い・少ない・見ない」のいずれかを選んでください。',
+      );
+      return;
+    }
+    if (form.pestControl.photos.length === 0) {
+      notify(
+        '害虫駆除の写真を添付してください',
+        '害虫駆除の欄に写真を1枚以上添付してください。',
+      );
+      return;
+    }
     const ok = isNew
       ? await store.createReport(form)
       : await store.updateReport(id, form);
@@ -434,10 +448,13 @@ export default function ReportFormScreen() {
                 label="強殺虫剤"
               />
             </View>
-            <Text style={styles.subLabel}>害虫の状況（いるかいないか）</Text>
+            <Text style={styles.subLabel}>
+              害虫の状況（いるかいないか）<Text style={styles.required}>必須</Text>
+            </Text>
             <ChipSelect
               options={[...PEST_PRESENCE_OPTIONS]}
               value={form.pestControl.presence}
+              allowEmpty={false}
               onChange={(v) =>
                 patch({
                   pestControl: {
@@ -447,7 +464,9 @@ export default function ReportFormScreen() {
                 })
               }
             />
-            <Text style={styles.subLabel}>写真（最大6枚）</Text>
+            <Text style={styles.subLabel}>
+              写真（最大6枚）<Text style={styles.required}>必須</Text>
+            </Text>
             <PhotoSection
               photos={form.pestControl.photos}
               onChange={(photos: ReportPhoto[]) =>
@@ -707,6 +726,7 @@ const styles = StyleSheet.create({
     borderTopColor: C.border,
   },
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
+  required: { fontSize: 10, fontWeight: '800', color: C.danger },
   techWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   techChip: {
     flexDirection: 'row',

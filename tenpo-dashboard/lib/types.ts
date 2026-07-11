@@ -11,6 +11,7 @@ export type DailyMetrics = {
 	date: string; // YYYY-MM-DD
 	kpiScore: number;
 	kpiAvg: number | null;
+	kpiRank: number | null;
 	overallRank: number;
 	totalStores: number;
 	costRate: number;
@@ -81,6 +82,7 @@ export type GasStoreRow = {
 	code: string;
 	kpi_score: number;
 	kpi_avg?: number;
+	kpi_rank?: number;
 	overall_rank: number;
 	cost_rate: number;
 	cost_rate_rank?: number;

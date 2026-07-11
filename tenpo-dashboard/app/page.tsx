@@ -224,6 +224,14 @@ export default async function DashboardPage() {
 									<span>全店平均</span>
 									<b>{fmt1(m.kpiAvg)}</b>
 								</div>
+								{m.kpiRank !== null && (
+									<div className="row">
+										<span>順位</span>
+										<b>
+											{m.kpiRank}位 / {m.totalStores}店舗
+										</b>
+									</div>
+								)}
 							</div>
 						</div>
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import BrandLogo from "@/components/BrandLogo";
 import RankChart from "@/components/RankChart";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/data";
@@ -193,7 +194,7 @@ export default async function DashboardPage() {
 	return (
 		<>
 			<header className="site-header">
-				<span className="logo">鶏</span>
+				<BrandLogo brand={store.brand} />
 				<div className="titles">
 					<h1>{store.name}</h1>
 					<div className="subtitle">{store.brand} 衛生管理</div>

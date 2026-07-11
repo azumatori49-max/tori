@@ -18,6 +18,8 @@ const stores: Store[] = [
 	{ id: "s4", code: "104", name: "仙台国分町店", brand: "まる助", active: true },
 	{ id: "s5", code: "105", name: "宇都宮東口店", brand: "鶏ヤロー", active: true },
 	{ id: "s6", code: "106", name: "大宮南銀座店", brand: "まる助", active: true },
+	{ id: "s7", code: "107", name: "川越クレアモール店", brand: "イザカラ", active: true },
+	{ id: "s8", code: "108", name: "上野御徒町店", brand: "すし鳥酒場", active: true },
 ];
 
 function dateStr(daysAgo: number): string {

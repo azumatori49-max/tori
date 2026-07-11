@@ -27,7 +27,7 @@ export default async function LoginPage({
 		<div className="login-wrap">
 			<div className="card login-card">
 				<h1>店長ダッシュボード</h1>
-				<p className="lead">鶏ヤロー・まる助 衛生管理</p>
+				<p className="lead">鶏ヤロー / まる助 / イザカラ / すし鳥酒場</p>
 				{provider.isMock && (
 					<p className="mock-note">
 						デモモードで動作中です。店舗コード「101」〜「106」、パスワード「demo」でログインできます。

@@ -80,6 +80,12 @@ textarea {
 	flex-shrink: 0;
 }
 
+.site-header .logo-img {
+	background: #fff;
+	object-fit: contain;
+	border: 1px solid var(--border);
+}
+
 .site-header .titles {
 	flex: 1;
 	min-width: 0;

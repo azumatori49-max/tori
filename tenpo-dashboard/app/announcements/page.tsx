@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import BrandLogo from "@/components/BrandLogo";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/data";
 import { fmtDateTime, isNew } from "@/lib/format";
@@ -15,10 +16,10 @@ export default async function AnnouncementsPage() {
 	return (
 		<>
 			<header className="site-header">
-				<span className="logo">鶏</span>
+				<BrandLogo />
 				<div className="titles">
 					<h1>お知らせ一覧</h1>
-					<div className="subtitle">鶏ヤロー・まる助 衛生管理</div>
+					<div className="subtitle">店長ダッシュボード</div>
 				</div>
 				<Link className="logout-btn" href={session.role === "admin" ? "/admin" : "/"}>
 					戻る

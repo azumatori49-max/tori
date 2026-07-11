@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import AdminNav from "@/components/AdminNav";
+import BrandLogo from "@/components/BrandLogo";
 import { getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/data";
 import { logoutAdmin } from "@/app/actions";
@@ -12,10 +13,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 	return (
 		<>
 			<header className="site-header">
-				<span className="logo">鶏</span>
+				<BrandLogo />
 				<div className="titles">
 					<h1>本部 管理画面</h1>
-					<div className="subtitle">鶏ヤロー・まる助 衛生管理</div>
+					<div className="subtitle">鶏ヤロー / まる助 / イザカラ / すし鳥酒場</div>
 				</div>
 				<form action={logoutAdmin}>
 					<button className="logout-btn" type="submit">

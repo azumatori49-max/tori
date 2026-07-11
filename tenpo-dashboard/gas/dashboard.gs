@@ -104,12 +104,14 @@ function initSpreadsheet() {
 	var master = getOrCreateSheet(ss, SHEET_MASTER);
 	if (master.getLastRow() === 0) {
 		master
-			.getRange(1, 1, 4, 4)
+			.getRange(1, 1, 6, 4)
 			.setValues([
 				["店舗コード", "店舗名", "ブランド", "初期パスワード"],
-				["101", "福島栄町店", "鶏ヤロー・まる助", ""],
+				["101", "福島栄町店", "鶏ヤロー", ""],
 				["102", "郡山駅前店", "鶏ヤロー", ""],
-				["103", "いわき平店", "鶏ヤロー", ""],
+				["103", "大宮一番街店", "まる助", ""],
+				["104", "川越クレアモール店", "イザカラ", ""],
+				["105", "上野御徒町店", "すし鳥酒場", ""],
 			]);
 		master.getRange("A1:D1").setFontWeight("bold").setBackground("#f4e8dd");
 		master.getRange("A:A").setNumberFormat("@"); // 店舗コードは文字列扱い

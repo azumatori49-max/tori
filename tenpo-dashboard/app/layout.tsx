@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-	title: "店長ダッシュボード | 鶏ヤロー・まる助",
-	description: "店舗KPI・衛生管理ダッシュボード",
+	title: "店長ダッシュボード",
+	description: "鶏ヤロー・まる助・イザカラ・すし鳥酒場 店舗KPI・衛生管理ダッシュボード",
 };
 
 export const viewport: Viewport = {

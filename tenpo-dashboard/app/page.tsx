@@ -202,7 +202,7 @@ export default async function DashboardPage() {
 			<main className="page">
 				{provider.isMock && (
 					<p className="mock-note">
-						デモモードで動作中です(Supabase 未設定)。表示されているのはサンプルデータです。
+						デモモードで動作中です(Firebase 未設定)。表示されているのはサンプルデータです。
 					</p>
 				)}
 				<p className="updated-at">最終更新:{m ? fmtDateTime(m.updatedAt) : "-"}</p>

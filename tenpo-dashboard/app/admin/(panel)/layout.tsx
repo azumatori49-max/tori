@@ -26,7 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 			<main className="page">
 				{provider.isMock && (
 					<p className="mock-note">
-						デモモードで動作中です(Supabase 未設定)。ここでの変更はサーバー再起動で消えます。
+						デモモードで動作中です(Firebase 未設定)。ここでの変更はサーバー再起動で消えます。
 					</p>
 				)}
 				<AdminNav />

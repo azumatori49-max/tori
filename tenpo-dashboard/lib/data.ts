@@ -47,9 +47,20 @@ let provider: DataProvider | null = null;
 
 export async function getProvider(): Promise<DataProvider> {
 	if (provider) return provider;
-	if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-		const { supabaseProvider } = await import("./supabase");
-		provider = supabaseProvider;
+	const hasFirebase =
+		!!process.env.FIREBASE_SERVICE_ACCOUNT ||
+		!!(
+			process.env.FIREBASE_PROJECT_ID &&
+			process.env.FIREBASE_CLIENT_EMAIL &&
+			process.env.FIREBASE_PRIVATE_KEY
+		) ||
+		!!process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+		// Firebase App Hosting / Cloud Run 上では自動的に設定される
+		!!process.env.FIREBASE_CONFIG ||
+		!!process.env.GOOGLE_CLOUD_PROJECT;
+	if (hasFirebase) {
+		const { firebaseProvider } = await import("./firebase");
+		provider = firebaseProvider;
 	} else {
 		const { mockProvider } = await import("./mock");
 		provider = mockProvider;

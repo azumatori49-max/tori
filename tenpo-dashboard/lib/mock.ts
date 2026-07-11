@@ -291,4 +291,32 @@ export const mockProvider: DataProvider = {
 		}
 		return { updated, unknownCodes };
 	},
+
+	async upsertStores(rows) {
+		let created = 0;
+		let updated = 0;
+		const skippedNoPassword: string[] = [];
+		for (const row of rows) {
+			const existing = stores.find((s) => s.code === row.code);
+			if (existing) {
+				existing.name = row.name;
+				if (row.brand) existing.brand = row.brand;
+				updated++;
+			} else {
+				if (!row.password) {
+					skippedNoPassword.push(row.code);
+					continue;
+				}
+				stores.push({
+					id: `s${stores.length + 1}`,
+					code: row.code,
+					name: row.name,
+					brand: row.brand ?? "",
+					active: true,
+				});
+				created++;
+			}
+		}
+		return { created, updated, skippedNoPassword };
+	},
 };

@@ -1,6 +1,6 @@
 import { cert, getApps, initializeApp, applicationDefault, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
-import { verifyPassword } from "./auth";
+import { hashPassword, verifyPassword } from "./auth";
 import type { DataProvider, StoreOverviewRow } from "./data";
 import type {
 	Announcement,
@@ -289,5 +289,40 @@ export const firebaseProvider: DataProvider = {
 		}
 
 		return { updated, unknownCodes };
+	},
+
+	async upsertStores(rows) {
+		const snap = await db().collection("stores").get();
+		const docByCode = new Map(snap.docs.map((d) => [d.data().code as string, d]));
+		let created = 0;
+		let updated = 0;
+		const skippedNoPassword: string[] = [];
+		for (const row of rows) {
+			const existing = docByCode.get(row.code);
+			if (existing) {
+				const update: Record<string, unknown> = {
+					name: row.name,
+					brand: row.brand ?? existing.data().brand ?? "",
+					active: true,
+				};
+				if (row.password) update.passwordHash = hashPassword(row.password);
+				await existing.ref.set(update, { merge: true });
+				updated++;
+			} else {
+				if (!row.password) {
+					skippedNoPassword.push(row.code);
+					continue;
+				}
+				await db().collection("stores").add({
+					code: row.code,
+					name: row.name,
+					brand: row.brand ?? "",
+					passwordHash: hashPassword(row.password),
+					active: true,
+				});
+				created++;
+			}
+		}
+		return { created, updated, skippedNoPassword };
 	},
 };

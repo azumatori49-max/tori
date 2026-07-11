@@ -10,8 +10,10 @@
  * 3. メニュー「① 初期セットアップ」→ シート(店舗マスタ/データ入力/設定/ダッシュボード連携)が生成される
  * 4. 「設定」シートにエンドポイント URL を入力、「店舗マスタ」を実店舗に書き換える
  * 5. メニュー「② API シークレットを設定」→ アプリ側の GAS_SYNC_SECRET と同じ値を入力
- * 6. 「データ入力」に各店舗の数値を入れて、メニュー「③ 今すぐ同期」で動作確認
- * 7. メニュー「④ 毎日の自動同期を設定」で毎日自動送信(時刻は「設定」シートで変更可)
+ * 6. 「店舗マスタ」の「初期パスワード」を入力し、メニュー「⑤ 店舗をアプリに登録」を実行
+ *    → 店舗がアプリに登録され、店舗コード+パスワードでログインできるようになる
+ * 7. 「データ入力」に各店舗の数値を入れて、メニュー「③ 今すぐ同期」で動作確認
+ * 8. メニュー「④ 毎日の自動同期を設定」で毎日自動送信(時刻は「設定」シートで変更可)
  *
  * ■ 各シートの役割
  * - 店舗マスタ:       店舗コードと店舗名(アプリ側の店舗コードと一致させる)
@@ -69,6 +71,7 @@ function onOpen() {
 		.addItem("② API シークレットを設定", "setApiSecret")
 		.addItem("③ 今すぐ同期", "syncToDashboard")
 		.addItem("④ 毎日の自動同期を設定", "setupDailyTrigger")
+		.addItem("⑤ 店舗をアプリに登録", "registerStores")
 		.addToUi();
 }
 
@@ -101,21 +104,29 @@ function initSpreadsheet() {
 	var master = getOrCreateSheet(ss, SHEET_MASTER);
 	if (master.getLastRow() === 0) {
 		master
-			.getRange(1, 1, 4, 3)
+			.getRange(1, 1, 4, 4)
 			.setValues([
-				["店舗コード", "店舗名", "ブランド"],
-				["101", "福島栄町店", "鶏ヤロー・まる助"],
-				["102", "郡山駅前店", "鶏ヤロー"],
-				["103", "いわき平店", "鶏ヤロー"],
+				["店舗コード", "店舗名", "ブランド", "初期パスワード"],
+				["101", "福島栄町店", "鶏ヤロー・まる助", ""],
+				["102", "郡山駅前店", "鶏ヤロー", ""],
+				["103", "いわき平店", "鶏ヤロー", ""],
 			]);
-		master.getRange("A1:C1").setFontWeight("bold").setBackground("#f4e8dd");
+		master.getRange("A1:D1").setFontWeight("bold").setBackground("#f4e8dd");
 		master.getRange("A:A").setNumberFormat("@"); // 店舗コードは文字列扱い
 		master.setColumnWidth(2, 160);
-		master
-			.getRange("A1")
-			.setNote("アプリ(Firestore の stores)に登録した店舗コードと一致させてください");
 		master.setFrozenRows(1);
 	}
+	// 旧バージョンで作成したシートにパスワード列を追加
+	if (String(master.getRange("D1").getValue()).trim() === "") {
+		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#f4e8dd");
+	}
+	master
+		.getRange("A1")
+		.setNote(
+			"メニュー「⑤ 店舗をアプリに登録」でこの一覧がそのままアプリに登録されます。\n" +
+				"新しい店舗は「初期パスワード」を入れてから⑤を実行してください(登録後は空欄に戻してOK)。\n" +
+				"既存店舗のパスワードを変えたいときも、入力して⑤を実行すれば更新されます。",
+		);
 
 	// --- データ入力 ---
 	var input = getOrCreateSheet(ss, SHEET_INPUT);
@@ -422,6 +433,66 @@ function writeOutputSheet(ss, stores) {
 	output.getRange(1, 1, 1, OUTPUT_HEADERS.length).setFontWeight("bold").setBackground("#e3edfb");
 	output.getRange("A:A").setNumberFormat("@");
 	output.getRange(2, 1, rows.length, OUTPUT_HEADERS.length).setValues(rows);
+}
+
+/* ===================== ⑤ 店舗をアプリに登録 ===================== */
+
+function registerStores() {
+	var ss = SpreadsheetApp.getActiveSpreadsheet();
+	var settings = readSettings(ss);
+	var secret = PropertiesService.getScriptProperties().getProperty("GAS_SYNC_SECRET");
+	if (!secret) {
+		throw new Error("メニュー「② API シークレットを設定」を先に実行してください");
+	}
+	var master = ss.getSheetByName(SHEET_MASTER);
+	if (!master || master.getLastRow() < 2) {
+		throw new Error("「" + SHEET_MASTER + "」に店舗を入力してください");
+	}
+
+	var stores = [];
+	master
+		.getRange(2, 1, master.getLastRow() - 1, 4)
+		.getValues()
+		.forEach(function (row) {
+			var code = String(row[0]).trim();
+			var name = String(row[1]).trim();
+			if (!code || !name) return;
+			var store = { code: code, name: name };
+			var brand = String(row[2]).trim();
+			if (brand) store.brand = brand;
+			var password = String(row[3]).trim();
+			if (password) store.password = password;
+			stores.push(store);
+		});
+	if (stores.length === 0) {
+		throw new Error("登録できる店舗がありません(店舗コードと店舗名は必須です)");
+	}
+
+	var endpoint = settings.endpoint.replace(/\/kpi\/?\s*$/, "/stores");
+	var res = UrlFetchApp.fetch(endpoint, {
+		method: "post",
+		contentType: "application/json",
+		headers: { "x-api-key": secret },
+		payload: JSON.stringify({ stores: stores }),
+		muteHttpExceptions: true,
+	});
+
+	var status = res.getResponseCode();
+	Logger.log("HTTP " + status + ": " + res.getContentText());
+	if (status !== 200) {
+		throw new Error("店舗登録に失敗しました: HTTP " + status + " " + res.getContentText());
+	}
+
+	var body = JSON.parse(res.getContentText());
+	var msg = "新規登録 " + body.created + " 店舗 / 更新 " + body.updated + " 店舗";
+	if (body.skippedNoPassword && body.skippedNoPassword.length > 0) {
+		msg +=
+			"\n\n次の店舗は「初期パスワード」が未入力のため登録できませんでした:\n" +
+			body.skippedNoPassword.join(", ") +
+			"\n店舗マスタの D 列にパスワードを入力して、もう一度⑤を実行してください。";
+	}
+	msg += "\n\n登録が済んだ店舗の「初期パスワード」欄は空欄に戻して構いません。";
+	SpreadsheetApp.getUi().alert("店舗登録の結果", msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /* ===================== ④ 自動同期トリガー ===================== */

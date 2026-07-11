@@ -5,6 +5,7 @@ import type {
 	DashboardData,
 	DailyMetrics,
 	GasStoreRow,
+	GasStoreUpsertRow,
 	HygieneStatus,
 	Store,
 } from "./types";
@@ -41,6 +42,9 @@ export interface DataProvider {
 		totalStores: number,
 		rows: GasStoreRow[],
 	): Promise<{ updated: number; unknownCodes: string[] }>;
+	upsertStores(
+		rows: GasStoreUpsertRow[],
+	): Promise<{ created: number; updated: number; skippedNoPassword: string[] }>;
 }
 
 let provider: DataProvider | null = null;

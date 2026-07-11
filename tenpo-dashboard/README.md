@@ -59,18 +59,10 @@ Firebase 未設定の場合は自動的にデモデータで動作します。
 
 1. [Firebase コンソール](https://console.firebase.google.com/)でプロジェクトを作成し、**Cloud Firestore** を有効化する(本番モード)
 2. セキュリティルールに `firestore.rules` の内容を貼り付けて公開する
-3. 「プロジェクトの設定 > サービスアカウント」から**秘密鍵(サービスアカウント JSON)**を生成する
-4. 店舗の初期データを投入する
-
-   ```bash
-   # scripts/seed-firestore.mjs の STORES を実店舗に合わせて編集してから
-   GOOGLE_APPLICATION_CREDENTIALS=./serviceAccount.json node scripts/seed-firestore.mjs
-   ```
-
-   パスワードを後から変更する場合は `node scripts/hash-password.mjs <新パスワード>` で
-   ハッシュを生成し、Firestore コンソールで該当店舗の `passwordHash` を更新します。
-
-5. `.env.example` を参考に環境変数を設定する(ホスティング先にも同じ値を設定)
+3. 店舗の登録は**デプロイ後にスプレッドシートのメニュー「⑤ 店舗をアプリに登録」で行えます**
+   (「店舗マスタ」シートに店舗コード・店舗名・初期パスワードを入れて⑤を実行するだけ。
+   ターミナルが使える場合は `scripts/seed-firestore.mjs` でも投入できます)
+4. `.env.example` を参考に環境変数を設定する(ホスティング先にも同じ値を設定)
 
    | 変数 | 内容 |
    | --- | --- |

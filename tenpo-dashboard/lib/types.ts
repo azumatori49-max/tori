@@ -109,3 +109,11 @@ export type GasSyncPayload = {
 	total_stores: number;
 	stores: GasStoreRow[];
 };
+
+/** 店舗登録 API(/api/gas/stores)が受け取る 1 店舗分のペイロード */
+export type GasStoreUpsertRow = {
+	code: string;
+	name: string;
+	brand?: string;
+	password?: string; // 新規店舗は必須。既存店舗は指定時のみ変更
+};

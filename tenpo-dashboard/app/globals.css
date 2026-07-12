@@ -531,7 +531,7 @@ textarea {
 	align-items: center;
 	justify-content: center;
 	padding: 20px;
-	background: linear-gradient(165deg, var(--brand-deep) 0%, var(--brand) 55%, var(--brand-light) 100%);
+	background: var(--brand);
 }
 
 .login-card {

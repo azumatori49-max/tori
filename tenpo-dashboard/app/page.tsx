@@ -30,6 +30,7 @@ function Diff({ value, unit, digits = 1 }: { value: number | null; unit: string;
 
 function RateCard({
 	title,
+	href,
 	rate,
 	target,
 	avg,
@@ -37,6 +38,7 @@ function RateCard({
 	total,
 }: {
 	title: string;
+	href: string;
 	rate: number;
 	target: number | null;
 	avg: number | null;
@@ -45,7 +47,7 @@ function RateCard({
 }) {
 	const ok = target === null ? null : rate <= target;
 	return (
-		<div className="card kpi-card">
+		<Link className="card kpi-card kpi-card-link" href={href}>
 			<div className="kpi-title">{title}</div>
 			<div className="kpi-value">
 				{fmt1(rate)}
@@ -74,7 +76,8 @@ function RateCard({
 					<span className={`badge ${ok ? "good" : "bad"}`}>{ok ? "良好" : "要改善"}</span>
 				</div>
 			)}
-		</div>
+			<div className="kpi-more">詳細を見る ›</div>
+		</Link>
 	);
 }
 
@@ -217,7 +220,7 @@ export default async function DashboardPage() {
 
 				{m ? (
 					<div className="kpi-grid">
-						<div className="card kpi-card">
+						<Link className="card kpi-card kpi-card-link" href="/metric/kpi">
 							<div className="kpi-title">KPI点数</div>
 							<div className="kpi-value">
 								{fmt2(m.kpiScore)}
@@ -241,9 +244,10 @@ export default async function DashboardPage() {
 									</div>
 								)}
 							</div>
-						</div>
+							<div className="kpi-more">詳細を見る ›</div>
+						</Link>
 
-						<div className="card kpi-card">
+						<Link className="card kpi-card kpi-card-link" href="/metric/rank">
 							<div className="kpi-title">順位</div>
 							<div className="kpi-value">
 								{m.overallRank}
@@ -255,10 +259,12 @@ export default async function DashboardPage() {
 									<b>{prev ? `${prev.overallRank}位` : "-"}</b>
 								</div>
 							</div>
-						</div>
+							<div className="kpi-more">詳細を見る ›</div>
+						</Link>
 
 						<RateCard
 							title="原価率"
+							href="/metric/cost"
 							rate={m.costRate}
 							target={m.costRateTarget}
 							avg={m.costRateAvg}
@@ -267,6 +273,7 @@ export default async function DashboardPage() {
 						/>
 						<RateCard
 							title="人件費率"
+							href="/metric/labor"
 							rate={m.laborRate}
 							target={m.laborRateTarget}
 							avg={m.laborRateAvg}

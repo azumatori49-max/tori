@@ -61,18 +61,23 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 						</text>
 					</g>
 				))}
-				{points.map((p, i) => (
-					<text
-						key={p.date}
-						x={x(i)}
-						y={H - 8}
-						textAnchor="middle"
-						fontSize={11}
-						fill="#6e6e73"
-					>
-						{fmtMD(p.date)}
-					</text>
-				))}
+				{points.map(
+					(p, i) =>
+						// ラベルが混み合うときは間引く(最後の点は必ず表示)
+						(i === points.length - 1 ||
+							(points.length - 1 - i) % Math.max(1, Math.ceil(points.length / 8)) === 0) && (
+							<text
+								key={p.date}
+								x={x(i)}
+								y={H - 8}
+								textAnchor="middle"
+								fontSize={11}
+								fill="#6e6e73"
+							>
+								{fmtMD(p.date)}
+							</text>
+						),
+				)}
 
 				{/* 折れ線とマーカー */}
 				<path d={path} fill="none" stroke="#c25534" strokeWidth={2.5} strokeLinejoin="round" />

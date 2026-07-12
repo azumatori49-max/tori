@@ -147,7 +147,7 @@ export const firebaseProvider: DataProvider = {
 	async getDashboard(store): Promise<DashboardData> {
 		const storeRef = db().collection("stores").doc(store.id);
 		const [metricsSnap, storeSnap, commentsSnap, annSnap] = await Promise.all([
-			storeRef.collection("metrics").orderBy("date", "desc").limit(7).get(),
+			storeRef.collection("metrics").orderBy("date", "desc").limit(14).get(),
 			storeRef.get(),
 			db().collection("comments").orderBy("createdAt", "desc").limit(50).get(),
 			db().collection("announcements").orderBy("publishedAt", "desc").limit(1).get(),
@@ -162,6 +162,7 @@ export const firebaseProvider: DataProvider = {
 			store,
 			today: history[history.length - 1] ?? null,
 			yesterday: history[history.length - 2] ?? null,
+			history,
 			rankHistory: history.map((m) => ({ date: m.date, rank: m.overallRank })),
 			hygiene: hygieneData ? mapHygiene(store.id, hygieneData) : null,
 			comments,

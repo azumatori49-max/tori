@@ -190,6 +190,7 @@ export const mockProvider: DataProvider = {
 			store,
 			today,
 			yesterday,
+			history,
 			rankHistory: history.map((m) => ({ date: m.date, rank: m.overallRank })),
 			hygiene: hygieneByStore.get(store.id) ?? null,
 			comments: comments

@@ -69,6 +69,8 @@ export type DashboardData = {
 	store: Store;
 	today: DailyMetrics | null;
 	yesterday: DailyMetrics | null;
+	/** 日付昇順の履歴(詳細ページの推移グラフに使用) */
+	history: DailyMetrics[];
 	rankHistory: RankPoint[];
 	hygiene: HygieneStatus | null;
 	comments: Comment[];

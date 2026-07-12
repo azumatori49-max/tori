@@ -1,5 +1,5 @@
 /**
- * 店長ダッシュボード連携 Google Apps Script
+ * 店舗ダッシュボード連携 Google Apps Script
  *
  * このファイル 1 つをスプレッドシートに貼るだけで、
  * 必要なシートの自動生成・順位/平均の自動計算・ダッシュボードへの同期がすべて行えます。
@@ -97,7 +97,7 @@ function initSpreadsheet() {
 		settings.setColumnWidth(2, 360);
 		settings
 			.getRange("B2")
-			.setNote("デプロイした店長ダッシュボードの URL + /api/gas/kpi を入力してください");
+			.setNote("デプロイした店舗ダッシュボードの URL + /api/gas/kpi を入力してください");
 	}
 
 	// --- 店舗マスタ ---

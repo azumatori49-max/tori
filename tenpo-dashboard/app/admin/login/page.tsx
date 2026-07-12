@@ -26,7 +26,7 @@ export default async function AdminLoginPage({
 		<div className="login-wrap">
 			<div className="card login-card">
 				<h1>本部 管理画面</h1>
-				<p className="lead">STORE MANAGER DASHBOARD</p>
+				<p className="lead">STORE DASHBOARD</p>
 				{provider.isMock && !process.env.ADMIN_PASSWORD && (
 					<p className="mock-note">デモモードで動作中です。パスワード「admin」でログインできます。</p>
 				)}

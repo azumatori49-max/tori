@@ -19,7 +19,7 @@ export default async function AnnouncementsPage() {
 				<BrandLogo />
 				<div className="titles">
 					<h1>お知らせ一覧</h1>
-					<div className="subtitle">店長ダッシュボード</div>
+					<div className="subtitle">店舗ダッシュボード</div>
 				</div>
 				<Link className="logout-btn" href={session.role === "admin" ? "/admin" : "/"}>
 					戻る

@@ -83,6 +83,7 @@ textarea {
 .site-header .logo-img {
 	background: #fff;
 	object-fit: contain;
+	padding: 2px;
 	border: 1px solid var(--border);
 }
 

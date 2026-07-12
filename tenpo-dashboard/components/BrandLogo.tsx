@@ -12,10 +12,10 @@ type BrandDef = {
 };
 
 const BRANDS: BrandDef[] = [
-	{ match: "鶏ヤロー", initial: "鶏", bg: "#e8590c" },
-	{ match: "まる助", initial: "ま", bg: "#c62828" },
-	{ match: "イザカラ", initial: "イ", bg: "#6d28d9" },
-	{ match: "すし鳥", initial: "す", bg: "#1d4ed8" },
+	{ match: "鶏ヤロー", initial: "鶏", bg: "#e8590c", image: "/brand/toriyaro.png" },
+	{ match: "まる助", initial: "ま", bg: "#c62828", image: "/brand/marusuke.png" },
+	{ match: "イザカラ", initial: "イ", bg: "#1d3a6e", image: "/brand/izakara.png" },
+	{ match: "すし鳥", initial: "す", bg: "#1d4ed8", image: "/brand/sushitori.png" },
 ];
 
 const DEFAULT: BrandDef = { match: "", initial: "店", bg: "#e8590c" };

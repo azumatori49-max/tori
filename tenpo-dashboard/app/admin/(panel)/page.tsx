@@ -1,5 +1,5 @@
 import { getProvider } from "@/lib/data";
-import { fmt1, fmtDateTime, submitState } from "@/lib/format";
+import { fmt1, fmt2, fmtDateTime, submitState } from "@/lib/format";
 import { getLiveHygiene } from "@/lib/hygiene";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +57,7 @@ export default async function AdminOverviewPage() {
 									</td>
 									<td>{store.code}</td>
 									<td>{store.name}</td>
-									<td>{today ? fmt1(today.kpiScore) : "-"}</td>
+									<td>{today ? fmt2(today.kpiScore) : "-"}</td>
 									<td>{today ? `${fmt1(today.costRate)}%` : "-"}</td>
 									<td>{today ? `${fmt1(today.laborRate)}%` : "-"}</td>
 									<td>{today?.qscScore !== null && today ? fmt1(today.qscScore) : "-"}</td>

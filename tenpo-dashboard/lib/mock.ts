@@ -33,7 +33,7 @@ function dateStr(daysAgo: number): string {
 
 // 福島栄町店(モックアップ再現)の直近 7 日の総合順位
 const HERO_RANKS = [26, 18, 15, 13, 13, 10, 3];
-const HERO_KPI = [72.5, 76.8, 78.9, 80.4, 81.2, 84.1, 86.4];
+const HERO_KPI = [3.63, 3.84, 3.95, 4.02, 4.06, 4.21, 4.32]; // KPI は 5 点満点
 
 function heroMetrics(daysAgo: number): DailyMetrics {
 	const i = 6 - daysAgo;
@@ -41,7 +41,7 @@ function heroMetrics(daysAgo: number): DailyMetrics {
 		storeId: "s1",
 		date: dateStr(daysAgo),
 		kpiScore: HERO_KPI[i],
-		kpiAvg: 78.1,
+		kpiAvg: 3.91,
 		kpiRank: HERO_RANKS[i],
 		overallRank: HERO_RANKS[i],
 		totalStores: TOTAL_STORES,
@@ -62,14 +62,14 @@ function heroMetrics(daysAgo: number): DailyMetrics {
 
 // 他店舗向けの簡易な擬似データ(店舗インデックスで決定的に生成)
 function genMetrics(store: Store, index: number, daysAgo: number): DailyMetrics {
-	const base = 68 + ((index * 7) % 20);
-	const kpi = Math.round((base + (6 - daysAgo) * 0.9) * 10) / 10;
+	const base = 3.2 + ((index * 7) % 20) / 20;
+	const kpi = Math.round((base + (6 - daysAgo) * 0.04) * 100) / 100;
 	const rank = ((index * 5 + daysAgo * 3) % TOTAL_STORES) + 1;
 	return {
 		storeId: store.id,
 		date: dateStr(daysAgo),
 		kpiScore: kpi,
-		kpiAvg: 78.1,
+		kpiAvg: 3.91,
 		kpiRank: rank,
 		overallRank: rank,
 		totalStores: TOTAL_STORES,

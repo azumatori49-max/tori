@@ -6,6 +6,12 @@ export function fmt1(n: number | null | undefined): string {
 	return n.toFixed(1);
 }
 
+/** 小数 2 桁で表示(5 点満点の KPI 用) */
+export function fmt2(n: number | null | undefined): string {
+	if (n === null || n === undefined) return "-";
+	return n.toFixed(2);
+}
+
 /** ISO → 2026/06/20 22:26 (JST) */
 export function fmtDateTime(iso: string | null | undefined): string {
 	if (!iso) return "-";

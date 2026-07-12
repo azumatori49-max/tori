@@ -7,6 +7,7 @@ import { getProvider } from "@/lib/data";
 import { getLiveHygiene } from "@/lib/hygiene";
 import {
 	fmt1,
+	fmt2,
 	fmtDateTime,
 	fmtMDFromIso,
 	isNew,
@@ -18,11 +19,12 @@ import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-function Diff({ value, unit }: { value: number | null; unit: string }) {
+function Diff({ value, unit, digits = 1 }: { value: number | null; unit: string; digits?: number }) {
 	if (value === null) return <b>-</b>;
-	const rounded = Math.round(value * 10) / 10;
-	if (rounded > 0) return <b className="diff-up">+{fmt1(rounded)}{unit}</b>;
-	if (rounded < 0) return <b className="diff-down">{fmt1(rounded)}{unit}</b>;
+	const factor = 10 ** digits;
+	const rounded = Math.round(value * factor) / factor;
+	if (rounded > 0) return <b className="diff-up">+{rounded.toFixed(digits)}{unit}</b>;
+	if (rounded < 0) return <b className="diff-down">{rounded.toFixed(digits)}{unit}</b>;
 	return <b>±0{unit}</b>;
 }
 
@@ -218,17 +220,17 @@ export default async function DashboardPage() {
 						<div className="card kpi-card">
 							<div className="kpi-title">KPI点数</div>
 							<div className="kpi-value">
-								{fmt1(m.kpiScore)}
-								<span className="unit">/100</span>
+								{fmt2(m.kpiScore)}
+								<span className="unit">/5</span>
 							</div>
 							<div className="kpi-sub">
 								<div className="row">
 									<span>前日比</span>
-									<Diff value={kpiDiff} unit="pt" />
+									<Diff value={kpiDiff} unit="pt" digits={2} />
 								</div>
 								<div className="row">
 									<span>全店平均</span>
-									<b>{fmt1(m.kpiAvg)}</b>
+									<b>{fmt2(m.kpiAvg)}</b>
 								</div>
 								{m.kpiRank !== null && (
 									<div className="row">

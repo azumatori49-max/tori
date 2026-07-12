@@ -72,6 +72,7 @@ function onOpen() {
 		.addItem("③ 今すぐ同期", "syncToDashboard")
 		.addItem("④ 毎日の自動同期を設定", "setupDailyTrigger")
 		.addItem("⑤ 店舗をアプリに登録", "registerStores")
+		.addItem("⑥ 元シートから数値を取り込み(テスト)", "importFromSourcesMenu")
 		.addToUi();
 }
 
@@ -99,6 +100,11 @@ function initSpreadsheet() {
 			.getRange("B2")
 			.setNote("デプロイした店舗ダッシュボードの URL + /api/gas/kpi を入力してください");
 	}
+	// 元シート取り込み用の設定行(無ければ追記)
+	ensureSettingRow(settings, "PLシートのURL", "", "KPI点数・材料費率・人件費率を管理しているスプレッドシートの URL");
+	ensureSettingRow(settings, "PLシートのタブ名", "", "上記スプレッドシートの中の、対象シート(タブ)の名前");
+	ensureSettingRow(settings, "QSCシートのURL", "", "QSC アンケート集計スプレッドシートの URL");
+	ensureSettingRow(settings, "QSCシートのタブ名", "", "上記スプレッドシートの中の、対象シート(タブ)の名前");
 
 	// --- 店舗マスタ ---
 	var master = getOrCreateSheet(ss, SHEET_MASTER);
@@ -230,6 +236,20 @@ function getOrCreateSheet(ss, name) {
 	return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
+/** 設定シートに指定の行が無ければ末尾に追加する */
+function ensureSettingRow(settings, key, defaultValue, note) {
+	var lastRow = Math.max(settings.getLastRow(), 1);
+	var keys = settings
+		.getRange(1, 1, lastRow, 1)
+		.getValues()
+		.map(function (r) {
+			return String(r[0]).trim();
+		});
+	if (keys.indexOf(key) >= 0) return;
+	settings.getRange(lastRow + 1, 1, 1, 2).setValues([[key, defaultValue]]);
+	if (note) settings.getRange(lastRow + 1, 2).setNote(note);
+}
+
 /* ===================== ② API シークレット ===================== */
 
 function setApiSecret() {
@@ -249,6 +269,229 @@ function setApiSecret() {
 	ui.alert("シークレットを保存しました。");
 }
 
+/* ===================== ⑥ 元シートからの自動取り込み ===================== */
+//
+// 「設定」シートに PL シート / QSC シートの URL とタブ名を入れておくと、
+// 同期のたびに元シートから数値を自動で取り込んで各指標シートに書き込む。
+// 店舗名は表記ゆれ(ブランド名の接頭辞付きなど)を吸収して自動マッチングする。
+// PL シート: 列見出し「KPI点数」「材料費率」「人件費率」を自動検出(材料費率=原価率)
+// QSC シート: 列見出し「店舗名」「総合点」を自動検出
+
+function readSourceConfig(ss) {
+	var sheet = ss.getSheetByName(SHEET_SETTINGS);
+	if (!sheet) return { plUrl: "", plTab: "", qscUrl: "", qscTab: "" };
+	var values = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+	var map = {};
+	values.forEach(function (row) {
+		map[String(row[0]).trim()] = String(row[1]).trim();
+	});
+	return {
+		plUrl: map["PLシートのURL"] || "",
+		plTab: map["PLシートのタブ名"] || "",
+		qscUrl: map["QSCシートのURL"] || "",
+		qscTab: map["QSCシートのタブ名"] || "",
+	};
+}
+
+function importFromSourcesMenu() {
+	var summary = importFromSources();
+	SpreadsheetApp.getUi().alert("取り込み結果", summary, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/** 元シートから取り込み、結果サマリー文字列を返す(トリガーからも呼べるよう UI は使わない) */
+function importFromSources() {
+	var ss = SpreadsheetApp.getActiveSpreadsheet();
+	var cfg = readSourceConfig(ss);
+	if (!cfg.plUrl && !cfg.qscUrl) {
+		throw new Error(
+			"「設定」シートの「PLシートのURL」「QSCシートのURL」を入力してください(タブ名も)",
+		);
+	}
+	var master = ss.getSheetByName(SHEET_MASTER);
+	if (!master || master.getLastRow() < 2) {
+		throw new Error("「" + SHEET_MASTER + "」に店舗を入力してください");
+	}
+	var masterNames = master
+		.getRange(2, 2, master.getLastRow() - 1, 1)
+		.getValues()
+		.map(function (r) {
+			return String(r[0]).trim();
+		});
+
+	var lines = [];
+	var allUnmatched = [];
+
+	if (cfg.plUrl) {
+		var pl = openSourceSheet(cfg.plUrl, cfg.plTab, "PLシート");
+		var values = pl.getDataRange().getValues();
+		var kpiCol = findHeaderColumn(values, "KPI点数");
+		var costCol = findHeaderColumn(values, "材料費率");
+		var laborCol = findHeaderColumn(values, "人件費率");
+		if (kpiCol < 0 || costCol < 0 || laborCol < 0) {
+			throw new Error(
+				"PLシートで列見出しが見つかりません(KPI点数: " +
+					(kpiCol >= 0) + " / 材料費率: " + (costCol >= 0) + " / 人件費率: " + (laborCol >= 0) + ")",
+			);
+		}
+		var plRows = {};
+		values.forEach(function (row) {
+			var name = String(row[0]).trim();
+			if (!name) return;
+			var kpi = toNumber(row[kpiCol]);
+			var cost = toPercent(row[costCol]);
+			var labor = toPercent(row[laborCol]);
+			if (kpi === null && cost === null && labor === null) return; // 見出し行・空行
+			plRows[name] = { kpi: kpi, cost: cost, labor: labor };
+		});
+		var plMatch = matchSourceNames(masterNames, Object.keys(plRows));
+		writeMetricColumn(ss, "KPI", masterNames, plMatch, plRows, "kpi");
+		writeMetricColumn(ss, "原価率", masterNames, plMatch, plRows, "cost");
+		writeMetricColumn(ss, "人件費率", masterNames, plMatch, plRows, "labor");
+		var plMatched = masterNames.filter(function (n) {
+			return plMatch[n];
+		}).length;
+		lines.push("PLシート: " + plMatched + " / " + masterNames.length + " 店舗を取り込み");
+		masterNames.forEach(function (n) {
+			if (!plMatch[n]) allUnmatched.push(n + "(PL)");
+		});
+	}
+
+	if (cfg.qscUrl) {
+		var qsc = openSourceSheet(cfg.qscUrl, cfg.qscTab, "QSCシート");
+		var qValues = qsc.getDataRange().getValues();
+		var nameCol = findHeaderColumn(qValues, "店舗名");
+		var scoreCol = findHeaderColumn(qValues, "総合点");
+		if (nameCol < 0 || scoreCol < 0) {
+			throw new Error("QSCシートで列見出し(店舗名 / 総合点)が見つかりません");
+		}
+		var qscRows = {};
+		qValues.forEach(function (row) {
+			var name = String(row[nameCol]).trim();
+			if (!name || name === "店舗名") return;
+			var score = toNumber(row[scoreCol]);
+			if (score === null) return; // 「-」(回答なし)は取り込まない
+			qscRows[name] = { qsc: score };
+		});
+		var qscMatch = matchSourceNames(masterNames, Object.keys(qscRows));
+		writeMetricColumn(ss, "QSCアンケート", masterNames, qscMatch, qscRows, "qsc");
+		var qscMatched = masterNames.filter(function (n) {
+			return qscMatch[n];
+		}).length;
+		lines.push("QSCシート: " + qscMatched + " / " + masterNames.length + " 店舗を取り込み(回答なしの店舗は空欄)");
+	}
+
+	if (allUnmatched.length > 0) {
+		lines.push(
+			"店舗名が一致しなかった店舗: " +
+				allUnmatched.join(", ") +
+				"\n(店舗マスタの店舗名が元シートの店舗名の末尾と一致するようにしてください)",
+		);
+	}
+	return lines.join("\n");
+}
+
+function openSourceSheet(url, tab, label) {
+	var source;
+	try {
+		source = SpreadsheetApp.openByUrl(url);
+	} catch (e) {
+		throw new Error(label + "の URL を開けません。URL とアクセス権を確認してください: " + e.message);
+	}
+	if (!tab) {
+		return source.getSheets()[0];
+	}
+	var sheet = source.getSheetByName(tab);
+	if (!sheet) {
+		throw new Error(
+			label + "にタブ「" + tab + "」がありません。タブ名: " +
+				source.getSheets().map(function (s) { return s.getName(); }).join(" / "),
+		);
+	}
+	return sheet;
+}
+
+/** シート全体から指定の見出しセルを探して列番号(0始まり)を返す */
+function findHeaderColumn(values, header) {
+	for (var r = 0; r < Math.min(values.length, 100); r++) {
+		for (var c = 0; c < values[r].length; c++) {
+			if (String(values[r][c]).trim() === header) return c;
+		}
+	}
+	return -1;
+}
+
+/** 店舗名の表記ゆれを吸収した正規化 */
+function normName(s) {
+	return String(s)
+		.normalize("NFKC")
+		.replace(/\s+/g, "")
+		.replace(/[!!]/g, "")
+		.trim();
+}
+
+/**
+ * 店舗マスタの店舗名 → 元シートの店舗名 の対応表を作る。
+ * 1パス目: 完全一致、または末尾一致の候補が 1 つだけの店舗を確定。
+ * 2パス目: 候補が複数あった店舗は、他の店舗に取られていない候補が 1 つなら確定。
+ * (例: マスタ「柏店」の候補が「鶏ヤロー柏店」「魚と鶏ヤロー柏店」の 2 つでも、
+ *  後者がマスタ「魚と鶏ヤロー柏店」に確定済みなら前者に決まる)
+ */
+function matchSourceNames(masterNames, sourceNames) {
+	var result = {};
+	var claimed = {};
+	var candidatesByMaster = {};
+
+	masterNames.forEach(function (m) {
+		var target = normName(m);
+		if (!target) return;
+		var exact = sourceNames.filter(function (s) {
+			return normName(s) === target;
+		});
+		if (exact.length === 1) {
+			result[m] = exact[0];
+			claimed[exact[0]] = true;
+			return;
+		}
+		var suffix = sourceNames.filter(function (s) {
+			return normName(s).slice(-target.length) === target;
+		});
+		if (suffix.length === 1) {
+			result[m] = suffix[0];
+			claimed[suffix[0]] = true;
+		} else if (suffix.length > 1) {
+			candidatesByMaster[m] = suffix;
+		}
+	});
+
+	Object.keys(candidatesByMaster).forEach(function (m) {
+		var rest = candidatesByMaster[m].filter(function (s) {
+			return !claimed[s];
+		});
+		if (rest.length === 1) {
+			result[m] = rest[0];
+			claimed[rest[0]] = true;
+		}
+	});
+
+	return result;
+}
+
+/** 指標シートの C 列を、店舗マスタの並び順で書き込む(未一致は空欄) */
+function writeMetricColumn(ss, sheetName, masterNames, match, sourceRows, key) {
+	var sheet = ss.getSheetByName(sheetName);
+	if (!sheet) {
+		throw new Error("「" + sheetName + "」シートがありません。①初期セットアップを実行してください");
+	}
+	var column = masterNames.map(function (m) {
+		var src = match[m];
+		var v = src && sourceRows[src] ? sourceRows[src][key] : null;
+		return [v === null || v === undefined ? "" : v];
+	});
+	if (column.length > 0) {
+		sheet.getRange(2, 3, column.length, 1).setValues(column);
+	}
+}
+
 /* ===================== ③ 同期 ===================== */
 
 function syncToDashboard() {
@@ -257,6 +500,14 @@ function syncToDashboard() {
 	var secret = PropertiesService.getScriptProperties().getProperty("GAS_SYNC_SECRET");
 	if (!secret) {
 		throw new Error("メニュー「② API シークレットを設定」を先に実行してください");
+	}
+
+	// 元シートが設定されていれば、最新の数値を先に取り込む
+	var cfg = readSourceConfig(ss);
+	var importSummary = "";
+	if (cfg.plUrl || cfg.qscUrl) {
+		importSummary = importFromSources();
+		SpreadsheetApp.flush();
 	}
 
 	var computed = computeStores(ss, settings);

@@ -114,7 +114,7 @@ function HygieneItem({
 
 function HygienePanel({ hygiene }: { hygiene: HygieneStatus | null }) {
 	const hygieneUrl =
-		process.env.NEXT_PUBLIC_HYGIENE_APP_URL || "https://toriyaro-eisei-faf2e.web.app";
+		process.env.NEXT_PUBLIC_HYGIENE_APP_URL || "https://toriyaro-eisei-v2.web.app";
 	return (
 		<section className="card">
 			<h2 className="section-title">衛生チェックの状況</h2>

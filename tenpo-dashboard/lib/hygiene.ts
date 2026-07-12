@@ -11,13 +11,15 @@
 // ダッシュボードの店舗とは「店舗名」で自動マッチングする。
 import type { HygieneStatus, Store } from "./types";
 
-const PROJECT = "toriyaro-eisei-faf2e";
-const CANDIDATE_URLS = [
-	`https://${PROJECT}-default-rtdb.firebaseio.com`,
-	`https://${PROJECT}-default-rtdb.asia-southeast1.firebasedatabase.app`,
-	`https://${PROJECT}-default-rtdb.europe-west1.firebasedatabase.app`,
-	`https://${PROJECT}.firebaseio.com`,
-];
+// 現行の衛生管理アプリは toriyaro-eisei-v2 プロジェクト。
+// 旧プロジェクト(faf2e)も後方互換のため候補に残す。
+const PROJECTS = ["toriyaro-eisei-v2", "toriyaro-eisei-faf2e"];
+const CANDIDATE_URLS = PROJECTS.flatMap((p) => [
+	`https://${p}-default-rtdb.firebaseio.com`,
+	`https://${p}-default-rtdb.asia-southeast1.firebasedatabase.app`,
+	`https://${p}-default-rtdb.europe-west1.firebasedatabase.app`,
+	`https://${p}.firebaseio.com`,
+]);
 
 const DAILY_REQUIRED = 7;
 const WEEKLY_REQUIRED = 7;

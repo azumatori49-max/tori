@@ -75,14 +75,14 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 				))}
 
 				{/* 折れ線とマーカー */}
-				<path d={path} fill="none" stroke="#e8590c" strokeWidth={2.5} strokeLinejoin="round" />
+				<path d={path} fill="none" stroke="#c25534" strokeWidth={2.5} strokeLinejoin="round" />
 				{points.map((p, i) => (
 					<circle
 						key={p.date}
 						cx={x(i)}
 						cy={y(p.rank)}
 						r={active === i ? 6 : 4.5}
-						fill="#e8590c"
+						fill="#c25534"
 						stroke="#fff"
 						strokeWidth={2}
 					/>

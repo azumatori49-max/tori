@@ -48,6 +48,36 @@ export default async function HygieneDebugPage() {
 						</tbody>
 					</table>
 				</div>
+
+				<h3 className="section-title" style={{ marginTop: 20 }}>
+					候補URLの接続テスト
+				</h3>
+				<div className="table-wrap">
+					<table className="data">
+						<thead>
+							<tr>
+								<th>URL</th>
+								<th>結果</th>
+								<th>店舗データ</th>
+							</tr>
+						</thead>
+						<tbody>
+							{d.probes.map((p) => (
+								<tr key={p.url}>
+									<td style={{ whiteSpace: "normal", wordBreak: "break-all" }}>{p.url}</td>
+									<td>
+										{p.status === 200 ? (
+											<span className="badge good">200 OK</span>
+										) : (
+											<span className="badge bad">{String(p.status)}</span>
+										)}
+									</td>
+									<td>{p.hasStores ? "あり ✓" : "なし"}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
 			</section>
 
 			<section className="card">

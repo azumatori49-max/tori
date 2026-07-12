@@ -56,6 +56,19 @@ function heroMetrics(daysAgo: number): DailyMetrics {
 		qscScore: 89.2,
 		qscRank: 4,
 		qscPrevRank: 5,
+		qscAnswers: 12,
+		qscQuestions: [
+			{ label: "Q1. お食事の満足度", score: 93 },
+			{ label: "Q2. 欠品で注文できないメニュー", score: 100 },
+			{ label: "Q3. スタッフの態度", score: 97 },
+			{ label: "Q4. 入店時の対応", score: 90 },
+			{ label: "Q5. レジ周りの整理整頓", score: 85 },
+			{ label: "Q6. 店内の清潔感", score: 92.5 },
+			{ label: "Q7. 客席のベタつき", score: 80 },
+			{ label: "Q8. 食器類の汚れ", score: 95 },
+			{ label: "Q9. トイレの清潔感", score: 77.5 },
+			{ label: "Q10. スタッフの身だしなみ", score: 90 },
+		],
 		updatedAt: new Date().toISOString(),
 	};
 }
@@ -84,6 +97,8 @@ function genMetrics(store: Store, index: number, daysAgo: number): DailyMetrics 
 		qscScore: Math.round((80 + (index * 3) % 15) * 10) / 10,
 		qscRank: ((index * 6) % TOTAL_STORES) + 1,
 		qscPrevRank: ((index * 6 + 2) % TOTAL_STORES) + 1,
+		qscAnswers: null,
+		qscQuestions: null,
 		updatedAt: new Date().toISOString(),
 	};
 }
@@ -269,6 +284,8 @@ export const mockProvider: DataProvider = {
 				qscScore: row.qsc_score ?? null,
 				qscRank: row.qsc_rank ?? null,
 				qscPrevRank: row.qsc_prev_rank ?? null,
+				qscAnswers: row.qsc_answers ?? null,
+				qscQuestions: row.qsc_questions ?? null,
 				updatedAt: new Date().toISOString(),
 			};
 			const idx = history.findIndex((m) => m.date === date);

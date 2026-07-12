@@ -374,16 +374,25 @@ function importFromSources() {
 		if (nameCol < 0 || scoreCol < 0) {
 			throw new Error("QSCシートで列見出し(店舗名 / 総合点)が見つかりません");
 		}
+		var ansCol = findHeaderColumn(qValues, "回答数");
+		var qCols = findQuestionColumns(qValues);
 		var qscRows = {};
 		qValues.forEach(function (row) {
 			var name = String(row[nameCol]).trim();
 			if (!name || name === "店舗名") return;
 			var score = toNumber(row[scoreCol]);
 			if (score === null) return; // 「-」(回答なし)は取り込まない
-			qscRows[name] = { qsc: score };
+			qscRows[name] = {
+				qsc: score,
+				answers: ansCol >= 0 ? toNumber(row[ansCol]) : null,
+				q: qCols.map(function (c) {
+					return toNumber(row[c.col]);
+				}),
+			};
 		});
 		var qscMatch = matchSourceNames(masterNames, Object.keys(qscRows));
 		writeMetricColumn(ss, "QSCアンケート", masterNames, qscMatch, qscRows, "qsc");
+		writeQscDetailColumns(ss, masterNames, qscMatch, qscRows, qCols);
 		var qscMatched = masterNames.filter(function (n) {
 			return qscMatch[n];
 		}).length;
@@ -428,6 +437,88 @@ function findHeaderColumn(values, header) {
 		}
 	}
 	return -1;
+}
+
+/** 見出し行から「Q1.」「Q2.」… の設問列(点数列)を探す */
+function findQuestionColumns(values) {
+	var found = {};
+	for (var r = 0; r < Math.min(values.length, 10); r++) {
+		for (var c = 0; c < values[r].length; c++) {
+			var cell = String(values[r][c]).trim();
+			var match = cell.match(/^Q(\d+)[.\s]/);
+			if (match && !found[match[1]]) {
+				found[match[1]] = { no: Number(match[1]), col: c, label: cell };
+			}
+		}
+	}
+	return Object.keys(found)
+		.map(function (k) {
+			return found[k];
+		})
+		.sort(function (a, b) {
+			return a.no - b.no;
+		});
+}
+
+/** QSCアンケートシートの D 列以降に回答数・設問別点数を書き込む */
+function writeQscDetailColumns(ss, masterNames, match, rows, qCols) {
+	var sheet = ss.getSheetByName("QSCアンケート");
+	if (!sheet) return;
+	var headers = ["回答数"].concat(
+		qCols.map(function (c) {
+			return c.label;
+		}),
+	);
+	sheet
+		.getRange(1, 4, 1, headers.length)
+		.setValues([headers])
+		.setFontWeight("bold")
+		.setBackground("#f6e4dc");
+	var data = masterNames.map(function (m) {
+		var src = match[m];
+		var r = src ? rows[src] : null;
+		if (!r) {
+			return headers.map(function () {
+				return "";
+			});
+		}
+		return [r.answers === null ? "" : r.answers].concat(
+			r.q.map(function (v) {
+				return v === null ? "" : v;
+			}),
+		);
+	});
+	if (data.length > 0) {
+		sheet.getRange(2, 4, data.length, headers.length).setValues(data);
+	}
+}
+
+/** QSCアンケートシートの D 列以降から、店舗コード → 回答数・設問別点数 を読む */
+function readQscDetail(ss) {
+	var sheet = ss.getSheetByName("QSCアンケート");
+	var map = {};
+	if (!sheet || sheet.getLastRow() < 2 || sheet.getLastColumn() < 4) return map;
+	var lastCol = sheet.getLastColumn();
+	var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+	if (String(header[3]).trim() !== "回答数") return map;
+	sheet
+		.getRange(2, 1, sheet.getLastRow() - 1, lastCol)
+		.getValues()
+		.forEach(function (row) {
+			var code = String(row[0]).trim();
+			if (!code) return;
+			var questions = [];
+			for (var c = 4; c < lastCol; c++) {
+				var label = String(header[c]).trim();
+				if (!label) continue;
+				questions.push({ label: label, score: toNumber(row[c]) });
+			}
+			var answers = toNumber(row[3]);
+			if (answers !== null || questions.length > 0) {
+				map[code] = { answers: answers, questions: questions };
+			}
+		});
+	return map;
 }
 
 /** 店舗名の表記ゆれを吸収した正規化 */
@@ -556,6 +647,10 @@ function syncToDashboard() {
 				row.qsc_score = s.qsc;
 				row.qsc_rank = s.qscRank;
 				if (s.qscPrevRank !== null) row.qsc_prev_rank = s.qscPrevRank;
+				if (s.qscDetail) {
+					if (s.qscDetail.answers !== null) row.qsc_answers = s.qscDetail.answers;
+					if (s.qscDetail.questions.length > 0) row.qsc_questions = s.qscDetail.questions;
+				}
 			}
 			return row;
 		}),
@@ -633,6 +728,7 @@ function computeStores(ss, settings) {
 	var costMap = readMetricSheet(ss, "原価率");
 	var laborMap = readMetricSheet(ss, "人件費率");
 	var qscMap = readMetricSheet(ss, "QSCアンケート");
+	var qscDetailMap = readQscDetail(ss);
 
 	// 前回の QSC 順位(出力シートから引き継ぎ)
 	var qscPrevByCode = readPreviousQscRanks(ss);
@@ -668,6 +764,7 @@ function computeStores(ss, settings) {
 				labor: labor,
 				qsc: qsc,
 				qscPrevRank: qscPrevByCode[code] !== undefined ? qscPrevByCode[code] : null,
+				qscDetail: qscDetailMap[code] || null,
 			});
 		});
 	if (stores.length === 0) return { stores: stores, incomplete: incomplete };

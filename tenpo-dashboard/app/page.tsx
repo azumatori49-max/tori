@@ -274,16 +274,7 @@ export default async function DashboardPage() {
 							total={m.totalStores}
 						/>
 
-						<a
-							className="card kpi-card kpi-card-link"
-							href={
-								store.qscUrl ||
-								process.env.NEXT_PUBLIC_QSC_APP_URL ||
-								"https://dashboard.andy.conetto.app/surveys/survey-list"
-							}
-							target="_blank"
-							rel="noreferrer"
-						>
+						<Link className="card kpi-card kpi-card-link" href="/qsc">
 							<div className="kpi-title">QSCアンケート</div>
 							<div className="kpi-value">
 								{fmt1(m.qscScore)}
@@ -300,7 +291,7 @@ export default async function DashboardPage() {
 								</div>
 							</div>
 							<div className="kpi-more">詳細を見る ›</div>
-						</a>
+						</Link>
 					</div>
 				) : (
 					<div className="card" style={{ marginBottom: 16 }}>

@@ -27,6 +27,8 @@ export type DailyMetrics = {
 	qscScore: number | null;
 	qscRank: number | null;
 	qscPrevRank: number | null;
+	qscAnswers: number | null;
+	qscQuestions: { label: string; score: number | null }[] | null;
 	updatedAt: string;
 };
 
@@ -97,6 +99,8 @@ export type GasStoreRow = {
 	qsc_score?: number;
 	qsc_rank?: number;
 	qsc_prev_rank?: number;
+	qsc_answers?: number;
+	qsc_questions?: { label: string; score: number | null }[];
 	hygiene?: {
 		daily_submitted: number;
 		daily_required?: number;

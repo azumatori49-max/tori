@@ -54,6 +54,23 @@ export async function POST(req: NextRequest) {
 		}
 	}
 
+	// QSC 設問詳細のサニタイズ(任意項目)
+	for (const row of payload.stores) {
+		if (row.qsc_questions !== undefined) {
+			if (!Array.isArray(row.qsc_questions)) {
+				delete row.qsc_questions;
+				continue;
+			}
+			row.qsc_questions = row.qsc_questions
+				.slice(0, 20)
+				.filter((q) => q && typeof q.label === "string")
+				.map((q) => ({
+					label: q.label.slice(0, 100),
+					score: typeof q.score === "number" ? q.score : null,
+				}));
+		}
+	}
+
 	try {
 		const provider = await getProvider();
 		const result = await provider.upsertDailyMetrics(

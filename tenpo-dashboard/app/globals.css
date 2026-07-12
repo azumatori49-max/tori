@@ -297,6 +297,60 @@ a.kpi-card-link:hover {
 	text-align: right;
 }
 
+/* ===== QSC 詳細 ===== */
+.qsc-summary {
+	display: flex;
+	gap: 24px;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.qsc-summary-sub {
+	flex: 1;
+	min-width: 200px;
+	display: grid;
+	gap: 6px;
+	font-size: 13px;
+	padding-top: 6px;
+}
+
+.qsc-summary-sub .row {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	color: var(--ink-2);
+}
+
+.qsc-summary-sub .row b {
+	color: var(--ink);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.qsc-q {
+	padding: 10px 0;
+}
+
+.qsc-q + .qsc-q {
+	border-top: 1px solid var(--border);
+}
+
+.qsc-q-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 12px;
+	font-size: 13px;
+	margin-bottom: 2px;
+}
+
+.qsc-q-head b {
+	font-size: 15px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	flex-shrink: 0;
+}
+
 /* ===== セクション見出し ===== */
 .section-title {
 	font-size: 15px;

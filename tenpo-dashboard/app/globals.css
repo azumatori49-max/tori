@@ -277,6 +277,26 @@ textarea {
 	text-align: center;
 }
 
+a.kpi-card-link {
+	color: inherit;
+	display: block;
+	transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+a.kpi-card-link:hover {
+	text-decoration: none;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.09);
+	transform: translateY(-1px);
+}
+
+.kpi-more {
+	margin-top: 12px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--brand-deep);
+	text-align: right;
+}
+
 /* ===== セクション見出し ===== */
 .section-title {
 	font-size: 15px;

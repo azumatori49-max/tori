@@ -51,6 +51,7 @@ function mapStore(id: string, data: any): Store {
 		name: data.name,
 		brand: data.brand ?? "",
 		active: data.active !== false,
+		qscUrl: data.qscUrl ?? null,
 	};
 }
 
@@ -306,6 +307,7 @@ export const firebaseProvider: DataProvider = {
 					active: true,
 				};
 				if (row.password) update.passwordHash = hashPassword(row.password);
+				if (row.qsc_url !== undefined) update.qscUrl = row.qsc_url || null;
 				await existing.ref.set(update, { merge: true });
 				updated++;
 			} else {
@@ -319,6 +321,7 @@ export const firebaseProvider: DataProvider = {
 					brand: row.brand ?? "",
 					passwordHash: hashPassword(row.password),
 					active: true,
+					qscUrl: row.qsc_url || null,
 				});
 				created++;
 			}

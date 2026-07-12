@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
 				name: r.name.trim(),
 				brand: r.brand?.trim() || undefined,
 				password: r.password?.trim() || undefined,
+				qsc_url: typeof r.qsc_url === "string" ? r.qsc_url.trim() : undefined,
 			})),
 		);
 		return NextResponse.json({ ok: true, ...result });

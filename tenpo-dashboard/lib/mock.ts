@@ -303,6 +303,7 @@ export const mockProvider: DataProvider = {
 			if (existing) {
 				existing.name = row.name;
 				if (row.brand) existing.brand = row.brand;
+				if (row.qsc_url !== undefined) existing.qscUrl = row.qsc_url || null;
 				updated++;
 			} else {
 				if (!row.password) {

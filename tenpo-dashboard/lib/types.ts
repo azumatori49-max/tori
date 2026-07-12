@@ -4,6 +4,8 @@ export type Store = {
 	name: string;
 	brand: string;
 	active: boolean;
+	/** andy などアンケートの詳細ページ URL(店舗別) */
+	qscUrl?: string | null;
 };
 
 export type DailyMetrics = {
@@ -116,4 +118,5 @@ export type GasStoreUpsertRow = {
 	name: string;
 	brand?: string;
 	password?: string; // 新規店舗は必須。既存店舗は指定時のみ変更
+	qsc_url?: string; // アンケート詳細ページの URL(指定時のみ更新)
 };

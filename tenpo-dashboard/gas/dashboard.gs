@@ -110,23 +110,33 @@ function initSpreadsheet() {
 	var master = getOrCreateSheet(ss, SHEET_MASTER);
 	if (master.getLastRow() === 0) {
 		master
-			.getRange(1, 1, 6, 4)
+			.getRange(1, 1, 6, 5)
 			.setValues([
-				["店舗コード", "店舗名", "ブランド", "初期パスワード"],
-				["101", "福島栄町店", "鶏ヤロー", ""],
-				["102", "郡山駅前店", "鶏ヤロー", ""],
-				["103", "大宮一番街店", "まる助", ""],
-				["104", "川越クレアモール店", "イザカラ", ""],
-				["105", "上野御徒町店", "すし鳥酒場", ""],
+				["店舗コード", "店舗名", "ブランド", "初期パスワード", "QSC詳細URL"],
+				["101", "福島栄町店", "鶏ヤロー", "", ""],
+				["102", "郡山駅前店", "鶏ヤロー", "", ""],
+				["103", "大宮一番街店", "まる助", "", ""],
+				["104", "川越クレアモール店", "イザカラ", "", ""],
+				["105", "上野御徒町店", "すし鳥酒場", "", ""],
 			]);
-		master.getRange("A1:D1").setFontWeight("bold").setBackground("#f6e4dc");
+		master.getRange("A1:E1").setFontWeight("bold").setBackground("#f6e4dc");
 		master.getRange("A:A").setNumberFormat("@"); // 店舗コードは文字列扱い
 		master.setColumnWidth(2, 160);
 		master.setFrozenRows(1);
 	}
-	// 旧バージョンで作成したシートにパスワード列を追加
+	// 旧バージョンで作成したシートに不足列を追加
 	if (String(master.getRange("D1").getValue()).trim() === "") {
 		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#f6e4dc");
+	}
+	if (String(master.getRange("E1").getValue()).trim() === "") {
+		master.getRange("E1").setValue("QSC詳細URL").setFontWeight("bold").setBackground("#f6e4dc");
+		master
+			.getRange("E1")
+			.setNote(
+				"andy のこの店舗のアンケート詳細ページ URL(任意)。\n" +
+					"入力して⑤を実行すると、ダッシュボードの QSC カードをタップしたときにこのページが開きます。\n" +
+					"空欄の店舗はアンケート一覧ページが開きます。",
+			);
 	}
 	master
 		.getRange("A1")
@@ -770,7 +780,7 @@ function registerStores() {
 
 	var stores = [];
 	master
-		.getRange(2, 1, master.getLastRow() - 1, 4)
+		.getRange(2, 1, master.getLastRow() - 1, 5)
 		.getValues()
 		.forEach(function (row) {
 			var code = String(row[0]).trim();
@@ -781,6 +791,8 @@ function registerStores() {
 			if (brand) store.brand = brand;
 			var password = String(row[3]).trim();
 			if (password) store.password = password;
+			var qscUrl = String(row[4]).trim();
+			if (qscUrl) store.qsc_url = qscUrl;
 			stores.push(store);
 		});
 	if (stores.length === 0) {

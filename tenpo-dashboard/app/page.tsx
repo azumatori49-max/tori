@@ -244,9 +244,6 @@ export default async function DashboardPage() {
 						<div className="card kpi-card">
 							<div className="kpi-title">順位</div>
 							<div className="kpi-value">
-								<span className="crown" aria-hidden>
-									&#128081;
-								</span>
 								{m.overallRank}
 								<span className="unit">位 / {m.totalStores}店舗</span>
 							</div>
@@ -354,7 +351,7 @@ export default async function DashboardPage() {
 						<span className="text muted">お知らせはありません。</span>
 					)}
 					<Link className="announce-all" href="/announcements">
-						すべてのお知らせを見る &#8594;
+						すべてのお知らせを見る
 					</Link>
 				</section>
 			</main>

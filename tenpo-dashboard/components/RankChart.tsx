@@ -53,10 +53,10 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 							x2={W - PAD_R}
 							y1={y(t)}
 							y2={y(t)}
-							stroke="#e6e1d6"
+							stroke="rgba(0,0,0,0.07)"
 							strokeWidth={1}
 						/>
-						<text x={PAD_L - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#9b968a">
+						<text x={PAD_L - 8} y={y(t) + 4} textAnchor="end" fontSize={11} fill="#a1a1a6">
 							{t}位
 						</text>
 					</g>
@@ -68,7 +68,7 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 						y={H - 8}
 						textAnchor="middle"
 						fontSize={11}
-						fill="#6f6b61"
+						fill="#6e6e73"
 					>
 						{fmtMD(p.date)}
 					</text>
@@ -97,7 +97,7 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 						height={26}
 						rx={7}
 						fill="#fff"
-						stroke="#2b2a26"
+						stroke="#1d1d1f"
 						strokeWidth={1.5}
 					/>
 					<text
@@ -106,7 +106,7 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 						textAnchor="middle"
 						fontSize={14}
 						fontWeight={700}
-						fill="#2b2a26"
+						fill="#1d1d1f"
 					>
 						{last.rank}位
 					</text>

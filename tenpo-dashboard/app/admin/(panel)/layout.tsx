@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 				<BrandLogo />
 				<div className="titles">
 					<h1>本部 管理画面</h1>
-					<div className="subtitle">鶏ヤロー / まる助 / イザカラ / すし鳥酒場</div>
+					<div className="subtitle">店長ダッシュボード</div>
 				</div>
 				<form action={logoutAdmin}>
 					<button className="logout-btn" type="submit">

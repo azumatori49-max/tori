@@ -6,9 +6,13 @@
 //   submissions/{storeKey}/daily/{YYYY-MM-DD}   = { count, total?, submittedAt, photos, storeName }
 //   submissions/{storeKey}/weekly/{Wyyyy-mm-dd} = 同上(キーは週の月曜日)
 //
-// Realtime Database の URL はリージョンによって形式が異なるため、
-// 候補 URL を順に試して繋がったものを使う(HYGIENE_RTDB_URL で固定も可能)。
+// 読み取り方法は 2 通り:
+// 1) HYGIENE_FIREBASE_SERVICE_ACCOUNT が設定されていれば、そのサービスアカウントで
+//    認証して読む(現行の v2 データベースは非公開のためこちらが必要)
+// 2) 未設定なら候補 URL を順に試して公開 REST で読む(旧アプリ互換)
 // ダッシュボードの店舗とは「店舗名」で自動マッチングする。
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getDatabase, type Database } from "firebase-admin/database";
 import type { HygieneStatus, Store } from "./types";
 
 // 現行の衛生管理アプリは toriyaro-eisei-v2 プロジェクト。
@@ -24,7 +28,24 @@ const CANDIDATE_URLS = PROJECTS.flatMap((p) => [
 const DAILY_REQUIRED = 7;
 const WEEKLY_REQUIRED = 7;
 
-/* ===== 接続先 URL の自動検出 ===== */
+// v2 データベースの実体(診断で確認済み: asia-southeast1)
+const V2_DB_URL = "https://toriyaro-eisei-v2-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+/* ===== サービスアカウント認証(HYGIENE_FIREBASE_SERVICE_ACCOUNT) ===== */
+
+function hygieneAdminDb(): Database | null {
+	const sa = process.env.HYGIENE_FIREBASE_SERVICE_ACCOUNT;
+	if (!sa) return null;
+	const envUrl = process.env.HYGIENE_RTDB_URL;
+	const url = envUrl && envUrl !== "off" ? envUrl.replace(/\/+$/, "") : V2_DB_URL;
+	const existing = getApps().find((a) => a.name === "hygiene");
+	const app =
+		existing ??
+		initializeApp({ credential: cert(JSON.parse(sa)), databaseURL: url }, "hygiene");
+	return getDatabase(app);
+}
+
+/* ===== 接続先 URL の自動検出(公開 REST モード) ===== */
 
 type ProbeResult = { url: string; status: number | string; hasStores: boolean };
 
@@ -102,6 +123,23 @@ async function rtdbGet(base: string, path: string, ttlMs: number): Promise<unkno
 	return data;
 }
 
+/** サービスアカウント認証があれば Admin SDK、なければ公開 REST で読む */
+async function readPath(path: string, ttlMs: number): Promise<unknown> {
+	const db = hygieneAdminDb();
+	if (db) {
+		const key = `admin:${path}`;
+		const hit = cache.get(key);
+		if (hit && Date.now() - hit.at < ttlMs) return hit.data;
+		const snap = await db.ref(path).get();
+		const data = snap.val() as unknown;
+		cache.set(key, { at: Date.now(), data });
+		return data;
+	}
+	const base = await resolveBaseUrl();
+	if (!base) throw new Error("接続先のデータベースが見つかりません");
+	return rtdbGet(base, path, ttlMs);
+}
+
 /* ===== 店舗名マッチング ===== */
 
 function norm(s: string): string {
@@ -150,6 +188,7 @@ function photoCount(sub: RtdbSubmission | null): number {
 /* ===== 同期診断(管理画面 /admin/debug 用) ===== */
 
 export type HygieneDiagnosis = {
+	mode: "service-account" | "public-rest" | "off";
 	rtdbUrl: string | null;
 	probes: ProbeResult[];
 	dailyKey: string;
@@ -168,10 +207,24 @@ export type HygieneDiagnosis = {
 
 export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis> {
 	const envUrl = process.env.HYGIENE_RTDB_URL;
-	const probes = envUrl && envUrl !== "off" ? await Promise.all([probe(envUrl)]) : await probeAll();
-	const url = envUrl && envUrl !== "off" ? envUrl.replace(/\/+$/, "") : pickUrl(probes);
+	const hasSA = !!process.env.HYGIENE_FIREBASE_SERVICE_ACCOUNT;
+
+	let mode: HygieneDiagnosis["mode"];
+	let url: string | null = null;
+	let probes: ProbeResult[] = [];
+	if (envUrl === "off") {
+		mode = "off";
+	} else if (hasSA) {
+		mode = "service-account";
+		url = envUrl ? envUrl.replace(/\/+$/, "") : V2_DB_URL;
+	} else {
+		mode = "public-rest";
+		probes = envUrl ? [await probe(envUrl)] : await probeAll();
+		url = envUrl ? envUrl.replace(/\/+$/, "") : pickUrl(probes);
+	}
 
 	const diagnosis: HygieneDiagnosis = {
+		mode,
 		rtdbUrl: url,
 		probes,
 		dailyKey: dailyKeyJST(),
@@ -180,11 +233,11 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
 		appStoreNames: [],
 		matches: [],
 	};
-	if (envUrl === "off") {
+	if (mode === "off") {
 		diagnosis.connection.error = "HYGIENE_RTDB_URL が off に設定されています";
 		return diagnosis;
 	}
-	if (!url) {
+	if (mode === "public-rest" && !url) {
 		diagnosis.connection.error =
 			"どの候補 URL にも接続できませんでした(下の接続テスト結果を参照)";
 		return diagnosis;
@@ -192,7 +245,7 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
 
 	let rtdbStores: RtdbStores = {};
 	try {
-		rtdbStores = ((await rtdbGet(url, "stores", 0)) as RtdbStores) ?? {};
+		rtdbStores = ((await readPath("stores", 0)) as RtdbStores) ?? {};
 		diagnosis.connection.ok = true;
 		diagnosis.appStoreNames = Object.values(rtdbStores)
 			.map((v) => v?.name)
@@ -215,8 +268,8 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
 		if (key) {
 			try {
 				const [daily, weekly] = await Promise.all([
-					rtdbGet(url, `submissions/${key}/daily/${diagnosis.dailyKey}`, 0) as Promise<RtdbSubmission | null>,
-					rtdbGet(url, `submissions/${key}/weekly/${diagnosis.weeklyKey}`, 0) as Promise<RtdbSubmission | null>,
+					readPath(`submissions/${key}/daily/${diagnosis.dailyKey}`, 0) as Promise<RtdbSubmission | null>,
+					readPath(`submissions/${key}/weekly/${diagnosis.weeklyKey}`, 0) as Promise<RtdbSubmission | null>,
 				]);
 				entry.daily = daily
 					? { count: photoCount(daily), total: daily.total ?? null, submittedAt: daily.submittedAt ?? null }
@@ -240,13 +293,11 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
  */
 export async function getLiveHygiene(stores: Store[]): Promise<Map<string, HygieneStatus>> {
 	const result = new Map<string, HygieneStatus>();
-	if (stores.length === 0) return result;
-	const base = await resolveBaseUrl();
-	if (!base) return result;
+	if (stores.length === 0 || process.env.HYGIENE_RTDB_URL === "off") return result;
 
 	let rtdbStores: RtdbStores;
 	try {
-		rtdbStores = ((await rtdbGet(base, "stores", 10 * 60_000)) as RtdbStores) ?? {};
+		rtdbStores = ((await readPath("stores", 10 * 60_000)) as RtdbStores) ?? {};
 	} catch {
 		return result; // アプリ側に到達できないときは全店フォールバック
 	}
@@ -260,8 +311,8 @@ export async function getLiveHygiene(stores: Store[]): Promise<Map<string, Hygie
 			if (!key) return;
 			try {
 				const [daily, weekly] = await Promise.all([
-					rtdbGet(base, `submissions/${key}/daily/${dailyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
-					rtdbGet(base, `submissions/${key}/weekly/${weeklyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
+					readPath(`submissions/${key}/daily/${dailyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
+					readPath(`submissions/${key}/weekly/${weeklyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
 				]);
 				const times = [daily?.submittedAt, weekly?.submittedAt]
 					.filter((t): t is string => typeof t === "string")

@@ -18,6 +18,16 @@ export default async function HygieneDebugPage() {
 					<table className="data">
 						<tbody>
 							<tr>
+								<th>読み取り方法</th>
+								<td>
+									{d.mode === "service-account"
+										? "サービスアカウント認証"
+										: d.mode === "public-rest"
+											? "公開データとして読み取り(認証なし)"
+											: "無効化"}
+								</td>
+							</tr>
+							<tr>
 								<th>接続先データベース</th>
 								<td>{d.rtdbUrl ?? "(無効化されています)"}</td>
 							</tr>
@@ -49,9 +59,23 @@ export default async function HygieneDebugPage() {
 					</table>
 				</div>
 
-				<h3 className="section-title" style={{ marginTop: 20 }}>
-					候補URLの接続テスト
-				</h3>
+				{!d.connection.ok && d.mode === "public-rest" && (
+					<div className="mock-note" style={{ marginTop: 16 }}>
+						<b>401(権限エラー)が出ている場合:</b>{" "}
+						衛生管理アプリのデータベースは非公開です。同期するには、衛生管理アプリの
+						Firebase プロジェクト(toriyaro-eisei-v2)の「プロジェクトの設定 →
+						サービスアカウント → 新しい秘密鍵の生成」で JSON をダウンロードし、その中身を
+						このアプリ(App Hosting)の環境変数{" "}
+						<code>HYGIENE_FIREBASE_SERVICE_ACCOUNT</code>{" "}
+						に貼り付けて再デプロイしてください。
+					</div>
+				)}
+
+				{d.probes.length > 0 && (
+					<h3 className="section-title" style={{ marginTop: 20 }}>
+						候補URLの接続テスト
+					</h3>
+				)}
 				<div className="table-wrap">
 					<table className="data">
 						<thead>

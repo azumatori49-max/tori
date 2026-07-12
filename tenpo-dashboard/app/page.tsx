@@ -13,8 +13,8 @@ import {
 	isNew,
 	submitState,
 } from "@/lib/format";
-import type { Comment, DailyMetrics, HygieneStatus } from "@/lib/types";
-import { ROLE_LABELS } from "@/lib/types";
+import type { Comment, DailyMetrics, HygieneStatus, UiSettings } from "@/lib/types";
+import { roleLabel } from "@/lib/types";
 import { logout } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -117,7 +117,13 @@ function HygieneItem({
 	);
 }
 
-function HygienePanel({ hygiene }: { hygiene: HygieneStatus | null }) {
+function HygienePanel({
+	hygiene,
+	texts,
+}: {
+	hygiene: HygieneStatus | null;
+	texts: UiSettings["texts"];
+}) {
 	const hygieneUrl =
 		process.env.NEXT_PUBLIC_HYGIENE_APP_URL || "https://toriyaro-eisei-v2.web.app";
 	return (
@@ -128,14 +134,14 @@ function HygienePanel({ hygiene }: { hygiene: HygieneStatus | null }) {
 					<HygieneItem
 						kind="daily"
 						name="毎日の衛生チェック"
-						desc={`毎日${hygiene.dailyRequired}枚の写真を撮影して提出してください`}
+						desc={texts.hygieneDailyDesc}
 						submitted={hygiene.dailySubmitted}
 						required={hygiene.dailyRequired}
 					/>
 					<HygieneItem
 						kind="weekly"
 						name="週次の衛生チェック"
-						desc={`毎週1回${hygiene.weeklyRequired}枚の写真を撮影して提出してください`}
+						desc={texts.hygieneWeeklyDesc}
 						submitted={hygiene.weeklySubmitted}
 						required={hygiene.weeklyRequired}
 					/>
@@ -153,13 +159,18 @@ function HygienePanel({ hygiene }: { hygiene: HygieneStatus | null }) {
 	);
 }
 
+function avatarClass(role: string): string {
+	if (role === "am" || role === "sv" || role === "hq") return role;
+	let hash = 0;
+	for (const ch of role) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+	return ["am", "sv", "hq", "c3"][hash % 4];
+}
+
 function CommentItem({ comment }: { comment: Comment }) {
-	const roleLabel = ROLE_LABELS[comment.authorRole];
-	const name =
-		comment.authorRole === "hq" ? comment.authorName : `${roleLabel} ${comment.authorName}`;
+	const label = roleLabel(comment.authorRole);
 	return (
 		<div className="comment">
-			<span className={`avatar ${comment.authorRole}`} aria-hidden>
+			<span className={`avatar ${avatarClass(comment.authorRole)}`} aria-hidden>
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
 					<circle cx="12" cy="8" r="4" />
 					<path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5v1H4z" />
@@ -167,7 +178,7 @@ function CommentItem({ comment }: { comment: Comment }) {
 			</span>
 			<div>
 				<div className="meta">
-					{comment.authorRole === "hq" ? `本部 ${comment.authorName}` : name}
+					{label === comment.authorName ? label : `${label} ${comment.authorName}`}
 					<div className="time">{fmtDateTime(comment.createdAt)}</div>
 				</div>
 				<p className="body">{comment.body}</p>
@@ -183,7 +194,10 @@ export default async function DashboardPage() {
 	const store = await provider.getStoreByCode(session.storeCode);
 	if (!store) redirect("/login");
 
-	const data = await provider.getDashboard(store);
+	const [data, uiSettings] = await Promise.all([
+		provider.getDashboard(store),
+		provider.getUiSettings(),
+	]);
 	// 衛生チェックは既存の衛生管理アプリからリアルタイム取得(不可ならシート同期値)
 	const liveHygiene = await getLiveHygiene([store]);
 	const hygiene = liveHygiene.get(store.id) ?? data.hygiene;
@@ -309,7 +323,7 @@ export default async function DashboardPage() {
 				)}
 
 				<div className="main-grid">
-					<HygienePanel hygiene={hygiene} />
+					<HygienePanel hygiene={hygiene} texts={uiSettings.texts} />
 
 					<section className="card">
 						<h2 className="section-title">

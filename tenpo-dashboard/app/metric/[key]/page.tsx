@@ -68,10 +68,14 @@ export default async function MetricDetailPage({
 	const store = await provider.getStoreByCode(session.storeCode);
 	if (!store) redirect("/login");
 
-	const data = await provider.getDashboard(store);
+	const [data, uiSettings] = await Promise.all([
+		provider.getDashboard(store),
+		provider.getUiSettings(),
+	]);
 	const m = data.today;
 	const fmt = (v: number | null | undefined) =>
 		v === null || v === undefined ? "-" : v.toFixed(config?.digits ?? 1);
+	const betterNote = config?.betterNote ? uiSettings.texts.betterLowNote : null;
 
 	return (
 		<>
@@ -109,7 +113,7 @@ export default async function MetricDetailPage({
 								</div>
 							</div>
 							<p className="muted" style={{ marginTop: 10 }}>
-								総合順位は KPI・原価率・人件費率・QSC の各順位から算出されます。
+								{uiSettings.texts.rankNote}
 							</p>
 						</section>
 						<section className="card">
@@ -189,9 +193,9 @@ export default async function MetricDetailPage({
 									)}
 								</div>
 							</div>
-							{config.betterNote && (
+							{betterNote && (
 								<p className="muted" style={{ marginTop: 10 }}>
-									{config.betterNote}
+									{betterNote}
 								</p>
 							)}
 						</section>

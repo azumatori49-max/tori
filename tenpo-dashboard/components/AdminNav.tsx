@@ -7,6 +7,7 @@ const LINKS = [
 	{ href: "/admin", label: "店舗一覧" },
 	{ href: "/admin/comments", label: "コメント管理" },
 	{ href: "/admin/announcements", label: "お知らせ管理" },
+	{ href: "/admin/settings", label: "表示設定" },
 ];
 
 export default function AdminNav() {

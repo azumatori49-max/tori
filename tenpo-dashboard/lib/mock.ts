@@ -6,7 +6,9 @@ import type {
 	GasStoreRow,
 	HygieneStatus,
 	Store,
+	UiSettings,
 } from "./types";
+import { DEFAULT_UI_SETTINGS } from "./types";
 import type { DataProvider, StoreOverviewRow } from "./data";
 
 const TOTAL_STORES = 42;
@@ -155,6 +157,8 @@ const comments: Comment[] = [
 		createdAt: new Date(Date.now() - 37 * 3600_000).toISOString(),
 	},
 ];
+
+let uiSettings: UiSettings = structuredClone(DEFAULT_UI_SETTINGS);
 
 let announcementSeq = 2;
 const announcements: Announcement[] = [
@@ -310,6 +314,14 @@ export const mockProvider: DataProvider = {
 			updated++;
 		}
 		return { updated, unknownCodes };
+	},
+
+	async getUiSettings() {
+		return uiSettings;
+	},
+
+	async saveUiSettings(settings) {
+		uiSettings = settings;
 	},
 
 	async upsertStores(rows) {

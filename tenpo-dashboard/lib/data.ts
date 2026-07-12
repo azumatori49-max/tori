@@ -8,6 +8,7 @@ import type {
 	GasStoreUpsertRow,
 	HygieneStatus,
 	Store,
+	UiSettings,
 } from "./types";
 
 export type StoreOverviewRow = {
@@ -45,6 +46,8 @@ export interface DataProvider {
 	upsertStores(
 		rows: GasStoreUpsertRow[],
 	): Promise<{ created: number; updated: number; skippedNoPassword: string[] }>;
+	getUiSettings(): Promise<UiSettings>;
+	saveUiSettings(settings: UiSettings): Promise<void>;
 }
 
 let provider: DataProvider | null = null;

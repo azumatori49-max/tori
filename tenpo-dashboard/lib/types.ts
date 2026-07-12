@@ -42,7 +42,8 @@ export type HygieneStatus = {
 	lastSubmittedAt: string | null;
 };
 
-export type CommentRole = "am" | "sv" | "hq";
+// コメントの役職。旧データは "am"|"sv"|"hq"、新データは役職名そのもの
+export type CommentRole = string;
 
 export type Comment = {
 	id: string;
@@ -77,10 +78,42 @@ export type DashboardData = {
 	latestAnnouncement: Announcement | null;
 };
 
-export const ROLE_LABELS: Record<CommentRole, string> = {
+// 旧データ("am"等のキーで保存されたコメント)の表示用ラベル
+export const LEGACY_ROLE_LABELS: Record<string, string> = {
 	am: "エリアマネージャー",
 	sv: "スーパーバイザー",
 	hq: "本部 衛生管理チーム",
+};
+
+/** 役職キー/役職名を表示用ラベルに変換 */
+export function roleLabel(authorRole: string): string {
+	return LEGACY_ROLE_LABELS[authorRole] ?? authorRole;
+}
+
+/** 本部管理画面から編集できる表示設定 */
+export type UiSettings = {
+	/** コメント投稿時に選べる役職(表示順) */
+	roles: string[];
+	texts: {
+		/** 原価率・人件費率の詳細ページの注記 */
+		betterLowNote: string;
+		/** 総合順位の詳細ページの注記 */
+		rankNote: string;
+		/** 毎日の衛生チェックの説明文 */
+		hygieneDailyDesc: string;
+		/** 週次の衛生チェックの説明文 */
+		hygieneWeeklyDesc: string;
+	};
+};
+
+export const DEFAULT_UI_SETTINGS: UiSettings = {
+	roles: ["エリアマネージャー", "スーパーバイザー", "本部 衛生管理チーム"],
+	texts: {
+		betterLowNote: "低いほど良い指標です",
+		rankNote: "総合順位は KPI・原価率・人件費率・QSC の各順位から算出されます。",
+		hygieneDailyDesc: "毎日7枚の写真を撮影して提出してください",
+		hygieneWeeklyDesc: "毎週1回7枚の写真を撮影して提出してください",
+	},
 };
 
 /** GAS 同期 API が受け取る 1 店舗分のペイロード */

@@ -1,15 +1,16 @@
 import { createComment, deleteComment } from "@/app/admin/actions";
 import { getProvider } from "@/lib/data";
 import { fmtDateTime } from "@/lib/format";
-import { ROLE_LABELS } from "@/lib/types";
+import { roleLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCommentsPage() {
 	const provider = await getProvider();
-	const [stores, comments] = await Promise.all([
+	const [stores, comments, settings] = await Promise.all([
 		provider.listStores(),
 		provider.listComments(50),
+		provider.getUiSettings(),
 	]);
 
 	return (
@@ -30,11 +31,13 @@ export default async function AdminCommentsPage() {
 							</select>
 						</div>
 						<div className="field">
-							<label htmlFor="authorRole">役職</label>
-							<select id="authorRole" name="authorRole" defaultValue="hq">
-								<option value="am">{ROLE_LABELS.am}</option>
-								<option value="sv">{ROLE_LABELS.sv}</option>
-								<option value="hq">{ROLE_LABELS.hq}</option>
+							<label htmlFor="authorRole">役職(表示設定タブで編集できます)</label>
+							<select id="authorRole" name="authorRole" defaultValue={settings.roles[0]}>
+								{settings.roles.map((r) => (
+									<option key={r} value={r}>
+										{r}
+									</option>
+								))}
 							</select>
 						</div>
 					</div>
@@ -62,7 +65,7 @@ export default async function AdminCommentsPage() {
 							<div className="grow">
 								<div className="muted">
 									{fmtDateTime(c.createdAt)}/{c.storeName ?? "全店舗"}/
-									{ROLE_LABELS[c.authorRole]} {c.authorName}
+									{roleLabel(c.authorRole)} {c.authorName}
 								</div>
 								<div>{c.body}</div>
 							</div>

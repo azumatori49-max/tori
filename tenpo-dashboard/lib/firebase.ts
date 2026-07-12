@@ -10,7 +10,11 @@ import type {
 	GasStoreRow,
 	HygieneStatus,
 	Store,
+	UiSettings,
 } from "./types";
+import { DEFAULT_UI_SETTINGS } from "./types";
+
+let uiSettingsCache: { at: number; settings: UiSettings } | null = null;
 
 function app(): App {
 	const existing = getApps();
@@ -295,6 +299,27 @@ export const firebaseProvider: DataProvider = {
 		}
 
 		return { updated, unknownCodes };
+	},
+
+	async getUiSettings() {
+		const cached = uiSettingsCache;
+		if (cached && Date.now() - cached.at < 60_000) return cached.settings;
+		const snap = await db().collection("settings").doc("ui").get();
+		const data = (snap.data() ?? {}) as Partial<UiSettings>;
+		const settings: UiSettings = {
+			roles:
+				Array.isArray(data.roles) && data.roles.length > 0
+					? data.roles.filter((r): r is string => typeof r === "string")
+					: DEFAULT_UI_SETTINGS.roles,
+			texts: { ...DEFAULT_UI_SETTINGS.texts, ...(data.texts ?? {}) },
+		};
+		uiSettingsCache = { at: Date.now(), settings };
+		return settings;
+	},
+
+	async saveUiSettings(settings) {
+		await db().collection("settings").doc("ui").set(settings);
+		uiSettingsCache = { at: Date.now(), settings };
 	},
 
 	async upsertStores(rows) {

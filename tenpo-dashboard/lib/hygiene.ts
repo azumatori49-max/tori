@@ -101,6 +101,83 @@ function photoCount(sub: RtdbSubmission | null): number {
 	return 0;
 }
 
+/* ===== 同期診断(管理画面 /admin/debug 用) ===== */
+
+export type HygieneDiagnosis = {
+	rtdbUrl: string | null;
+	dailyKey: string;
+	weeklyKey: string;
+	connection: { ok: boolean; error?: string };
+	appStoreNames: string[];
+	matches: {
+		storeName: string;
+		matchedKey: string | null;
+		matchedName: string | null;
+		daily: { count: number; total: number | null; submittedAt: string | null } | null;
+		weekly: { count: number; total: number | null; submittedAt: string | null } | null;
+		error?: string;
+	}[];
+};
+
+export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis> {
+	const url = baseUrl();
+	const diagnosis: HygieneDiagnosis = {
+		rtdbUrl: url,
+		dailyKey: dailyKeyJST(),
+		weeklyKey: weeklyKeyJST(),
+		connection: { ok: false },
+		appStoreNames: [],
+		matches: [],
+	};
+	if (!url) {
+		diagnosis.connection.error = "HYGIENE_RTDB_URL が off に設定されています";
+		return diagnosis;
+	}
+
+	let rtdbStores: RtdbStores = {};
+	try {
+		rtdbStores = ((await rtdbGet("stores", 0)) as RtdbStores) ?? {};
+		diagnosis.connection.ok = true;
+		diagnosis.appStoreNames = Object.values(rtdbStores)
+			.map((v) => v?.name)
+			.filter((n): n is string => typeof n === "string")
+			.sort();
+	} catch (e) {
+		diagnosis.connection.error = e instanceof Error ? e.message : String(e);
+		return diagnosis;
+	}
+
+	for (const store of stores) {
+		const key = findStoreKey(store.name, rtdbStores);
+		const entry: HygieneDiagnosis["matches"][number] = {
+			storeName: store.name,
+			matchedKey: key,
+			matchedName: key ? rtdbStores[key]?.name ?? null : null,
+			daily: null,
+			weekly: null,
+		};
+		if (key) {
+			try {
+				const [daily, weekly] = await Promise.all([
+					rtdbGet(`submissions/${key}/daily/${diagnosis.dailyKey}`, 0) as Promise<RtdbSubmission | null>,
+					rtdbGet(`submissions/${key}/weekly/${diagnosis.weeklyKey}`, 0) as Promise<RtdbSubmission | null>,
+				]);
+				entry.daily = daily
+					? { count: photoCount(daily), total: daily.total ?? null, submittedAt: daily.submittedAt ?? null }
+					: null;
+				entry.weekly = weekly
+					? { count: photoCount(weekly), total: weekly.total ?? null, submittedAt: weekly.submittedAt ?? null }
+					: null;
+			} catch (e) {
+				entry.error = e instanceof Error ? e.message : String(e);
+			}
+		}
+		diagnosis.matches.push(entry);
+	}
+
+	return diagnosis;
+}
+
 /**
  * 既存衛生管理アプリから、渡した店舗の今日/今週の提出状況を取得する。
  * 取得できなかった店舗は結果に含まれない(呼び出し側でシート同期値にフォールバック)。

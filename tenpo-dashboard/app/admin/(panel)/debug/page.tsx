@@ -1,0 +1,108 @@
+import { getProvider } from "@/lib/data";
+import { fmtDateTime } from "@/lib/format";
+import { diagnoseHygiene } from "@/lib/hygiene";
+
+export const dynamic = "force-dynamic";
+
+export default async function HygieneDebugPage() {
+	const provider = await getProvider();
+	const stores = await provider.listStores();
+	const d = await diagnoseHygiene(stores);
+	const matchedCount = d.matches.filter((m) => m.matchedKey).length;
+
+	return (
+		<div className="stack-16">
+			<section className="card">
+				<h2 className="section-title">衛生管理アプリ 同期診断</h2>
+				<div className="table-wrap">
+					<table className="data">
+						<tbody>
+							<tr>
+								<th>接続先データベース</th>
+								<td>{d.rtdbUrl ?? "(無効化されています)"}</td>
+							</tr>
+							<tr>
+								<th>接続結果</th>
+								<td>
+									{d.connection.ok ? (
+										<span className="badge good">接続OK</span>
+									) : (
+										<>
+											<span className="badge bad">接続失敗</span> {d.connection.error}
+										</>
+									)}
+								</td>
+							</tr>
+							<tr>
+								<th>今日のキー / 今週のキー</th>
+								<td>
+									{d.dailyKey} / {d.weeklyKey}
+								</td>
+							</tr>
+							<tr>
+								<th>店舗の一致</th>
+								<td>
+									{matchedCount} / {d.matches.length} 店舗が一致
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section className="card">
+				<h2 className="section-title">店舗ごとの状況</h2>
+				<div className="table-wrap">
+					<table className="data">
+						<thead>
+							<tr>
+								<th>ダッシュボード側の店舗名</th>
+								<th>衛生アプリ側の店舗名</th>
+								<th>今日の提出(日次)</th>
+								<th>今週の提出(週次)</th>
+							</tr>
+						</thead>
+						<tbody>
+							{d.matches.map((m) => (
+								<tr key={m.storeName}>
+									<td>{m.storeName}</td>
+									<td>
+										{m.matchedName ?? <span className="badge bad">一致なし</span>}
+										{m.error && <span className="badge bad">取得エラー: {m.error}</span>}
+									</td>
+									<td>
+										{m.matchedKey
+											? m.daily
+												? `${m.daily.count}枚 (${fmtDateTime(m.daily.submittedAt)})`
+												: "提出なし"
+											: "-"}
+									</td>
+									<td>
+										{m.matchedKey
+											? m.weekly
+												? `${m.weekly.count}枚 (${fmtDateTime(m.weekly.submittedAt)})`
+												: "提出なし"
+											: "-"}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+				<p className="muted" style={{ marginTop: 12 }}>
+					「一致なし」の店舗は、スプレッドシートの店舗マスタの店舗名を上の「衛生管理アプリの登録店舗」
+					のいずれかと同じにして「⑤ 店舗をアプリに登録」を再実行すると同期されます。
+				</p>
+			</section>
+
+			{d.connection.ok && (
+				<section className="card">
+					<h2 className="section-title">
+						衛生管理アプリの登録店舗 <small>({d.appStoreNames.length}件)</small>
+					</h2>
+					<p style={{ fontSize: 13 }}>{d.appStoreNames.join(" / ")}</p>
+				</section>
+			)}
+		</div>
+	);
+}

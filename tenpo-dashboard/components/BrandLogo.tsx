@@ -18,7 +18,12 @@ const BRANDS: BrandDef[] = [
 	{ match: "すし鳥", initial: "す", bg: "#1d4ed8", image: "/brand/sushitori.png" },
 ];
 
-const DEFAULT: BrandDef = { match: "", initial: "店", bg: "#e8590c" };
+const DEFAULT: BrandDef = {
+	match: "店舗ダッシュボード",
+	initial: "店",
+	bg: "#c25534",
+	image: "/brand/app-logo.png",
+};
 
 export default function BrandLogo({ brand }: { brand?: string }) {
 	const def = (brand && BRANDS.find((b) => brand.includes(b.match))) || DEFAULT;

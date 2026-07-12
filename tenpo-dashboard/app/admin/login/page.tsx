@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createSession, getSession } from "@/lib/auth";
 import { getProvider } from "@/lib/data";
@@ -25,6 +26,7 @@ export default async function AdminLoginPage({
 	return (
 		<div className="login-wrap">
 			<div className="card login-card">
+				<Image className="login-logo" src="/brand/app-logo.png" alt="" width={72} height={72} />
 				<h1>本部 管理画面</h1>
 				<p className="lead">STORE DASHBOARD</p>
 				{provider.isMock && !process.env.ADMIN_PASSWORD && (

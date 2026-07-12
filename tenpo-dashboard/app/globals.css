@@ -619,6 +619,11 @@ a.kpi-card-link:hover {
 	padding: 32px;
 }
 
+.login-logo {
+	display: block;
+	margin: 0 auto 14px;
+}
+
 .login-card h1 {
 	font-size: 21px;
 	font-weight: 600;

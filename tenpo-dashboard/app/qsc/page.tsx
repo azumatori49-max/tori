@@ -16,10 +16,9 @@ export default async function QscDetailPage() {
 
 	const data = await provider.getDashboard(store);
 	const m = data.today;
-	const andyUrl =
-		store.qscUrl ||
-		process.env.NEXT_PUBLIC_QSC_APP_URL ||
-		"https://dashboard.andy.conetto.app/surveys/survey-list";
+	// andy は公開リンク・API 非対応のため、外部リンクは
+	// 店舗マスタの「QSC詳細URL」等で明示的に設定された場合のみ表示する
+	const externalUrl = store.qscUrl || process.env.NEXT_PUBLIC_QSC_APP_URL || null;
 
 	return (
 		<>
@@ -83,9 +82,11 @@ export default async function QscDetailPage() {
 							)}
 						</section>
 
-						<a className="hygiene-app-link" href={andyUrl} target="_blank" rel="noreferrer">
-							andy でアンケート回答を見る
-						</a>
+						{externalUrl && (
+							<a className="hygiene-app-link" href={externalUrl} target="_blank" rel="noreferrer">
+								アンケート回答の詳細を見る
+							</a>
+						)}
 					</div>
 				) : (
 					<section className="card">

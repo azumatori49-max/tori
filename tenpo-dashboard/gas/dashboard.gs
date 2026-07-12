@@ -7,19 +7,24 @@
  * ■ セットアップ手順
  * 1. スプレッドシートの「拡張機能 > Apps Script」を開き、このファイルの内容を貼り付けて保存
  * 2. スプレッドシートを再読み込みすると「ダッシュボード連携」メニューが表示される
- * 3. メニュー「① 初期セットアップ」→ シート(店舗マスタ/データ入力/設定/ダッシュボード連携)が生成される
+ * 3. メニュー「① 初期セットアップ」→ 必要なシートが生成される
+ *    (旧「データ入力」シートがある場合は、値を新しいシートに自動で移行します)
  * 4. 「設定」シートにエンドポイント URL を入力、「店舗マスタ」を実店舗に書き換える
  * 5. メニュー「② API シークレットを設定」→ アプリ側の GAS_SYNC_SECRET と同じ値を入力
  * 6. 「店舗マスタ」の「初期パスワード」を入力し、メニュー「⑤ 店舗をアプリに登録」を実行
- *    → 店舗がアプリに登録され、店舗コード+パスワードでログインできるようになる
- * 7. 「データ入力」に各店舗の数値を入れて、メニュー「③ 今すぐ同期」で動作確認
+ * 7. 「KPI」「原価率」「人件費率」「QSCアンケート」の各シートに数値を入れて「③ 今すぐ同期」
  * 8. メニュー「④ 毎日の自動同期を設定」で毎日自動送信(時刻は「設定」シートで変更可)
  *
  * ■ 各シートの役割
- * - 店舗マスタ:       店舗コードと店舗名(アプリ側の店舗コードと一致させる)
- * - データ入力:       毎日更新する数値(KPI点数・原価率・人件費率・QSC点数・衛生チェック提出枚数)
- * - 設定:             エンドポイント URL・目標値・同期時刻
+ * - 店舗マスタ:        店舗コード・店舗名・ブランド・初期パスワード(全シートの店舗一覧の元)
+ * - KPI:               各店舗の KPI 点数(C 列だけ入力。店舗コード・店舗名は自動)
+ * - 原価率:            各店舗の原価率%(同上)
+ * - 人件費率:          各店舗の人件費率%(同上)
+ * - QSCアンケート:     各店舗の QSC 点数(同上・未実施の店舗は空欄で可)
+ * - 設定:              エンドポイント URL・目標値・同期時刻
  * - ダッシュボード連携: 同期時に自動生成される計算結果(順位・平均)。手で編集しない
+ *
+ * ※ 衛生チェックの提出枚数は衛生管理アプリから自動取得されるため、入力不要です。
  *
  * 順位・全店平均は同期のたびに GAS が自動計算します:
  * - KPI順位:   KPI点数の高い順
@@ -29,19 +34,16 @@
  */
 
 var SHEET_MASTER = "店舗マスタ";
-var SHEET_INPUT = "データ入力";
 var SHEET_OUTPUT = "ダッシュボード連携";
 var SHEET_SETTINGS = "設定";
+var SHEET_INPUT_LEGACY = "データ入力"; // 旧バージョンの入力シート(①で自動移行)
 
-var INPUT_HEADERS = [
-	"店舗コード",
-	"店舗名(自動)",
-	"KPI点数",
-	"原価率(%)",
-	"人件費率(%)",
-	"QSC点数",
-	"日次提出(枚)",
-	"週次提出(枚)",
+// 指標ごとの入力シート
+var METRIC_SHEETS = [
+	{ key: "kpi", name: "KPI", header: "KPI点数", percent: false },
+	{ key: "cost", name: "原価率", header: "原価率(%)", percent: true },
+	{ key: "labor", name: "人件費率", header: "人件費率(%)", percent: true },
+	{ key: "qsc", name: "QSCアンケート", header: "QSC点数", percent: false },
 ];
 
 var OUTPUT_HEADERS = [
@@ -57,8 +59,6 @@ var OUTPUT_HEADERS = [
 	"QSC点数",
 	"QSC順位",
 	"QSC前回順位",
-	"日次提出",
-	"週次提出",
 	"同期日時",
 ];
 
@@ -92,7 +92,7 @@ function initSpreadsheet() {
 				["人件費率目標(%)", 25],
 				["同期時刻(0〜23時)", 22],
 			]);
-		settings.getRange("A1:B1").setFontWeight("bold").setBackground("#f4e8dd");
+		settings.getRange("A1:B1").setFontWeight("bold").setBackground("#f6e4dc");
 		settings.setColumnWidth(1, 180);
 		settings.setColumnWidth(2, 360);
 		settings
@@ -113,14 +113,14 @@ function initSpreadsheet() {
 				["104", "川越クレアモール店", "イザカラ", ""],
 				["105", "上野御徒町店", "すし鳥酒場", ""],
 			]);
-		master.getRange("A1:D1").setFontWeight("bold").setBackground("#f4e8dd");
+		master.getRange("A1:D1").setFontWeight("bold").setBackground("#f6e4dc");
 		master.getRange("A:A").setNumberFormat("@"); // 店舗コードは文字列扱い
 		master.setColumnWidth(2, 160);
 		master.setFrozenRows(1);
 	}
 	// 旧バージョンで作成したシートにパスワード列を追加
 	if (String(master.getRange("D1").getValue()).trim() === "") {
-		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#f4e8dd");
+		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#f6e4dc");
 	}
 	master
 		.getRange("A1")
@@ -130,37 +130,41 @@ function initSpreadsheet() {
 				"既存店舗のパスワードを変えたいときも、入力して⑤を実行すれば更新されます。",
 		);
 
-	// --- データ入力 ---
-	var input = getOrCreateSheet(ss, SHEET_INPUT);
-	if (input.getLastRow() === 0) {
-		input.getRange(1, 1, 1, INPUT_HEADERS.length).setValues([INPUT_HEADERS]);
-		input
-			.getRange(1, 1, 1, INPUT_HEADERS.length)
-			.setFontWeight("bold")
-			.setBackground("#fdeee3");
-		input.getRange("A:A").setNumberFormat("@");
-		// 店舗コードを入れると店舗名が自動表示される
-		input
-			.getRange(2, 2, 100, 1)
-			.setFormulaR1C1(
-				'=IF(RC[-1]="","",IFERROR(VLOOKUP(RC[-1],\'' +
-					SHEET_MASTER +
-					'\'!C1:C2,2,FALSE),"未登録"))',
-			);
-		// サンプル行
-		input.getRange(2, 1, 3, 1).setValues([["101"], ["102"], ["103"]]);
-		input
-			.getRange(2, 3, 3, 6)
-			.setValues([
-				[86.4, 28.7, 24.1, 89.2, 6, 5],
-				[80.2, 30.1, 25.3, 86.0, 7, 7],
-				[74.4, 31.0, 26.0, 89.0, 4, 6],
-			]);
-		input.setFrozenRows(1);
-		input
-			.getRange("C1")
-			.setNote("原価率・人件費率は 28.7 のように % の数値で入力してください(0.287 でも自動判別します)");
-	}
+	// --- 指標ごとの入力シート ---
+	var created = [];
+	METRIC_SHEETS.forEach(function (m) {
+		var sheet = ss.getSheetByName(m.name);
+		if (!sheet) {
+			sheet = ss.insertSheet(m.name);
+			created.push(m.name);
+		}
+		if (sheet.getLastRow() === 0) {
+			sheet.getRange(1, 1, 1, 3).setValues([["店舗コード", "店舗名", m.header]]);
+			sheet.getRange("A1:C1").setFontWeight("bold").setBackground("#f6e4dc");
+			// 店舗コード・店舗名は店舗マスタから自動反映
+			sheet
+				.getRange("A2")
+				.setFormula(
+					"=ARRAYFORMULA(IF('" + SHEET_MASTER + "'!A2:A200=\"\",\"\",'" + SHEET_MASTER + "'!A2:A200))",
+				);
+			sheet
+				.getRange("B2")
+				.setFormula(
+					"=ARRAYFORMULA(IF('" + SHEET_MASTER + "'!A2:A200=\"\",\"\",'" + SHEET_MASTER + "'!B2:B200))",
+				);
+			sheet.setColumnWidth(2, 180);
+			sheet.setFrozenRows(1);
+			sheet
+				.getRange("C1")
+				.setNote(
+					"C 列だけ入力してください。店舗コード・店舗名は店舗マスタから自動反映されます。" +
+						(m.percent ? "\n28.7 のように % の数値で入力(0.287 でも自動判別)" : ""),
+				);
+		}
+	});
+
+	// --- 旧「データ入力」シートからの移行 ---
+	var migrated = migrateLegacyInput(ss, created);
 
 	// --- ダッシュボード連携(出力先) ---
 	var output = getOrCreateSheet(ss, SHEET_OUTPUT);
@@ -169,7 +173,7 @@ function initSpreadsheet() {
 		output
 			.getRange(1, 1, 1, OUTPUT_HEADERS.length)
 			.setFontWeight("bold")
-			.setBackground("#e3edfb");
+			.setBackground("#e5ebf3");
 		output.getRange("A:A").setNumberFormat("@");
 		output.setFrozenRows(1);
 		output
@@ -177,11 +181,49 @@ function initSpreadsheet() {
 			.setNote("このシートは「今すぐ同期」実行時に自動生成されます。手で編集しないでください");
 	}
 
-	SpreadsheetApp.getActiveSpreadsheet().toast(
-		"シートを作成しました。「設定」シートと「店舗マスタ」を編集してください。",
-		"初期セットアップ完了",
-		8,
-	);
+	var msg = "シートを準備しました。";
+	if (migrated > 0) {
+		msg += "旧「データ入力」から " + migrated + " 店舗分の値を移行しました(旧シートは削除して構いません)。";
+	}
+	SpreadsheetApp.getActiveSpreadsheet().toast(msg, "初期セットアップ完了", 8);
+}
+
+/** 旧「データ入力」シート(店舗コード/店舗名/KPI/原価率/人件費率/QSC/日次/週次)から値を移行 */
+function migrateLegacyInput(ss, createdSheets) {
+	var legacy = ss.getSheetByName(SHEET_INPUT_LEGACY);
+	if (!legacy || legacy.getLastRow() < 2 || createdSheets.length === 0) return 0;
+
+	SpreadsheetApp.flush(); // ARRAYFORMULA を評価させてから行位置を特定する
+
+	var values = legacy.getRange(2, 1, legacy.getLastRow() - 1, 6).getValues();
+	var legacyByCode = {};
+	values.forEach(function (row) {
+		var code = String(row[0]).trim();
+		if (!code) return;
+		legacyByCode[code] = { kpi: row[2], cost: row[3], labor: row[4], qsc: row[5] };
+	});
+
+	var migrated = 0;
+	METRIC_SHEETS.forEach(function (m) {
+		if (createdSheets.indexOf(m.name) < 0) return; // 新規作成したシートにだけ移行
+		var sheet = ss.getSheetByName(m.name);
+		var lastRow = sheet.getLastRow();
+		if (lastRow < 2) return;
+		var codes = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+		codes.forEach(function (row, i) {
+			var code = String(row[0]).trim();
+			var legacyRow = legacyByCode[code];
+			if (!code || !legacyRow) return;
+			var v = legacyRow[m.key];
+			if (v !== "" && v !== null && v !== undefined) {
+				sheet.getRange(i + 2, 3).setValue(v);
+				if (m.key === "kpi") migrated++;
+			}
+		});
+	});
+
+	legacy.setName(SHEET_INPUT_LEGACY + "(旧・削除可)");
+	return migrated;
 }
 
 function getOrCreateSheet(ss, name) {
@@ -217,9 +259,15 @@ function syncToDashboard() {
 		throw new Error("メニュー「② API シークレットを設定」を先に実行してください");
 	}
 
-	var stores = computeStores(ss, settings);
+	var computed = computeStores(ss, settings);
+	var stores = computed.stores;
 	if (stores.length === 0) {
-		throw new Error("「" + SHEET_INPUT + "」に店舗データがありません");
+		throw new Error(
+			"同期できる店舗がありません。「KPI」「原価率」「人件費率」の各シートに数値を入力してください" +
+				(computed.incomplete.length > 0
+					? "(入力が足りない店舗: " + computed.incomplete.join(", ") + ")"
+					: ""),
+		);
 	}
 
 	writeOutputSheet(ss, stores);
@@ -242,11 +290,6 @@ function syncToDashboard() {
 				labor_rate_rank: s.laborRank,
 				labor_rate_target: settings.laborTarget,
 				labor_rate_avg: s.laborAvg,
-				hygiene: {
-					daily_submitted: s.daily,
-					weekly_submitted: s.weekly,
-					last_submitted_at: new Date().toISOString(),
-				},
 			};
 			if (s.qsc !== null) {
 				row.qsc_score = s.qsc;
@@ -273,10 +316,13 @@ function syncToDashboard() {
 
 	var body = JSON.parse(res.getContentText());
 	var msg = stores.length + " 店舗を同期しました";
+	if (computed.incomplete.length > 0) {
+		msg += "(入力不足でスキップ: " + computed.incomplete.join(", ") + ")";
+	}
 	if (body.unknownCodes && body.unknownCodes.length > 0) {
 		msg += "(アプリ未登録の店舗コード: " + body.unknownCodes.join(", ") + ")";
 	}
-	ss.toast(msg, "同期完了", 8);
+	ss.toast(msg, "同期完了", 10);
 }
 
 function readSettings(ss) {
@@ -301,50 +347,69 @@ function readSettings(ss) {
 	};
 }
 
-function computeStores(ss, settings) {
-	var master = ss.getSheetByName(SHEET_MASTER);
-	var input = ss.getSheetByName(SHEET_INPUT);
-	if (!master || !input) {
-		throw new Error("メニュー「① 初期セットアップ」を先に実行してください");
-	}
-
-	var nameByCode = {};
-	master
-		.getRange(2, 1, Math.max(master.getLastRow() - 1, 1), 2)
+/** 指標シート(A: 店舗コード, C: 値)を code → 値 のマップとして読む */
+function readMetricSheet(ss, name) {
+	var sheet = ss.getSheetByName(name);
+	var map = {};
+	if (!sheet || sheet.getLastRow() < 2) return map;
+	sheet
+		.getRange(2, 1, sheet.getLastRow() - 1, 3)
 		.getValues()
 		.forEach(function (row) {
 			var code = String(row[0]).trim();
-			if (code) nameByCode[code] = String(row[1]).trim();
+			if (code) map[code] = row[2];
 		});
+	return map;
+}
+
+function computeStores(ss, settings) {
+	var master = ss.getSheetByName(SHEET_MASTER);
+	if (!master) {
+		throw new Error("メニュー「① 初期セットアップ」を先に実行してください");
+	}
+
+	var kpiMap = readMetricSheet(ss, "KPI");
+	var costMap = readMetricSheet(ss, "原価率");
+	var laborMap = readMetricSheet(ss, "人件費率");
+	var qscMap = readMetricSheet(ss, "QSCアンケート");
 
 	// 前回の QSC 順位(出力シートから引き継ぎ)
 	var qscPrevByCode = readPreviousQscRanks(ss);
 
 	var stores = [];
-	var lastRow = input.getLastRow();
-	if (lastRow >= 2) {
-		input
-			.getRange(2, 1, lastRow - 1, INPUT_HEADERS.length)
-			.getValues()
-			.forEach(function (row) {
-				var code = String(row[0]).trim();
-				if (!code) return;
-				var kpi = toNumber(row[2]);
-				if (kpi === null) return; // KPI 点数が無い行はスキップ
-				stores.push({
-					code: code,
-					name: nameByCode[code] || String(row[1]).trim() || code,
-					kpi: kpi,
-					cost: toPercent(row[3]),
-					labor: toPercent(row[4]),
-					qsc: toNumber(row[5]),
-					daily: toNumber(row[6]) || 0,
-					weekly: toNumber(row[7]) || 0,
-					qscPrevRank: qscPrevByCode[code] !== undefined ? qscPrevByCode[code] : null,
-				});
+	var incomplete = [];
+	master
+		.getRange(2, 1, Math.max(master.getLastRow() - 1, 1), 2)
+		.getValues()
+		.forEach(function (row) {
+			var code = String(row[0]).trim();
+			var name = String(row[1]).trim();
+			if (!code || !name) return;
+
+			var kpi = toNumber(kpiMap[code]);
+			var cost = toPercent(costMap[code]);
+			var labor = toPercent(laborMap[code]);
+			var qsc = toNumber(qscMap[code]);
+
+			// 全て未入力の店舗は対象外(新店など)
+			if (kpi === null && cost === null && labor === null && qsc === null) return;
+			// KPI・原価率・人件費率は必須(どれか欠けたら今回はスキップ)
+			if (kpi === null || cost === null || labor === null) {
+				incomplete.push(name);
+				return;
+			}
+
+			stores.push({
+				code: code,
+				name: name,
+				kpi: kpi,
+				cost: cost,
+				labor: labor,
+				qsc: qsc,
+				qscPrevRank: qscPrevByCode[code] !== undefined ? qscPrevByCode[code] : null,
 			});
-	}
-	if (stores.length === 0) return stores;
+		});
+	if (stores.length === 0) return { stores: stores, incomplete: incomplete };
 
 	// 順位(同値は同順位)と全店平均
 	assignRanks(stores, "kpi", "kpiRank", false);
@@ -383,17 +448,20 @@ function computeStores(ss, settings) {
 				: i + 1;
 	});
 
-	return stores;
+	return { stores: stores, incomplete: incomplete };
 }
 
 function readPreviousQscRanks(ss) {
 	var output = ss.getSheetByName(SHEET_OUTPUT);
 	var map = {};
 	if (!output || output.getLastRow() < 2) return map;
-	var codeCol = OUTPUT_HEADERS.indexOf("店舗コード");
-	var qscRankCol = OUTPUT_HEADERS.indexOf("QSC順位");
+	var lastCol = output.getLastColumn();
+	var header = output.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+	var codeCol = header.indexOf("店舗コード");
+	var qscRankCol = header.indexOf("QSC順位");
+	if (codeCol < 0 || qscRankCol < 0) return map;
 	output
-		.getRange(2, 1, output.getLastRow() - 1, OUTPUT_HEADERS.length)
+		.getRange(2, 1, output.getLastRow() - 1, lastCol)
 		.getValues()
 		.forEach(function (row) {
 			var code = String(row[codeCol]).trim();
@@ -425,14 +493,12 @@ function writeOutputSheet(ss, stores) {
 				s.qsc === null ? "" : s.qsc,
 				s.qscRank === null ? "" : s.qscRank,
 				s.qscPrevRank === null ? "" : s.qscPrevRank,
-				s.daily,
-				s.weekly,
 				now,
 			];
 		});
 	output.clearContents();
 	output.getRange(1, 1, 1, OUTPUT_HEADERS.length).setValues([OUTPUT_HEADERS]);
-	output.getRange(1, 1, 1, OUTPUT_HEADERS.length).setFontWeight("bold").setBackground("#e3edfb");
+	output.getRange(1, 1, 1, OUTPUT_HEADERS.length).setFontWeight("bold").setBackground("#e5ebf3");
 	output.getRange("A:A").setNumberFormat("@");
 	output.getRange(2, 1, rows.length, OUTPUT_HEADERS.length).setValues(rows);
 }

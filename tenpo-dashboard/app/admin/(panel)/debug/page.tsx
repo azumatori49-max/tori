@@ -44,10 +44,17 @@ export default async function HygieneDebugPage() {
 								</td>
 							</tr>
 							<tr>
-								<th>今日のキー / 今週のキー</th>
+								<th>営業日(今日) / 今週のキー</th>
 								<td>
 									{d.dailyKey} / {d.weeklyKey}
+									<span className="muted" style={{ marginLeft: 8 }}>
+										※ 朝{d.dayCutoffHour}時までは前日の営業日として扱います
+									</span>
 								</td>
+							</tr>
+							<tr>
+								<th>提出を探す日付</th>
+								<td>{d.dailyKeyCandidates.join(" と ")}</td>
 							</tr>
 							<tr>
 								<th>店舗の一致</th>

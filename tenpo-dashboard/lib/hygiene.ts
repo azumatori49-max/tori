@@ -89,23 +89,51 @@ async function resolveBaseUrl(): Promise<string | null> {
 }
 
 /* ===== 既存アプリと同じ期間キー(JST) ===== */
+// 深夜営業のため、朝の締め時刻(既定 6 時)までは前日の営業日として扱う。
+// ただし提出がどちらの日付キーで記録されていても拾えるよう、
+// 営業日ベースとカレンダー日ベースの両方の候補キーを返し、
+// 取得時は提出時刻が新しい方を採用する。
+
+const DAY_CUTOFF_HOUR = (() => {
+	const n = Number(process.env.HYGIENE_DAY_CUTOFF_HOUR ?? "6");
+	return Number.isFinite(n) && n >= 0 && n <= 12 ? n : 6;
+})();
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-function jstDate(): Date {
-	return new Date(Date.now() + 9 * 3600_000);
+function jstDate(cutoffHours = 0): Date {
+	return new Date(Date.now() + (9 - cutoffHours) * 3600_000);
 }
 
-export function dailyKeyJST(): string {
-	const d = jstDate();
+function dateKeyOf(d: Date): string {
 	return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
+function weekKeyOf(d: Date): string {
+	const m = new Date(d);
+	const dow = m.getUTCDay();
+	m.setUTCDate(m.getUTCDate() + (dow === 0 ? -6 : 1 - dow)); // その週の月曜日
+	return `W${m.getUTCFullYear()}-${pad(m.getUTCMonth() + 1)}-${pad(m.getUTCDate())}`;
+}
+
+/** 営業日ベースの今日(表示用) */
+export function dailyKeyJST(): string {
+	return dateKeyOf(jstDate(DAY_CUTOFF_HOUR));
+}
+
 export function weeklyKeyJST(): string {
-	const d = jstDate();
-	const dow = d.getUTCDay();
-	d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow)); // その週の月曜日
-	return `W${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+	return weekKeyOf(jstDate(DAY_CUTOFF_HOUR));
+}
+
+/** 検索対象の候補キー(営業日とカレンダー日。深夜帯のみ 2 件になる) */
+export function dailyKeyCandidates(): string[] {
+	const keys = [dateKeyOf(jstDate(DAY_CUTOFF_HOUR)), dateKeyOf(jstDate(0))];
+	return keys[0] === keys[1] ? [keys[0]] : keys;
+}
+
+export function weeklyKeyCandidates(): string[] {
+	const keys = [weekKeyOf(jstDate(DAY_CUTOFF_HOUR)), weekKeyOf(jstDate(0))];
+	return keys[0] === keys[1] ? [keys[0]] : keys;
 }
 
 /* ===== RTDB REST 読み取り(短時間キャッシュ付き) ===== */
@@ -185,6 +213,35 @@ function photoCount(sub: RtdbSubmission | null): number {
 	return 0;
 }
 
+/**
+ * 複数の候補キー(営業日 / カレンダー日)から提出データを読み、
+ * 最も提出が進んでいる(枚数が多い、同数なら提出時刻が新しい)ものを返す。
+ * 深夜 0 時をまたいでも「その営業の提出」を取りこぼさないための処理。
+ */
+async function readBestSubmission(
+	basePath: string,
+	keys: string[],
+	ttlMs: number,
+): Promise<RtdbSubmission | null> {
+	const subs = (await Promise.all(
+		keys.map((k) => readPath(`${basePath}/${k}`, ttlMs) as Promise<RtdbSubmission | null>),
+	)) as (RtdbSubmission | null)[];
+	let best: RtdbSubmission | null = null;
+	let bestCount = -1;
+	for (const sub of subs) {
+		if (!sub) continue;
+		const count = photoCount(sub);
+		if (
+			count > bestCount ||
+			(count === bestCount && (sub.submittedAt ?? "") > (best?.submittedAt ?? ""))
+		) {
+			best = sub;
+			bestCount = count;
+		}
+	}
+	return best;
+}
+
 /* ===== 同期診断(管理画面 /admin/debug 用) ===== */
 
 export type HygieneDiagnosis = {
@@ -193,6 +250,8 @@ export type HygieneDiagnosis = {
 	probes: ProbeResult[];
 	dailyKey: string;
 	weeklyKey: string;
+	dailyKeyCandidates: string[];
+	dayCutoffHour: number;
 	connection: { ok: boolean; error?: string };
 	appStoreNames: string[];
 	matches: {
@@ -229,6 +288,8 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
 		probes,
 		dailyKey: dailyKeyJST(),
 		weeklyKey: weeklyKeyJST(),
+		dailyKeyCandidates: dailyKeyCandidates(),
+		dayCutoffHour: DAY_CUTOFF_HOUR,
 		connection: { ok: false },
 		appStoreNames: [],
 		matches: [],
@@ -268,8 +329,8 @@ export async function diagnoseHygiene(stores: Store[]): Promise<HygieneDiagnosis
 		if (key) {
 			try {
 				const [daily, weekly] = await Promise.all([
-					readPath(`submissions/${key}/daily/${diagnosis.dailyKey}`, 0) as Promise<RtdbSubmission | null>,
-					readPath(`submissions/${key}/weekly/${diagnosis.weeklyKey}`, 0) as Promise<RtdbSubmission | null>,
+					readBestSubmission(`submissions/${key}/daily`, dailyKeyCandidates(), 0),
+					readBestSubmission(`submissions/${key}/weekly`, weeklyKeyCandidates(), 0),
 				]);
 				entry.daily = daily
 					? { count: photoCount(daily), total: daily.total ?? null, submittedAt: daily.submittedAt ?? null }
@@ -304,6 +365,8 @@ export async function getLiveHygiene(stores: Store[]): Promise<Map<string, Hygie
 
 	const dailyKey = dailyKeyJST();
 	const weeklyKey = weeklyKeyJST();
+	const dailyKeys = dailyKeyCandidates();
+	const weeklyKeys = weeklyKeyCandidates();
 
 	await Promise.all(
 		stores.map(async (store) => {
@@ -311,8 +374,8 @@ export async function getLiveHygiene(stores: Store[]): Promise<Map<string, Hygie
 			if (!key) return;
 			try {
 				const [daily, weekly] = await Promise.all([
-					readPath(`submissions/${key}/daily/${dailyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
-					readPath(`submissions/${key}/weekly/${weeklyKey}`, 2 * 60_000) as Promise<RtdbSubmission | null>,
+					readBestSubmission(`submissions/${key}/daily`, dailyKeys, 2 * 60_000),
+					readBestSubmission(`submissions/${key}/weekly`, weeklyKeys, 2 * 60_000),
 				]);
 				const times = [daily?.submittedAt, weekly?.submittedAt]
 					.filter((t): t is string => typeof t === "string")

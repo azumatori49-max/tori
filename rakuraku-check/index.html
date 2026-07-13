@@ -430,7 +430,11 @@ function compressPhoto(file){return new Promise((res,rej)=>{
   img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("画像を読み込めません"));};
   img.src=url;});}
 
-/* ================= AI自動判定（Firebase AI Logic / Gemini） ================= */
+/* ================= AI自動判定（Firebase AI Logic / Gemini） =================
+   一時的に無効化中。再度有効にするには下の FEATURE_AI を true にするか、
+   URLに ?ai=on を付けて開く（例：https://.../rakuraku-check/?ai=on）。 */
+const FEATURE_AI=false;
+const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[
@@ -523,6 +527,7 @@ function applyAISuggestion(itemId){
   persistDraft(); refreshCard(itemId);
 }
 function aiSection(item,a){
+  if(!AI_ENABLED) return "";
   if(!a.photos.length||!item.groups.length) return "";
   if(aiBusy.has(item.id)) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが写真を判定しています…</div>`;
   const err=aiErr.get(item.id);
@@ -580,7 +585,7 @@ function viewHome(){
   <div class="home-hero">
     <div class="eyebrow">AM改善チェック</div>
     <h1>らくらく隣店チェック</h1>
-    <p>写真とワンタップ評価で店舗巡回を記録。写真はAIが自動判定を提案し、問題点は対応・期限・担当者まで登録、次回来店時に宿題として自動表示します。</p>
+    <p>写真とワンタップ評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが自動判定を提案し、":""}問題点は対応・期限・担当者まで登録、次回来店時に宿題として自動表示します。</p>
   </div>
   <div class="wrap">
     ${state.draft?`
@@ -605,6 +610,7 @@ function viewHome(){
       <div id="prev-hw"></div>
       <div style="margin-top:16px"><button class="btn" id="start">チェックを開始する</button></div>
     </div>
+    ${AI_ENABLED?`
     <div class="card">
       <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
       <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価を自動判定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
@@ -630,7 +636,7 @@ function viewHome(){
         <button class="btn ghost" id="fb-test">接続テスト</button>
       </div>
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
-    </div>
+    </div>`:""}
     <div class="card">
       <h3>過去のチェック</h3>
       ${past.length?past.map(i=>`
@@ -919,7 +925,7 @@ function reportBody(insp,isPreview){
         <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
-        ${a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
+        ${AI_ENABLED&&a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
         ${a.photos.length?`<div class="photos" style="margin-top:8px">${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(it.name)}の写真${i+1}"></div>`).join("")}</div>`:""}
       </div>`;}).join("")}
   </section>`).join("")}
@@ -1043,7 +1049,7 @@ document.addEventListener("change",async e=>{
       const id=t.dataset.photo;
       ans(id).photos.push(url);
       persistDraft(); refreshCard(id);
-      if(state.fb&&state.fb.auto) judgeItem(id);
+      if(AI_ENABLED&&state.fb&&state.fb.auto) judgeItem(id);
     }catch(err){alert("写真の読み込みに失敗しました。もう一度お試しください。");}
     return;
   }

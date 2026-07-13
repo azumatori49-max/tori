@@ -432,6 +432,11 @@ function compressPhoto(file){return new Promise((res,rej)=>{
 
 /* ================= AI自動判定（Firebase AI Logic / Gemini） ================= */
 const FB_SDK_VERSION="11.10.0";
+const DEFAULT_AI_MODEL="gemini-3.5-flash";
+const KNOWN_MODELS=[
+  ["gemini-3.5-flash","gemini-3.5-flash（推奨・無料枠あり）"],
+  ["gemini-3.1-pro","gemini-3.1-pro（高精度・有料プラン向け）"],
+];
 let aiModel=null;
 const aiBusy=new Set(), aiErr=new Map();
 function aiConfigured(){return !!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
@@ -455,7 +460,7 @@ async function getAIModel(){
   }catch(e){ throw new Error("Firebase SDKを読み込めませんでした。ネットワーク接続を確認してください（プレビュー環境では外部接続がブロックされる場合があります）。"); }
   const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(state.fb.config);
   const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
-  aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||"gemini-2.5-flash"});
+  aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||DEFAULT_AI_MODEL});
   return aiModel;
 }
 function buildJudgePrompt(item){
@@ -471,10 +476,12 @@ ${groups}
 }
 function friendlyAIError(err){
   const s=String(err&&err.message||err);
+  if(/no longer available|not found|404/i.test(s))
+    return `このモデルは提供終了または利用できません。設定でモデルを「${DEFAULT_AI_MODEL}」に変更して保存し、再試行してください。`;
   if(/limit:\s*0/.test(s)&&/quota/i.test(s))
-    return "選択中のモデルには無料枠がありません。モデルを「gemini-2.5-flash」に変更して保存し、再試行してください。";
+    return `選択中のモデルには無料枠がありません。モデルを「${DEFAULT_AI_MODEL}」に変更して保存し、再試行してください。`;
   if(/429|quota|rate.?limit/i.test(s))
-    return "無料枠の利用上限に達しました。1分ほど待ってから再試行してください（改善しない場合はモデルをgemini-2.5-flash-liteに変更）。";
+    return "無料枠の利用上限に達しました。1分ほど待ってから再試行してください。";
   if(/403|permission|not.?enabled|api.?key/i.test(s))
     return "アクセスが拒否されました。Firebaseコンソールで「Firebase AI Logic」が有効か、APIキーの制限設定を確認してください。詳細："+s.slice(0,120);
   return s;
@@ -607,8 +614,12 @@ function viewHome(){
       <div class="row2">
         <div class="field"><label>モデル</label>
           <select id="fb-model">
-            ${[["gemini-2.5-flash","gemini-2.5-flash（推奨・無料枠あり）"],["gemini-2.5-flash-lite","gemini-2.5-flash-lite（軽量・無料枠が大きい）"],["gemini-2.5-pro","gemini-2.5-pro（有料プラン向け）"]].map(([v,l])=>`<option value="${v}"${((state.fb&&state.fb.model)||"gemini-2.5-flash")===v?" selected":""}>${l}</option>`).join("")}
+            ${(()=>{const cur=(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;const known=KNOWN_MODELS.some(([v])=>v===cur);
+              return KNOWN_MODELS.map(([v,l])=>`<option value="${v}"${known&&cur===v?" selected":""}>${l}</option>`).join("");})()}
           </select>
+        </div>
+        <div class="field"><label>モデル名を直接入力（任意・上級者向け）</label>
+          <input id="fb-model-custom" placeholder="空欄なら上の選択を使用" value="${(()=>{const cur=state.fb&&state.fb.model;return cur&&!KNOWN_MODELS.some(([v])=>v===cur)?esc(cur):"";})()}">
         </div>
         <div class="field"><label>写真追加時に自動判定</label>
           <select id="fb-auto"><option value="1"${state.fb&&state.fb.auto?" selected":""}>する</option><option value=""${state.fb&&!state.fb.auto?" selected":""}>しない</option></select>
@@ -673,7 +684,7 @@ function bindHome(){
     const status=$("#fb-status");
     const cfg=parseFirebaseConfig($("#fb-config").value);
     if(!cfg){status.textContent="設定を読み取れませんでした。apiKeyを含むfirebaseConfigを貼り付けてください。";return;}
-    state.fb={config:cfg,model:$("#fb-model").value,auto:!!$("#fb-auto").value};
+    state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
     aiModel=null;
     await kvSet("fb",state.fb).catch(()=>{});
     render();
@@ -685,7 +696,7 @@ function bindHome(){
     try{
       const cfg=parseFirebaseConfig($("#fb-config").value);
       if(cfg){
-        state.fb={config:cfg,model:$("#fb-model").value,auto:!!$("#fb-auto").value};
+        state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
         aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
       }
       const m=await getAIModel();
@@ -1061,6 +1072,11 @@ document.addEventListener("input",e=>{
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
     state.fb=(await kvGet("fb"))||null;
+    // 提供終了した旧モデル設定を自動で現行モデルへ移行
+    if(state.fb&&/^gemini-2\.5/.test(state.fb.model||"")){
+      state.fb.model=DEFAULT_AI_MODEL;
+      kvSet("fb",state.fb).catch(()=>{});
+    }
   }catch(e){ /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */ }
   render();
 })();

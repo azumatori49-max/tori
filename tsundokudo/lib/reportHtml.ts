@@ -53,15 +53,21 @@ export function buildReportHtml(report: ReportLike): string {
 
   // 点検表
   const checklistRows = report.checklist
-    .map(
-      (c) => `
+    .map((c) => {
+      // まとめ項目（各種フィルター清掃など）は内訳チェックを項目名の下に表示
+      const sub = c.subChecks?.length
+        ? `<div style="font-size:8px;font-weight:400;margin-top:2px">${c.subChecks
+            .map((s) => `${s.checked ? '☑' : '☐'} ${esc(s.name)}`)
+            .join('<br>')}</div>`
+        : '';
+      return `
       <tr>
-        <td class="blue name">${esc(c.name)}</td>
+        <td class="blue name">${esc(c.name)}${sub}</td>
         <td class="ctr">${cb(c.checked)}</td>
         <td>${esc(c.condition)}</td>
         <td>${esc(c.note)}</td>
-      </tr>`,
-    )
+      </tr>`;
+    })
     .join('');
 
   const pest = report.pestControl;

@@ -142,6 +142,11 @@ export default function ReportViewScreen() {
                 </Text>
               ) : null}
             </View>
+            {c.subChecks ? (
+              <Text style={styles.subChecksLine}>
+                {c.subChecks.map((sc) => `${sc.checked ? '✓' : '－'} ${sc.name}`).join('　')}
+              </Text>
+            ) : null}
             {c.note ? <Text style={styles.note}>{c.note}</Text> : null}
             <PhotoStrip photos={c.photos} />
           </Card>
@@ -323,6 +328,7 @@ const styles = StyleSheet.create({
   },
   condPillAlert: { backgroundColor: C.danger, color: '#FFF' },
   note: { fontSize: 13, color: '#475569', marginTop: 8, lineHeight: 19 },
+  subChecksLine: { fontSize: 12, color: '#475569', marginTop: 6 },
   empty: { fontSize: 13, color: C.textFaint },
   subBlock: {
     paddingVertical: 8,

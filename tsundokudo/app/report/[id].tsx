@@ -378,6 +378,25 @@ export default function ReportFormScreen() {
               />
               {item.checked && (
                 <View style={styles.checklistBody}>
+                  {item.subChecks && (
+                    <View style={styles.subChecks}>
+                      {item.subChecks.map((sc, sIdx) => (
+                        <CheckBox
+                          key={sc.name}
+                          checked={sc.checked}
+                          label={sc.name}
+                          size={20}
+                          onToggle={() =>
+                            patchChecklist(idx, {
+                              subChecks: item.subChecks!.map((x, i) =>
+                                i === sIdx ? { ...x, checked: !x.checked } : x,
+                              ),
+                            })
+                          }
+                        />
+                      ))}
+                    </View>
+                  )}
                   <Text style={styles.subLabel}>状況</Text>
                   <Dropdown
                     options={CONDITION_OPTIONS}
@@ -716,6 +735,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
+  subChecks: { gap: 10, marginBottom: 4 },
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
   required: { fontSize: 10, fontWeight: '800', color: C.danger },
   hintText: { fontSize: 11, color: C.textFaint, marginBottom: 8, lineHeight: 17 },

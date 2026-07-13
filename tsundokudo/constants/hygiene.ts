@@ -20,15 +20,21 @@ export const CONDITION_OPTIONS: ConditionLabel[] = [
   'できてない',
 ];
 
+/** まとめ項目「各種フィルター清掃」の内訳（1枚の写真にまとめて撮影する運用） */
+export const FILTER_GROUP_NAME = '各種フィルター清掃';
+export const FILTER_SUB_CHECKS: string[] = [
+  '冷蔵庫フィルター清掃',
+  '冷凍庫フィルター清掃',
+  '製氷機フィルター清掃',
+];
+
 /** 定期点検チェックリストの定型項目 */
 export const DEFAULT_CHECKLIST_NAMES: string[] = [
   'グリストラップ洗浄',
   'エアコンフィルター洗浄',
   '看板電飾点検',
   '店内照明',
-  '冷蔵庫フィルター清掃',
-  '冷凍庫フィルター清掃',
-  '製氷機フィルター清掃',
+  FILTER_GROUP_NAME,
   'キッチン床閉鎖清掃',
   '厨房換気扇フィルター清掃',
   '入口チャイム確認',
@@ -53,6 +59,9 @@ export function makeDefaultChecklist(): ChecklistItem[] {
     condition: '',
     note: '',
     photos: [],
+    ...(name === FILTER_GROUP_NAME
+      ? { subChecks: FILTER_SUB_CHECKS.map((n) => ({ name: n, checked: false })) }
+      : {}),
   }));
 }
 

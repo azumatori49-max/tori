@@ -24,6 +24,11 @@ export interface ChecklistItem {
   note: string;
   /** 写真（最大6枚） */
   photos: ReportPhoto[];
+  /**
+   * 内訳チェック（例: 各種フィルター清掃 → 冷蔵庫/冷凍庫/製氷機）。
+   * 写真・状況・備考は親項目で共有する。
+   */
+  subChecks?: { name: string; checked: boolean }[];
 }
 
 /** 害虫の状況（いるかいないか） */

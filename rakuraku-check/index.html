@@ -245,9 +245,9 @@ const CHECK_CATS = [
         {v:"注意",s:50,lv:"warn"},
         {v:"異常",s:0,lv:"bad",issue:true}]}],
       extras:[
-        {key:"temp",label:"実測温度",type:"number",unit:"℃",req:true,always:true},
-        {key:"reportTo",label:"報告先",type:"text",show:a=>a.evals.main==="異常",req:true}] },
-    { id:"cutting", name:"まな板・包丁・ダスター",
+        {key:"reportTo",label:"報告先",type:"text",show:a=>a.evals.main==="異常"}] },
+    ...[["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]].map(([id,label])=>(
+    { id, name:label,
       desc:["汚れ・欠け・破損・劣化がないか","衛生的に管理されているか"],
       groups:[{key:"main",label:"評価",options:[
         {v:"問題なし",s:100,lv:"good"},
@@ -255,7 +255,7 @@ const CHECK_CATS = [
         {v:"欠け・破損あり",s:30,lv:"bad",issue:true},
         {v:"買い替えが必要",s:20,lv:"bad",issue:true}]}],
       extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="買い替えが必要",req:true,
-        hint:"完了時に購入・交換タスクを自動作成します。"}] },
+        hint:"完了時に購入・交換タスクを自動作成します。"}] })),
     { id:"fryer", name:"フライヤー",
       desc:["清掃されているか","油の色や状態が正常か"],
       groups:[
@@ -282,19 +282,16 @@ const CHECK_CATS = [
     { id:"peak", name:"ピーク帯の現場確認",
       desc:["ピーク帯の現場感","人員配置","声かけ・連携","オペレーションのスムーズさ"], photoLabel:"現場写真",
       groups:[{key:"main",label:"評価",options:[
-        {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]}],
-      extras:[
-        {key:"score",label:"点数（100点満点）",type:"number",unit:"点",req:true,always:true,min:0,max:100},
-        {key:"reason",label:"評価理由",type:"textarea",req:true,always:true}] },
+        {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]}] },
     { id:"service", name:"接客・商品提供",
-      desc:["実際にドリンク・料理提供を行い営業状態を確認","提供スピード・見た目・量・盛り付けを確認","レシピ通りに作られているか確認"], photoLabel:"商品写真",
+      desc:["実際にドリンク・料理提供を行い営業状態を確認","提供スピード・見た目・量・盛り付けを確認","レシピ通りに作られているか確認"], photoLabel:"商品写真", photoOptional:true,
       groups:[
         {key:"recipe",label:"レシピ遵守",options:[
           {v:"レシピ通り",s:100,lv:"good"},{v:"一部違いあり",s:50,lv:"warn",issue:true},{v:"レシピ通りではない",s:0,lv:"bad",issue:true}]},
         {key:"serve",label:"提供状態",options:[
           {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]}] },
     { id:"quality", name:"商品品質",
-      desc:["味・温度・見た目・量・盛り付けが基準通りか"],
+      desc:["味・温度・見た目・量・盛り付けが基準通りか"], photoOptional:true,
       groups:[{key:"main",label:"評価",options:[
         {v:"正常",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"できていない",s:0,lv:"bad",issue:true}]}],
       extras:[
@@ -362,10 +359,9 @@ function isIssue(item,a){return hasIssueEval(a,item.id);}
 function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
-  if(!a.photos.length) return false;
+  if(!item.photoOptional&&!a.photos.length) return false;
   for(const g of item.groups){ if(!a.evals[g.key]) return false; }
   for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) return false; }
-  if(isIssue(item,a)){ for(const f of ISSUE_FIELDS){ if(!filled(a.fields[f.key])) return false; } }
   return true;
 }
 function itemScore(item,a){
@@ -385,9 +381,11 @@ function computeAutoTasks(draft){
   const e=draft.answers.entrance;
   if(e&&e.fields.cleanReq==="必要")
     t.push({text:"清掃会社へ清掃を依頼（入口・階段・店舗前）",owner:e.fields.owner||"",due:e.fields.due||"",priority:"高",auto:true});
-  const c=draft.answers.cutting;
-  if(c&&c.evals.main==="買い替えが必要")
-    t.push({text:"購入・交換："+(c.fields.buyList||"まな板・包丁・ダスター"),owner:c.fields.owner||"",due:c.fields.due||"",priority:"高",auto:true});
+  for(const [id,label] of [["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]]){
+    const c=draft.answers[id];
+    if(c&&c.evals.main==="買い替えが必要")
+      t.push({text:"購入・交換："+(c.fields.buyList||label),owner:c.fields.owner||"",due:c.fields.due||"",priority:"高",auto:true});
+  }
   return t;
 }
 function issueItems(draft){
@@ -408,10 +406,9 @@ function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
     const a=ans(item.id);
-    if(!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
+    if(!item.photoOptional&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
     for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) m.push({ci,id:item.id,label:item.name,what:`「${f.label}」が未入力`}); }
-    if(isIssue(item,a)) for(const f of ISSUE_FIELDS){ if(!filled(a.fields[f.key])) m.push({ci,id:item.id,label:item.name,what:`問題項目のため「${f.label}」の登録が必要`}); }
   }));
   d.pdca.reviews.forEach((r,i)=>{ if(!r.status) m.push({ci:4,id:"pdca-review",label:"前回の振り返り",what:`宿題${i+1}「${r.text.slice(0,12)}…」の評価が未選択`}); });
   if(!d.numbers.eval) m.push({ci:4,id:"pdca-numbers",label:"数字確認",what:"数字に対する評価が未選択"});
@@ -753,7 +750,7 @@ function itemCard(item){
   <section class="card ${complete?"done":""} ${issue?"issue":""}" id="card-${item.id}">
     <h3>${esc(item.name)} ${badge}</h3>
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
-    <div class="sec-label">${esc(item.photoLabel||"写真")} <span class="req">必須</span></div>
+    <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
       ${a.photos.length<4?`<label class="photo-add"><span>＋</span><span>撮影・追加</span><input type="file" accept="image/*" capture="environment" hidden data-photo="${item.id}"></label>`:""}
@@ -780,8 +777,8 @@ function fieldHtml(itemId,f,a){
 }
 function issueBox(itemId,a){
   return `<div class="issue-box">
-    <div class="ttl">問題あり — 対応内容・改善期限・担当者を登録してください（必須）</div>
-    ${ISSUE_FIELDS.map(f=>fieldHtml(itemId,{...f,req:true},a)).join("")}
+    <div class="ttl">問題あり — 必要に応じて対応内容・改善期限・担当者を登録できます（任意）</div>
+    ${ISSUE_FIELDS.map(f=>fieldHtml(itemId,f,a)).join("")}
   </div>`;
 }
 

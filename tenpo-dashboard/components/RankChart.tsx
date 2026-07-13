@@ -11,12 +11,26 @@ const PAD_R = 20;
 const PAD_T = 40;
 const PAD_B = 30;
 
-export default function RankChart({ points }: { points: RankPoint[] }) {
+export default function RankChart({
+	points,
+	monthly = false,
+	threshold = null,
+	thresholdLabel = "",
+}: {
+	points: RankPoint[];
+	/** true のとき date は YYYY-MM(月表示) */
+	monthly?: boolean;
+	/** この順位に点線を引く(MVP候補ラインなど) */
+	threshold?: number | null;
+	thresholdLabel?: string;
+}) {
 	const [active, setActive] = useState<number | null>(null);
 
 	if (points.length === 0) {
 		return <p className="muted">順位データがまだありません。</p>;
 	}
+
+	const label = (date: string) => (monthly ? `${Number(date.slice(5, 7))}月` : fmtMD(date));
 
 	const maxRank = Math.max(40, ...points.map((p) => p.rank));
 	const axisMax = Math.ceil(maxRank / 10) * 10;
@@ -74,9 +88,36 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 								fontSize={11}
 								fill="#6e6e73"
 							>
-								{fmtMD(p.date)}
+								{label(p.date)}
 							</text>
 						),
+				)}
+
+				{/* MVP候補ラインなどのしきい値 */}
+				{threshold !== null && (
+					<g>
+						<line
+							x1={PAD_L}
+							x2={W - PAD_R}
+							y1={y(threshold)}
+							y2={y(threshold)}
+							stroke="#1a7f37"
+							strokeWidth={1.5}
+							strokeDasharray="5 4"
+						/>
+						{thresholdLabel && (
+							<text
+								x={PAD_L + 6}
+								y={y(threshold) - 6}
+								textAnchor="start"
+								fontSize={10}
+								fontWeight={600}
+								fill="#1a7f37"
+							>
+								{thresholdLabel}
+							</text>
+						)}
+					</g>
 				)}
 
 				{/* 折れ線とマーカー */}
@@ -139,7 +180,7 @@ export default function RankChart({ points }: { points: RankPoint[] }) {
 						top: `${(y(points[active].rank) / H) * 100}%`,
 					}}
 				>
-					{fmtMD(points[active].date)} — {points[active].rank}位
+					{label(points[active].date)} — {points[active].rank}位
 				</div>
 			)}
 		</div>

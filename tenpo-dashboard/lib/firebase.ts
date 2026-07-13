@@ -150,13 +150,35 @@ export const firebaseProvider: DataProvider = {
 
 	async getDashboard(store): Promise<DashboardData> {
 		const storeRef = db().collection("stores").doc(store.id);
-		const [metricsSnap, storeSnap, commentsSnap, annSnap] = await Promise.all([
+		// 直近12ヶ月分の開始日(11ヶ月前の月初)
+		const yearAgo = new Date();
+		yearAgo.setUTCMonth(yearAgo.getUTCMonth() - 11, 1);
+		const yearAgoKey = `${yearAgo.getUTCFullYear()}-${String(yearAgo.getUTCMonth() + 1).padStart(2, "0")}-01`;
+		const [metricsSnap, monthlySnap, storeSnap, commentsSnap, annSnap] = await Promise.all([
 			storeRef.collection("metrics").orderBy("date", "desc").limit(14).get(),
+			storeRef
+				.collection("metrics")
+				.where("date", ">=", yearAgoKey)
+				.orderBy("date", "asc")
+				.select("date", "overallRank")
+				.get(),
 			storeRef.get(),
 			db().collection("comments").orderBy("createdAt", "desc").limit(50).get(),
 			db().collection("announcements").orderBy("publishedAt", "desc").limit(1).get(),
 		]);
 		const history = metricsSnap.docs.map((d) => mapMetrics(store.id, d.data())).reverse();
+		// 月ごとに最終同期時点の総合順位を採用
+		const byMonth = new Map<string, number>();
+		for (const doc of monthlySnap.docs) {
+			const row = doc.data() as { date?: string; overallRank?: number };
+			if (typeof row.date === "string" && typeof row.overallRank === "number") {
+				byMonth.set(row.date.slice(0, 7), row.overallRank);
+			}
+		}
+		const monthlyRankHistory = [...byMonth.entries()].map(([month, rank]) => ({
+			date: month,
+			rank,
+		}));
 		const hygieneData = storeSnap.data()?.hygiene;
 		const comments = commentsSnap.docs
 			.map((d) => mapComment(d.id, d.data()))
@@ -168,6 +190,7 @@ export const firebaseProvider: DataProvider = {
 			yesterday: history[history.length - 2] ?? null,
 			history,
 			rankHistory: history.map((m) => ({ date: m.date, rank: m.overallRank })),
+			monthlyRankHistory,
 			hygiene: hygieneData ? mapHygiene(store.id, hygieneData) : null,
 			comments,
 			latestAnnouncement: annSnap.empty
@@ -311,6 +334,10 @@ export const firebaseProvider: DataProvider = {
 				Array.isArray(data.roles) && data.roles.length > 0
 					? data.roles.filter((r): r is string => typeof r === "string")
 					: DEFAULT_UI_SETTINGS.roles,
+			mvpRank:
+				typeof data.mvpRank === "number" && data.mvpRank > 0
+					? data.mvpRank
+					: DEFAULT_UI_SETTINGS.mvpRank,
 			texts: { ...DEFAULT_UI_SETTINGS.texts, ...(data.texts ?? {}) },
 		};
 		uiSettingsCache = { at: Date.now(), settings };

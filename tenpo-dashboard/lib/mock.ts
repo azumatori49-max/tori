@@ -190,12 +190,24 @@ export const mockProvider: DataProvider = {
 		const history = metricsByStore.get(store.id) ?? [];
 		const today = history[history.length - 1] ?? null;
 		const yesterday = history[history.length - 2] ?? null;
+		// 月次順位(デモ用: 12ヶ月かけて順位が上がっていく)
+		const heroMonthly = [31, 28, 26, 22, 19, 15, 14, 12, 10, 8, 5, 3];
+		const monthlyRankHistory = Array.from({ length: 12 }, (_, i) => {
+			const d = new Date();
+			d.setMonth(d.getMonth() - (11 - i), 1);
+			const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+			const idx = Number(store.id.replace("s", "")) || 1;
+			const rank =
+				store.id === "s1" ? heroMonthly[i] : ((idx * 7 + (11 - i) * 3) % TOTAL_STORES) + 1;
+			return { date: month, rank };
+		});
 		return {
 			store,
 			today,
 			yesterday,
 			history,
 			rankHistory: history.map((m) => ({ date: m.date, rank: m.overallRank })),
+			monthlyRankHistory,
 			hygiene: hygieneByStore.get(store.id) ?? null,
 			comments: comments
 				.filter((c) => c.storeId === store.id || c.storeId === null)

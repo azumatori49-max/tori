@@ -48,8 +48,13 @@ export async function saveUiSettings(formData: FormData): Promise<void> {
 		.slice(0, 20);
 	const text = (key: keyof typeof DEFAULT_UI_SETTINGS.texts) =>
 		String(formData.get(key) ?? "").trim() || DEFAULT_UI_SETTINGS.texts[key];
+	const mvpRankInput = Number(formData.get("mvpRank"));
 	await provider.saveUiSettings({
 		roles: roles.length > 0 ? roles : DEFAULT_UI_SETTINGS.roles,
+		mvpRank:
+			Number.isFinite(mvpRankInput) && mvpRankInput >= 1 && mvpRankInput <= 100
+				? Math.floor(mvpRankInput)
+				: DEFAULT_UI_SETTINGS.mvpRank,
 		texts: {
 			betterLowNote: text("betterLowNote"),
 			rankNote: text("rankNote"),

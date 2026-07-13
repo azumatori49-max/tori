@@ -204,10 +204,9 @@ export default async function DashboardPage() {
 	const m: DailyMetrics | null = data.today;
 	const prev = data.yesterday;
 	const kpiDiff = m && prev ? m.kpiScore - prev.kpiScore : null;
+	const monthly = data.monthlyRankHistory;
 	const rankDelta =
-		data.rankHistory.length >= 2
-			? data.rankHistory[0].rank - data.rankHistory[data.rankHistory.length - 1].rank
-			: 0;
+		monthly.length >= 2 ? monthly[0].rank - monthly[monthly.length - 1].rank : 0;
 	const ann = data.latestAnnouncement;
 
 	return (
@@ -327,21 +326,30 @@ export default async function DashboardPage() {
 
 					<section className="card">
 						<h2 className="section-title">
-							現在の立ち位置 <small>(全店ランキング)</small>
+							1年間の立ち位置 <small>(全店ランキング)</small>
 						</h2>
 						<p className="muted" style={{ marginBottom: 8 }}>
-							総合順位の推移
+							総合順位の推移(12ヶ月・各月末時点)
 						</p>
-						<RankChart points={data.rankHistory} />
-						{data.rankHistory.length >= 2 && rankDelta !== 0 && (
-							<p className="chart-foot">
-								直近{data.rankHistory.length}日間で{" "}
-								<span className={rankDelta > 0 ? "delta-up" : "delta-down"}>
-									{Math.abs(rankDelta)}位 {rankDelta > 0 ? "↑" : "↓"}
-								</span>{" "}
-								{rankDelta > 0 ? "アップ" : "ダウン"}
-							</p>
-						)}
+						<RankChart
+							points={monthly}
+							monthly
+							threshold={uiSettings.mvpRank}
+							thresholdLabel={`MVP候補ライン(${uiSettings.mvpRank}位以内)`}
+						/>
+						<p className="chart-foot">
+							{monthly.length >= 2 && rankDelta !== 0 ? (
+								<>
+									直近{monthly.length}ヶ月で{" "}
+									<span className={rankDelta > 0 ? "delta-up" : "delta-down"}>
+										{Math.abs(rankDelta)}位 {rankDelta > 0 ? "↑" : "↓"}
+									</span>{" "}
+									{rankDelta > 0 ? "アップ" : "ダウン"}
+									{" ・ "}
+								</>
+							) : null}
+							上位{uiSettings.mvpRank}位以内で MVP 候補にノミネート
+						</p>
 					</section>
 
 					<section className="card">

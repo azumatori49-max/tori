@@ -73,6 +73,8 @@ export type DashboardData = {
 	/** 日付昇順の履歴(詳細ページの推移グラフに使用) */
 	history: DailyMetrics[];
 	rankHistory: RankPoint[];
+	/** 月次の総合順位(直近12ヶ月・各月の最終同期時点。date は YYYY-MM) */
+	monthlyRankHistory: RankPoint[];
 	hygiene: HygieneStatus | null;
 	comments: Comment[];
 	latestAnnouncement: Announcement | null;
@@ -94,6 +96,8 @@ export function roleLabel(authorRole: string): string {
 export type UiSettings = {
 	/** コメント投稿時に選べる役職(表示順) */
 	roles: string[];
+	/** MVP 候補にノミネートされる順位(この順位以内)*/
+	mvpRank: number;
 	texts: {
 		/** 原価率・人件費率の詳細ページの注記 */
 		betterLowNote: string;
@@ -108,6 +112,7 @@ export type UiSettings = {
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
 	roles: ["エリアマネージャー", "スーパーバイザー", "本部 衛生管理チーム"],
+	mvpRank: 3,
 	texts: {
 		betterLowNote: "低いほど良い指標です",
 		rankNote: "総合順位は KPI・原価率・人件費率・QSC の各順位から算出されます。",

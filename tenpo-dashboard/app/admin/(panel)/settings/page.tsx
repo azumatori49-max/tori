@@ -20,6 +20,17 @@ export default async function AdminSettingsPage() {
 				</div>
 				<div className="form-grid">
 					<div className="field">
+						<label htmlFor="mvpRank">MVP候補にノミネートされる順位(◯位以内)</label>
+						<input
+							id="mvpRank"
+							name="mvpRank"
+							type="number"
+							min={1}
+							max={100}
+							defaultValue={settings.mvpRank}
+						/>
+					</div>
+					<div className="field">
 						<label htmlFor="hygieneDailyDesc">毎日の衛生チェックの説明文</label>
 						<input
 							id="hygieneDailyDesc"

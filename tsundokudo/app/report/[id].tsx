@@ -205,11 +205,11 @@ export default function ReportFormScreen() {
       );
       return;
     }
-    const noPhotoCheck = form.checklist.find((c) => c.checked && c.photos.length === 0);
+    const noPhotoCheck = form.checklist.find((c) => c.photos.length === 0);
     if (noPhotoCheck) {
       notify(
         '写真を添付してください',
-        `定期点検「${noPhotoCheck.name}」を実施済みにした場合は写真を添付してください。`,
+        `定期点検「${noPhotoCheck.name}」に写真を添付してください。\n（項目にチェックを入れると写真を追加できます）`,
       );
       return;
     }
@@ -362,7 +362,7 @@ export default function ReportFormScreen() {
           <Card>
             <Text style={styles.hintText}>
               店舗外観などの写真を1枚以上添付してください。
-              実施した点検項目・プチDIY・年間スケジュールにも写真が必要です。
+              定期点検の全項目・プチDIY・年間スケジュールにも写真が必要です。
             </Text>
             <PhotoSection
               photos={form.photos}
@@ -415,7 +415,9 @@ export default function ReportFormScreen() {
           </Card>
 
           {/* ── 定期点検 ── */}
-          <SectionTitle>定期点検</SectionTitle>
+          <SectionTitle>
+            定期点検 <Text style={styles.required}>全項目写真必須</Text>
+          </SectionTitle>
           {form.checklist.map((item, idx) => (
             <Card key={item.name}>
               <CheckBox

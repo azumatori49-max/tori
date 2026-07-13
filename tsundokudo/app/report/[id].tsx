@@ -197,6 +197,40 @@ export default function ReportFormScreen() {
       );
       return;
     }
+    // 写真必須（トッピング以外）: 実施・入力した項目には写真が必要
+    if (form.photos.length === 0) {
+      notify(
+        '写真を添付してください',
+        '「写真」欄（店舗外観など）に1枚以上添付してください。',
+      );
+      return;
+    }
+    const noPhotoCheck = form.checklist.find((c) => c.checked && c.photos.length === 0);
+    if (noPhotoCheck) {
+      notify(
+        '写真を添付してください',
+        `定期点検「${noPhotoCheck.name}」を実施済みにした場合は写真を添付してください。`,
+      );
+      return;
+    }
+    const noPhotoDiy = form.diy.find(
+      (d) => (d.checked || d.name.trim() || d.fee > 0) && d.photos.length === 0,
+    );
+    if (noPhotoDiy) {
+      notify(
+        '写真を添付してください',
+        `プチDIY「${noPhotoDiy.name.trim() || '追加した項目'}」に写真を添付してください。`,
+      );
+      return;
+    }
+    const annual = form.annualSchedule;
+    if ((annual.comment.trim() || annual.fee > 0) && annual.photos.length === 0) {
+      notify(
+        '写真を添付してください',
+        '年間スケジュールを入力した場合は写真を添付してください。',
+      );
+      return;
+    }
     const ok = isNew
       ? await store.createReport(form)
       : await store.updateReport(id, form);
@@ -322,8 +356,14 @@ export default function ReportFormScreen() {
           </Card>
 
           {/* ── 写真 ── */}
-          <SectionTitle>写真</SectionTitle>
+          <SectionTitle>
+            写真 <Text style={styles.required}>必須</Text>
+          </SectionTitle>
           <Card>
+            <Text style={styles.hintText}>
+              店舗外観などの写真を1枚以上添付してください。
+              実施した点検項目・プチDIY・年間スケジュールにも写真が必要です。
+            </Text>
             <PhotoSection
               photos={form.photos}
               onChange={(photos) => patch({ photos })}
@@ -727,6 +767,7 @@ const styles = StyleSheet.create({
   },
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
   required: { fontSize: 10, fontWeight: '800', color: C.danger },
+  hintText: { fontSize: 11, color: C.textFaint, marginBottom: 8, lineHeight: 17 },
   techWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   techChip: {
     flexDirection: 'row',

@@ -469,6 +469,16 @@ ${groups}
 次のJSONのみを出力してください（コードブロックや説明文は不要）：
 {"judgments":{${item.groups.map(g=>`"${g.key}":"選択肢の文言"`).join(",")}},"reason":"判定理由を60字以内","confidence":"高か中か低"}`;
 }
+function friendlyAIError(err){
+  const s=String(err&&err.message||err);
+  if(/limit:\s*0/.test(s)&&/quota/i.test(s))
+    return "選択中のモデルには無料枠がありません。モデルを「gemini-2.5-flash」に変更して保存し、再試行してください。";
+  if(/429|quota|rate.?limit/i.test(s))
+    return "無料枠の利用上限に達しました。1分ほど待ってから再試行してください（改善しない場合はモデルをgemini-2.5-flash-liteに変更）。";
+  if(/403|permission|not.?enabled|api.?key/i.test(s))
+    return "アクセスが拒否されました。Firebaseコンソールで「Firebase AI Logic」が有効か、APIキーの制限設定を確認してください。詳細："+s.slice(0,120);
+  return s;
+}
 function parseAIJson(text){
   text=String(text||"").replace(/```(?:json)?/g,"");
   const s=text.indexOf("{"),e=text.lastIndexOf("}");
@@ -491,7 +501,7 @@ async function judgeItem(itemId){
     a.ai={suggest:out.judgments,reason:out.reason||"",conf:out.confidence||"",at:todayStr()};
     persistDraft();
   }catch(err){
-    aiErr.set(itemId,String(err&&err.message||err));
+    aiErr.set(itemId,friendlyAIError(err));
   }finally{
     aiBusy.delete(itemId); refreshCard(itemId);
   }
@@ -597,7 +607,7 @@ function viewHome(){
       <div class="row2">
         <div class="field"><label>モデル</label>
           <select id="fb-model">
-            ${["gemini-2.5-flash","gemini-2.5-pro"].map(m=>`<option${(state.fb&&state.fb.model)===m?" selected":""}>${m}</option>`).join("")}
+            ${[["gemini-2.5-flash","gemini-2.5-flash（推奨・無料枠あり）"],["gemini-2.5-flash-lite","gemini-2.5-flash-lite（軽量・無料枠が大きい）"],["gemini-2.5-pro","gemini-2.5-pro（有料プラン向け）"]].map(([v,l])=>`<option value="${v}"${((state.fb&&state.fb.model)||"gemini-2.5-flash")===v?" selected":""}>${l}</option>`).join("")}
           </select>
         </div>
         <div class="field"><label>写真追加時に自動判定</label>
@@ -674,7 +684,7 @@ function bindHome(){
     status.textContent="接続テスト中…";
     try{
       const cfg=parseFirebaseConfig($("#fb-config").value);
-      if(cfg&&(!state.fb||JSON.stringify(cfg)!==JSON.stringify(state.fb.config))){
+      if(cfg){
         state.fb={config:cfg,model:$("#fb-model").value,auto:!!$("#fb-auto").value};
         aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
       }
@@ -682,7 +692,7 @@ function bindHome(){
       const r=await m.generateContent("接続テストです。「OK」とだけ返してください。");
       status.textContent="接続成功："+r.response.text().trim().slice(0,40);
     }catch(err){
-      status.textContent="接続失敗："+String(err&&err.message||err);
+      status.textContent="接続失敗："+friendlyAIError(err);
     }
   });
 }

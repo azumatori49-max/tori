@@ -190,47 +190,6 @@ export default function ReportFormScreen() {
       );
       return;
     }
-    if (form.pestControl.photos.length === 0) {
-      notify(
-        '害虫駆除の写真を添付してください',
-        '害虫駆除の欄に写真を1枚以上添付してください。',
-      );
-      return;
-    }
-    // 写真必須（トッピング以外）: 実施・入力した項目には写真が必要
-    if (form.photos.length === 0) {
-      notify(
-        '写真を添付してください',
-        '「写真」欄（店舗外観など）に1枚以上添付してください。',
-      );
-      return;
-    }
-    const noPhotoCheck = form.checklist.find((c) => c.photos.length === 0);
-    if (noPhotoCheck) {
-      notify(
-        '写真を添付してください',
-        `定期点検「${noPhotoCheck.name}」に写真を添付してください。\n（項目にチェックを入れると写真を追加できます）`,
-      );
-      return;
-    }
-    const noPhotoDiy = form.diy.find(
-      (d) => (d.checked || d.name.trim() || d.fee > 0) && d.photos.length === 0,
-    );
-    if (noPhotoDiy) {
-      notify(
-        '写真を添付してください',
-        `プチDIY「${noPhotoDiy.name.trim() || '追加した項目'}」に写真を添付してください。`,
-      );
-      return;
-    }
-    const annual = form.annualSchedule;
-    if ((annual.comment.trim() || annual.fee > 0) && annual.photos.length === 0) {
-      notify(
-        '写真を添付してください',
-        '年間スケジュールを入力した場合は写真を添付してください。',
-      );
-      return;
-    }
     const ok = isNew
       ? await store.createReport(form)
       : await store.updateReport(id, form);
@@ -356,14 +315,8 @@ export default function ReportFormScreen() {
           </Card>
 
           {/* ── 写真 ── */}
-          <SectionTitle>
-            写真 <Text style={styles.required}>必須</Text>
-          </SectionTitle>
+          <SectionTitle>写真</SectionTitle>
           <Card>
-            <Text style={styles.hintText}>
-              店舗外観などの写真を1枚以上添付してください。
-              定期点検の全項目・プチDIY・年間スケジュールにも写真が必要です。
-            </Text>
             <PhotoSection
               photos={form.photos}
               onChange={(photos) => patch({ photos })}
@@ -415,9 +368,7 @@ export default function ReportFormScreen() {
           </Card>
 
           {/* ── 定期点検 ── */}
-          <SectionTitle>
-            定期点検 <Text style={styles.required}>全項目写真必須</Text>
-          </SectionTitle>
+          <SectionTitle>定期点検</SectionTitle>
           {form.checklist.map((item, idx) => (
             <Card key={item.name}>
               <CheckBox
@@ -506,9 +457,7 @@ export default function ReportFormScreen() {
                 })
               }
             />
-            <Text style={styles.subLabel}>
-              写真（最大6枚）<Text style={styles.required}>必須</Text>
-            </Text>
+            <Text style={styles.subLabel}>写真（最大6枚）</Text>
             <PhotoSection
               photos={form.pestControl.photos}
               onChange={(photos: ReportPhoto[]) =>

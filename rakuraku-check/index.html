@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>らくらく店舗チェック</title>
+<title>らくらく隣店チェック</title>
 </head>
 <body>
 <style>
@@ -166,7 +166,14 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .txt-block .v{font-size:13px;white-space:pre-wrap}
 .empty{font-size:13px;color:var(--sub);padding:8px 0}
 .del-row{font-size:11px;color:var(--bad);font-weight:700;margin-top:6px}
-@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+.ai-box{margin-top:14px;border:1px solid var(--accent);border-radius:10px;padding:12px;background:var(--accent-soft);font-size:13px}
+.ai-box .ttl{font-size:12px;font-weight:700;color:var(--accent)}
+.ai-box .rsn{font-size:12px;color:var(--sub);margin-top:4px}
+.ai-box .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.ai-box .sug{margin-top:4px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 @media print{
   body{background:#fff;color:#000}
   .hd,.navbar,.no-print{display:none !important}
@@ -318,7 +325,7 @@ const PDCA_TEXTS = [
 
 /* ================= 状態・保存 ================= */
 let db=null;
-const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null };
+const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null };
 
 function openDB(){return new Promise((res,rej)=>{
   const r=indexedDB.open("rakuraku-check",1);
@@ -423,6 +430,112 @@ function compressPhoto(file){return new Promise((res,rej)=>{
   img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("画像を読み込めません"));};
   img.src=url;});}
 
+/* ================= AI自動判定（Firebase AI Logic / Gemini） ================= */
+const FB_SDK_VERSION="11.10.0";
+let aiModel=null;
+const aiBusy=new Set(), aiErr=new Map();
+function aiConfigured(){return !!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
+function parseFirebaseConfig(text){
+  text=String(text||"").trim(); if(!text) return null;
+  try{const o=JSON.parse(text); if(o&&o.apiKey) return o;}catch(e){}
+  // コンソールからコピーした「const firebaseConfig = { apiKey: "..." }」形式にも対応
+  const o={};
+  for(const m of text.matchAll(/([A-Za-z][A-Za-z0-9]*)\s*:\s*["']([^"']*)["']/g)) o[m[1]]=m[2];
+  return o.apiKey?o:null;
+}
+async function getAIModel(){
+  if(aiModel) return aiModel;
+  if(!aiConfigured()) throw new Error("Firebase設定が未登録です。ホーム画面の「写真AI自動判定の設定」から登録してください。");
+  let appMod,aiMod;
+  try{
+    [appMod,aiMod]=await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FB_SDK_VERSION}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FB_SDK_VERSION}/firebase-ai.js`),
+    ]);
+  }catch(e){ throw new Error("Firebase SDKを読み込めませんでした。ネットワーク接続を確認してください（プレビュー環境では外部接続がブロックされる場合があります）。"); }
+  const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(state.fb.config);
+  const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
+  aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||"gemini-2.5-flash"});
+  return aiModel;
+}
+function buildJudgePrompt(item){
+  const groups=item.groups.map(g=>`- ${g.key}（${g.label}）：${g.options.map(o=>o.v).join(" ／ ")}`).join("\n");
+  return `あなたは飲食店の店舗巡回チェックの検査員です。添付の写真を確認し、次のチェック項目を判定してください。
+チェック項目：${item.name}
+確認内容：${item.desc.join("、")}
+評価グループと選択肢：
+${groups}
+写真から判断できる範囲で、各評価グループについて最も適切な選択肢を1つずつ、選択肢の文言そのままで選んでください。
+次のJSONのみを出力してください（コードブロックや説明文は不要）：
+{"judgments":{${item.groups.map(g=>`"${g.key}":"選択肢の文言"`).join(",")}},"reason":"判定理由を60字以内","confidence":"高か中か低"}`;
+}
+function parseAIJson(text){
+  text=String(text||"").replace(/```(?:json)?/g,"");
+  const s=text.indexOf("{"),e=text.lastIndexOf("}");
+  if(s<0||e<=s) return null;
+  try{return JSON.parse(text.slice(s,e+1));}catch(err){return null;}
+}
+async function judgeItem(itemId){
+  const item=findItem(itemId); if(!item) return;
+  const a=ans(itemId);
+  if(!a.photos.length){alert("先に写真を追加してください。");return;}
+  if(!aiConfigured()){alert("ホーム画面の「写真AI自動判定の設定」でFirebase設定を登録すると利用できます。");return;}
+  if(aiBusy.has(itemId)) return;
+  aiBusy.add(itemId); aiErr.delete(itemId); refreshCard(itemId);
+  try{
+    const model=await getAIModel();
+    const parts=a.photos.map(p=>({inlineData:{mimeType:"image/jpeg",data:p.split(",")[1]}}));
+    const res=await model.generateContent([...parts,buildJudgePrompt(item)]);
+    const out=parseAIJson(res.response.text());
+    if(!out||!out.judgments) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
+    a.ai={suggest:out.judgments,reason:out.reason||"",conf:out.confidence||"",at:todayStr()};
+    persistDraft();
+  }catch(err){
+    aiErr.set(itemId,String(err&&err.message||err));
+  }finally{
+    aiBusy.delete(itemId); refreshCard(itemId);
+  }
+}
+function applyAISuggestion(itemId){
+  const item=findItem(itemId); const a=ans(itemId);
+  if(!a.ai||!a.ai.suggest) return;
+  for(const g of item.groups){
+    const v=a.ai.suggest[g.key];
+    if(g.options.some(o=>o.v===v)) a.evals[g.key]=v;
+  }
+  persistDraft(); refreshCard(itemId);
+}
+function aiSection(item,a){
+  if(!a.photos.length||!item.groups.length) return "";
+  if(aiBusy.has(item.id)) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが写真を判定しています…</div>`;
+  const err=aiErr.get(item.id);
+  if(a.ai&&a.ai.suggest){
+    const rows=item.groups.map(g=>{
+      const v=a.ai.suggest[g.key];
+      const o=g.options.find(o=>o.v===v);
+      return o?`<div class="sug">${esc(g.label)}：<b>${esc(v)}</b></div>`:"";
+    }).join("");
+    const applied=item.groups.every(g=>{
+      const v=a.ai.suggest[g.key];
+      return !g.options.some(o=>o.v===v)||a.evals[g.key]===v;
+    });
+    return `<div class="ai-box">
+      <div class="ttl">AI判定の提案${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>
+      ${rows}
+      ${a.ai.reason?`<div class="rsn">${esc(a.ai.reason)}</div>`:""}
+      <div class="acts">
+        ${applied?`<span class="badge done">評価に反映済み</span>`:`<button class="chip" data-aiapply="${item.id}">提案を評価に反映</button>`}
+        <button class="chip" data-ai="${item.id}">再判定</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="ai-box">
+    ${err?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(err)}</div>`:""}
+    <button class="chip" data-ai="${item.id}">写真からAI自動判定</button>
+    ${aiConfigured()?"":`<div class="rsn">ホーム画面でFirebase設定を登録すると利用できます。</div>`}
+  </div>`;
+}
+
 /* ================= 描画 ================= */
 const app=$("#app");
 function render(){
@@ -449,8 +562,8 @@ function viewHome(){
   return `
   <div class="home-hero">
     <div class="eyebrow">AM改善チェック</div>
-    <h1>らくらく店舗チェック</h1>
-    <p>写真とワンタップ評価で店舗巡回を記録。問題点は対応・期限・担当者まで登録し、次回来店時に宿題として自動表示します。</p>
+    <h1>らくらく隣店チェック</h1>
+    <p>写真とワンタップ評価で店舗巡回を記録。写真はAIが自動判定を提案し、問題点は対応・期限・担当者まで登録、次回来店時に宿題として自動表示します。</p>
   </div>
   <div class="wrap">
     ${state.draft?`
@@ -474,6 +587,28 @@ function viewHome(){
       </div>
       <div id="prev-hw"></div>
       <div style="margin-top:16px"><button class="btn" id="start">チェックを開始する</button></div>
+    </div>
+    <div class="card">
+      <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
+      <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価を自動判定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
+      <div class="field"><label>firebaseConfig（JSON、またはコンソールのコードをそのまま貼り付け）</label>
+        <textarea id="fb-config" placeholder='{"apiKey":"AIza...","authDomain":"xxx.firebaseapp.com","projectId":"xxx","appId":"1:..."}'>${esc(state.fb&&state.fb.config?JSON.stringify(state.fb.config,null,1):"")}</textarea>
+      </div>
+      <div class="row2">
+        <div class="field"><label>モデル</label>
+          <select id="fb-model">
+            ${["gemini-2.5-flash","gemini-2.5-pro"].map(m=>`<option${(state.fb&&state.fb.model)===m?" selected":""}>${m}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field"><label>写真追加時に自動判定</label>
+          <select id="fb-auto"><option value="1"${state.fb&&state.fb.auto?" selected":""}>する</option><option value=""${state.fb&&!state.fb.auto?" selected":""}>しない</option></select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn sub" id="fb-save">設定を保存</button>
+        <button class="btn ghost" id="fb-test">接続テスト</button>
+      </div>
+      <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
     </div>
     <div class="card">
       <h3>過去のチェック</h3>
@@ -524,6 +659,32 @@ function bindHome(){
   document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{
     state.reportId=b.dataset.open; state.view="report"; render(); scrollTo(0,0);
   }));
+  $("#fb-save")?.addEventListener("click",async()=>{
+    const status=$("#fb-status");
+    const cfg=parseFirebaseConfig($("#fb-config").value);
+    if(!cfg){status.textContent="設定を読み取れませんでした。apiKeyを含むfirebaseConfigを貼り付けてください。";return;}
+    state.fb={config:cfg,model:$("#fb-model").value,auto:!!$("#fb-auto").value};
+    aiModel=null;
+    await kvSet("fb",state.fb).catch(()=>{});
+    render();
+    const st=$("#fb-status"); if(st) st.textContent="保存しました。「接続テスト」で動作確認できます。";
+  });
+  $("#fb-test")?.addEventListener("click",async()=>{
+    const status=$("#fb-status");
+    status.textContent="接続テスト中…";
+    try{
+      const cfg=parseFirebaseConfig($("#fb-config").value);
+      if(cfg&&(!state.fb||JSON.stringify(cfg)!==JSON.stringify(state.fb.config))){
+        state.fb={config:cfg,model:$("#fb-model").value,auto:!!$("#fb-auto").value};
+        aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
+      }
+      const m=await getAIModel();
+      const r=await m.generateContent("接続テストです。「OK」とだけ返してください。");
+      status.textContent="接続成功："+r.response.text().trim().slice(0,40);
+    }catch(err){
+      status.textContent="接続失敗："+String(err&&err.message||err);
+    }
+  });
 }
 
 /* ---------- チェック画面 ---------- */
@@ -575,6 +736,7 @@ function itemCard(item){
       <div class="chips" role="group" aria-label="${esc(g.label)}">
         ${g.options.map(o=>`<button class="chip${a.evals[g.key]===o.v?" on-"+o.lv:""}" data-eval="${item.id}:${g.key}:${esc(o.v)}" aria-pressed="${a.evals[g.key]===o.v}">${esc(o.v)}</button>`).join("")}
       </div>`).join("")}
+    ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
     ${issue?issueBox(item.id,a):""}
     ${item.note?`<p class="note">${esc(item.note)}</p>`:""}
@@ -736,6 +898,7 @@ function reportBody(insp,isPreview){
         <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
+        ${a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
         ${a.photos.length?`<div class="photos" style="margin-top:8px">${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(it.name)}の写真${i+1}"></div>`).join("")}</div>`:""}
       </div>`;}).join("")}
   </section>`).join("")}
@@ -832,6 +995,8 @@ document.addEventListener("click",async e=>{
   if(t.dataset.hwdel!=null&&t.dataset.hwdel!==""){
     state.draft.pdca.homework.splice(+t.dataset.hwdel,1); persistDraft(); render(); return;
   }
+  if(t.dataset.ai){judgeItem(t.dataset.ai);return;}
+  if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
   if(t.dataset.jump){
     const [ci,id]=t.dataset.jump.split(":");
     state.catIndex=+ci; render();
@@ -854,8 +1019,10 @@ document.addEventListener("change",async e=>{
     const file=t.files&&t.files[0]; if(!file) return;
     try{
       const url=await compressPhoto(file);
-      ans(t.dataset.photo).photos.push(url);
-      persistDraft(); refreshCard(t.dataset.photo);
+      const id=t.dataset.photo;
+      ans(id).photos.push(url);
+      persistDraft(); refreshCard(id);
+      if(state.fb&&state.fb.auto) judgeItem(id);
     }catch(err){alert("写真の読み込みに失敗しました。もう一度お試しください。");}
     return;
   }
@@ -883,6 +1050,7 @@ document.addEventListener("input",e=>{
     state.inspections=(await allInspections())||[];
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
+    state.fb=(await kvGet("fb"))||null;
   }catch(e){ /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */ }
   render();
 })();

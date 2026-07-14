@@ -9,7 +9,13 @@ export type Session =
 	| { role: "admin" };
 
 function secret(): string {
-	return process.env.AUTH_SECRET || "dev-secret-change-me";
+	const s = process.env.AUTH_SECRET;
+	if (s) return s;
+	// 本番で未設定のまま動くとセッション Cookie が偽造可能になるため起動を拒否する
+	if (process.env.NODE_ENV === "production") {
+		throw new Error("AUTH_SECRET が設定されていません(セッション保護のため必須です)");
+	}
+	return "dev-secret-change-me";
 }
 
 function sign(data: string): string {

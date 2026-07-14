@@ -2,8 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-	title: "店舗ダッシュボード",
+	title: "らくらく店舗ダッシュボード",
 	description: "鶏ヤロー・まる助・イザカラ・すし鳥酒場 店舗KPI・衛生管理ダッシュボード",
+	// iPad で「ホーム画面に追加」したときのアイコン名(短縮表示)
+	appleWebApp: { title: "らくらく店舗" },
 };
 
 export const viewport: Viewport = {

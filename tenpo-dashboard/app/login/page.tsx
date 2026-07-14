@@ -28,7 +28,7 @@ export default async function LoginPage({
 		<div className="login-wrap">
 			<div className="card login-card">
 				<Image className="login-logo" src="/brand/app-logo.png" alt="" width={72} height={72} />
-				<h1>店舗ダッシュボード</h1>
+				<h1>らくらく店舗ダッシュボード</h1>
 				<p className="lead">STORE DASHBOARD</p>
 				{provider.isMock && (
 					<p className="mock-note">

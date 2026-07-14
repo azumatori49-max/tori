@@ -11,7 +11,7 @@ export default async function AdminSettingsPage() {
 		<section className="card">
 			<h2 className="section-title">表示設定</h2>
 			<p className="muted" style={{ marginBottom: 16 }}>
-				店舗ダッシュボードに表示される文言をここから変更できます。保存するとすぐ反映されます。
+				らくらく店舗ダッシュボードに表示される文言をここから変更できます。保存するとすぐ反映されます。
 			</p>
 			<form action={saveUiSettings}>
 				<div className="field">

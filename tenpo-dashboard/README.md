@@ -1,4 +1,4 @@
-# 店舗ダッシュボード(tenpo-dashboard)
+# らくらく店舗ダッシュボード(tenpo-dashboard)
 
 店長が PC を使わず、店舗の iPad やスマートフォンだけで日々の数値を確認できるダッシュボードです。
 管理(コメント・お知らせの配信)は本部が PC の管理画面から行います。
@@ -19,9 +19,9 @@
 ## データの流れ
 
 ```
-KPI 集計スプレッドシート ─(GAS が毎日自動 POST)→ /api/gas/kpi → Firestore → 店舗ダッシュボード
-本部管理画面(コメント・お知らせ)──────────────────────→ Firestore → 店舗ダッシュボード
-既存の衛生管理アプリ(toriyaro-eisei)─(Realtime Database を直接参照)→ 店舗ダッシュボード
+KPI 集計スプレッドシート ─(GAS が毎日自動 POST)→ /api/gas/kpi → Firestore → らくらく店舗ダッシュボード
+本部管理画面(コメント・お知らせ)──────────────────────→ Firestore → らくらく店舗ダッシュボード
+既存の衛生管理アプリ(toriyaro-eisei)─(Realtime Database を直接参照)→ らくらく店舗ダッシュボード
 ```
 
 - **KPI点数・各順位・原価率・人件費率・QSC**: スプレッドシートの GAS が毎日 `POST /api/gas/kpi` に送信して反映されます(`gas/dashboard.gs` 参照)。

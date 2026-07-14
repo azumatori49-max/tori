@@ -1,5 +1,5 @@
 /**
- * 店舗ダッシュボード連携 Google Apps Script
+ * らくらく店舗ダッシュボード連携 Google Apps Script
  *
  * このファイル 1 つをスプレッドシートに貼るだけで、
  * 必要なシートの自動生成・順位/平均の自動計算・ダッシュボードへの同期がすべて行えます。
@@ -98,7 +98,7 @@ function initSpreadsheet() {
 		settings.setColumnWidth(2, 360);
 		settings
 			.getRange("B2")
-			.setNote("デプロイした店舗ダッシュボードの URL + /api/gas/kpi を入力してください");
+			.setNote("デプロイしたらくらく店舗ダッシュボードの URL + /api/gas/kpi を入力してください");
 	}
 	// 元シート取り込み用の設定行(無ければ追記)
 	ensureSettingRow(settings, "PLシートのURL", "", "KPI点数・材料費率・人件費率を管理しているスプレッドシートの URL");

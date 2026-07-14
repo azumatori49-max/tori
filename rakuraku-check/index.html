@@ -40,6 +40,11 @@ body{
   color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased;
 }
 #app{max-width:640px;margin:0 auto;padding-bottom:96px}
+/* PC でもスマホと同じ1カラム幅で表示する */
+@media (min-width:700px){
+  #app{max-width:430px}
+  .navbar .in{max-width:430px}
+}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input,select,textarea{
@@ -76,7 +81,6 @@ input[type=number]{font-variant-numeric:tabular-nums}
 }
 .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--line)}
 .card.done::before{background:var(--good)}
-.card.issue::before{background:var(--bad)}
 .card h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
 .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
 .badge.done{background:var(--good-bg);color:var(--good)}
@@ -122,11 +126,6 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .scale button.on-warn .sv,.scale button.on-warn .st{color:var(--warn)}
 .scale button.on-bad{background:var(--bad-bg);border-color:var(--bad)}
 .scale button.on-bad .sv,.scale button.on-bad .st{color:var(--bad)}
-.issue-box{
-  margin-top:14px;border:1px solid var(--bad);border-radius:10px;padding:12px;
-  background:var(--bad-bg);
-}
-.issue-box .ttl{font-size:12px;font-weight:700;color:var(--bad)}
 .btn{
   display:block;width:100%;text-align:center;font-weight:700;font-size:15px;
   padding:14px;border-radius:10px;background:var(--accent);color:var(--accent-ink);
@@ -199,11 +198,6 @@ input[type=number]{font-variant-numeric:tabular-nums}
 <script>
 "use strict";
 /* ================= データ定義 ================= */
-const ISSUE_FIELDS = [
-  {key:"fix",  label:"対応内容",  type:"textarea"},
-  {key:"due",  label:"改善期限",  type:"date"},
-  {key:"owner",label:"担当者",    type:"text"},
-];
 const PRIORITIES = ["高","中","低"];
 // 評価オプション: v=表示, s=点数, lv=色, issue=問題扱い(対応内容・期限・担当者を登録できる)
 // s5(): 5段階評価グループを生成。defs=[ [短い要約, 詳しい基準文], ... ]（5点→1点の順）
@@ -359,12 +353,12 @@ const CHECK_CATS = [
   ]},
   { id:"fives", name:"5S", short:"5S", items:[
     { id:"uniform", name:"ユニフォーム",
-      desc:["ユニフォームを正しく着用しているか","ユニフォームに汚れや乱れがないか"],
+      desc:["ユニフォームを正しく着用しているか","ユニフォームに汚れや乱れがないか","ネームプレートを着用しているか"],
       groups:[s5([
-        ["完璧","全員が正しく着用し、汚れ・乱れがない"],
+        ["完璧","全員がネームプレートを含め正しく着用し、汚れ・乱れがない"],
         ["良い","正しく着用しているが、一部に軽い汚れ・乱れがある"],
-        ["普通","一部のスタッフに着崩れや汚れがある"],
-        ["改善が必要","複数のスタッフに汚れ・乱れが目立つ"],
+        ["普通","一部のスタッフに着崩れ・汚れ、またはネームプレートの未着用がある"],
+        ["改善が必要","複数のスタッフに汚れ・乱れ・ネームプレート未着用が目立つ"],
         ["早急な改善が必要","着用ルールが守られておらず、著しく不衛生"]])] },
     { id:"greeting", name:"挨拶",
       desc:["スタッフ同士で挨拶しているか","臨店した際に、スタッフから挨拶があったか"], photoOptional:true,
@@ -446,7 +440,6 @@ function hasIssueEval(a,itemId){
   const item=findItem(itemId);
   return item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o&&o.issue;});
 }
-function isIssue(item,a){return hasIssueEval(a,item.id);}
 function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
@@ -471,16 +464,13 @@ function computeAutoTasks(draft){
   const t=[];
   const e=draft.answers.entrance;
   if(e&&e.fields.cleanReq==="必要")
-    t.push({text:"清掃会社へ清掃を依頼（入口・階段・店舗前）",owner:e.fields.owner||"",due:e.fields.due||"",priority:"高",auto:true});
+    t.push({text:"清掃会社へ清掃を依頼（入口・階段・店舗前）",owner:"",due:"",priority:"高",auto:true});
   for(const [id,label] of [["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]]){
     const c=draft.answers[id];
     if(c&&c.evals.main==="1点")
-      t.push({text:"購入・交換："+(c.fields.buyList||label),owner:c.fields.owner||"",due:c.fields.due||"",priority:"高",auto:true});
+      t.push({text:"購入・交換："+(c.fields.buyList||label),owner:"",due:"",priority:"高",auto:true});
   }
   return t;
-}
-function issueItems(draft){
-  return ALL_ITEMS.filter(it=>{const a=draft.answers[it.id];return a&&isIssue(it,a);});
 }
 function pdcaComplete(draft){
   return !draft.pdca.homework.some(h=>!filled(h.text));
@@ -667,7 +657,7 @@ function viewHome(){
   <div class="home-hero">
     <div class="eyebrow">AM改善チェック</div>
     <h1>らくらく臨店チェック</h1>
-    <p>写真とワンタップ評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが自動判定を提案し、":""}問題点は対応・期限・担当者まで登録、次回来店時に宿題として自動表示します。</p>
+    <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが自動判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
   </div>
   <div class="wrap">
     ${state.draft?`
@@ -724,14 +714,13 @@ function viewHome(){
       ${past.length?past.map(i=>`
         <div class="hw-item">
           <button class="list-card" data-open="${esc(i.id)}">
-            <span><b>${esc(i.store)}</b><span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}${issueCount(i)?`／<span style="color:var(--bad)">問題 ${issueCount(i)}件</span>`:""}</span></span>
+            <span><b>${esc(i.store)}</b><span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc">${i.totalScore}<small>点</small></span>
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
     </div>
   </div>`;
 }
-function issueCount(insp){return (insp.issues||[]).length;}
 function bindHome(){
   const storeIn=$("#f-store");
   const renderPrev=()=>{
@@ -825,11 +814,10 @@ function catDoneMark(i){
 }
 function itemCard(item){
   const a=ans(item.id);
-  const complete=itemComplete(item,a), issue=isIssue(item,a);
-  const badge=complete?(issue?`<span class="badge issue">問題あり・登録済</span>`:`<span class="badge done">完了</span>`)
-    :(issue?`<span class="badge issue">問題あり</span>`:`<span class="badge todo">未完了</span>`);
+  const complete=itemComplete(item,a);
+  const badge=complete?`<span class="badge done">完了</span>`:`<span class="badge todo">未完了</span>`;
   return `
-  <section class="card ${complete?"done":""} ${issue?"issue":""}" id="card-${item.id}">
+  <section class="card ${complete?"done":""}" id="card-${item.id}">
     <h3>${esc(item.name)} ${badge}</h3>
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
     <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
@@ -851,7 +839,6 @@ function itemCard(item){
       </div>`}`).join("")}
     ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
-    ${issue?issueBox(item.id,a):""}
     ${item.note?`<p class="note">${esc(item.note)}</p>`:""}
   </section>`;
 }
@@ -863,12 +850,6 @@ function fieldHtml(itemId,f,a){
   else if(f.type==="select") input=`<select data-field="${itemId}:${f.key}"><option value="">選択してください</option>${f.options.map(o=>`<option${v===o?" selected":""}>${esc(o)}</option>`).join("")}</select>`;
   else input=`<input type="${f.type}" ${f.min!=null?`min="${f.min}"`:""} ${f.max!=null?`max="${f.max}"`:""} value="${esc(v)}" data-field="${itemId}:${f.key}" ${f.type==="number"?'inputmode="decimal"':""}>`;
   return `<div class="field">${label}${input}${f.hint?`<p class="note" style="border:none;padding-top:4px;margin-top:2px">${esc(f.hint)}</p>`:""}</div>`;
-}
-function issueBox(itemId,a){
-  return `<div class="issue-box">
-    <div class="ttl">問題あり — 必要に応じて対応内容・改善期限・担当者を登録できます（任意）</div>
-    ${ISSUE_FIELDS.map(f=>fieldHtml(itemId,f,a)).join("")}
-  </div>`;
 }
 
 /* ---------- PDCA ---------- */
@@ -937,7 +918,6 @@ function buildInspection(d,preview){
     startedAt:d.startedAt, completedAt:preview?"":new Date().toISOString(),
     answers:d.answers, pdca:d.pdca, prevDate:d.prevDate,
     totalScore:totalScore(d),
-    issues:issueItems(d).map(it=>it.id),
     autoTasks,
     homework:d.pdca.homework.filter(h=>filled(h.text)),
   };
@@ -957,10 +937,9 @@ function viewReport(){
     </div>
   </div>`;
 }
-function evalBadge(o){return `<span class="badge ${o.issue?"issue":(o.lv==="good"?"done":"todo")}">${esc(o.v)}${o.t?"・"+esc(o.t):""}</span>`;}
+function evalBadge(o){return `<span class="badge ${o.lv==="bad"?"issue":(o.lv==="good"?"done":"todo")}">${esc(o.v)}${o.t?"・"+esc(o.t):""}</span>`;}
 function reportBody(insp,isPreview){
   const byId=id=>insp.answers[id]||{photos:[],evals:{},fields:{}};
-  const issueList=ALL_ITEMS.filter(it=>insp.issues.includes(it.id));
   return `
   <section class="card">
     <div class="rep-h">
@@ -968,16 +947,6 @@ function reportBody(insp,isPreview){
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
     </div>
-  </section>
-  <section class="card">
-    <h3>問題があった項目（${issueList.length}件）</h3>
-    ${issueList.length?issueList.map(it=>{
-      const a=byId(it.id);
-      return `<div class="rep-item">
-        <div class="nm">${esc(it.name)}</div>
-        <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):"";}).join("")}</div>
-        <div class="fx"><b>対応内容：</b>${esc(a.fields.fix||"—")}／<b>期限：</b>${fmtDate(a.fields.due)}／<b>担当：</b>${esc(a.fields.owner||"—")}</div>
-      </div>`;}).join(""):`<p class="empty">問題のあった項目はありません。</p>`}
   </section>
   ${CHECK_CATS.map(cat=>`
   <section class="card">

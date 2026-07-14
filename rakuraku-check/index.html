@@ -353,24 +353,6 @@ const INTERVIEW_QS=[
   {key:"q4",label:"4. 設備・備品で困っていることはありますか？",hint:"故障している設備、不足している備品、修理や交換が必要な物を記入"},
   {key:"q5",label:"5. その他の課題などはありますか？",hint:"上記以外に、店舗運営や業務上で困っていること、改善したいことを記入"},
 ];
-const NUM_FIELDS = [
-  {key:"sales",label:"売上",unit:"円"},{key:"laborCost",label:"人件費",unit:"円"},
-  {key:"laborRate",label:"人件費率",unit:"%"},{key:"guests",label:"客数",unit:"人"},
-  {key:"avgSpend",label:"客単価",unit:"円"},{key:"yoy",label:"前年比",unit:"%"},
-  {key:"vsBudget",label:"予算比",unit:"%"},{key:"costRate",label:"原価率（任意）",unit:"%"},
-  {key:"reservations",label:"予約数（任意）",unit:"件"},
-];
-const NUM_TEXTS = [
-  {key:"goodReason",label:"数字が良かった理由"},{key:"badReason",label:"数字が悪かった理由"},
-  {key:"guidance",label:"当日指導・改善した内容"},{key:"actionGoal",label:"次回までの行動目標"},
-];
-const PDCA_TEXTS = [
-  {key:"goodPoints",label:"今回良かったところ"},
-  {key:"needsImprove",label:"今回改善が必要なところ"},
-  {key:"improvedToday",label:"当日改善したところ"},
-  {key:"futureImprove",label:"今後改善しなければならないところ"},
-  {key:"coaching",label:"店長・社員への指導内容"},
-];
 
 /* ================= 状態・保存 ================= */
 let db=null;
@@ -444,11 +426,7 @@ function issueItems(draft){
   return ALL_ITEMS.filter(it=>{const a=draft.answers[it.id];return a&&isIssue(it,a);});
 }
 function pdcaComplete(draft){
-  const p=draft.pdca;
-  if(p.reviews.some(r=>!r.status)) return false;
-  if(!draft.numbers.eval) return false;
-  if(p.homework.some(h=>!filled(h.text))) return false;
-  return true;
+  return !draft.pdca.homework.some(h=>!filled(h.text));
 }
 function progressRatio(draft){
   const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length + (pdcaComplete(draft)?1:0);
@@ -462,8 +440,6 @@ function collectMissing(){
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
     for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) m.push({ci,id:item.id,label:item.name,what:`「${f.label}」が未入力`}); }
   }));
-  d.pdca.reviews.forEach((r,i)=>{ if(!r.status) m.push({ci:PDCA_CAT,id:"pdca-review",label:"前回の振り返り",what:`宿題${i+1}「${r.text.slice(0,12)}…」の評価が未選択`}); });
-  if(!d.numbers.eval) m.push({ci:PDCA_CAT,id:"pdca-numbers",label:"数字確認",what:"数字に対する評価が未選択"});
   d.pdca.homework.forEach((h,i)=>{ if(!filled(h.text)) m.push({ci:PDCA_CAT,id:"pdca-homework",label:"次回までの宿題",what:`宿題${i+1}の内容が未入力`}); });
   return m;
 }
@@ -706,7 +682,7 @@ function bindHome(){
     const last=lastInspectionFor(storeIn.value.trim());
     const hw=carriedHomework(last);
     box.innerHTML = last?`
-      <div class="sec-label">前回（${fmtDate(last.date)}）の宿題 — 開始すると振り返りに自動表示されます</div>
+      <div class="sec-label">前回（${fmtDate(last.date)}）の宿題・タスク</div>
       ${hw.length?hw.map(h=>`<div class="hw-item">${esc(h.text)}<div class="hw-meta">担当：${esc(h.owner||"—")}／期限：${fmtDate(h.due)}／優先度：${esc(h.priority||"—")}${h.auto?"／自動作成タスク":""}</div></div>`).join("")
         :`<p class="empty">前回の宿題はありません。</p>`}`:"";
   };
@@ -719,10 +695,7 @@ function bindHome(){
     state.draft={
       id:"insp-"+Date.now().toString(36), store, inspector, date,
       startedAt:new Date().toISOString(), answers:{},
-      pdca:{ reviews:carriedHomework(last).map(h=>({text:h.text,owner:h.owner||"",due:h.due||"",priority:h.priority||"中",status:"",cont:false})),
-             goodPoints:"",needsImprove:"",improvedToday:"",futureImprove:"",coaching:"",
-             homework:[],nextVisit:"",interview:{} },
-      numbers:{eval:""},
+      pdca:{ homework:[],nextVisit:"",interview:{} },
       prevDate:last?last.date:"",
     };
     persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
@@ -843,10 +816,8 @@ function issueBox(itemId,a){
 
 /* ---------- PDCA ---------- */
 function pdcaView(){
-  const d=state.draft, p=d.pdca, n=d.numbers;
+  const d=state.draft, p=d.pdca;
   const iv=p.interview||(p.interview={});
-  const laborRateAuto=(n.sales>0&&n.laborCost>0)?(n.laborCost/n.sales*100).toFixed(1):null;
-  const spendAuto=(n.sales>0&&n.guests>0)?Math.round(n.sales/n.guests):null;
   return `
   <section class="card" id="card-pdca-interview">
     <h3>面談記録</h3>
@@ -858,35 +829,6 @@ function pdcaView(){
       <div class="field"><label>${esc(q.label)}</label>
         <textarea data-iv="${q.key}" placeholder="${esc(q.hint)}">${esc(iv[q.key]||"")}</textarea>
       </div>`).join("")}
-  </section>
-  <section class="card" id="card-pdca-review">
-    <h3>前回の振り返り${d.prevDate?`<span class="badge todo">${fmtDate(d.prevDate)}分</span>`:""}</h3>
-    <p class="desc">前回の宿題・改善事項が改善できたか、継続して取り組む必要があるかを評価します。</p>
-    ${p.reviews.length?p.reviews.map((r,i)=>`
-      <div class="hw-row">
-        <div style="font-size:13px;font-weight:600">${esc(r.text)}</div>
-        <div class="hw-meta">担当：${esc(r.owner||"—")}／期限：${fmtDate(r.due)}／優先度：${esc(r.priority||"—")}</div>
-        <div class="chips">
-          ${["完了","一部完了","未完了"].map((s,si)=>`<button class="chip${r.status===s?" on-"+["good","warn","bad"][si]:""}" data-review="${i}:${s}" aria-pressed="${r.status===s}">${s}</button>`).join("")}
-          <button class="chip${r.cont?" on-warn":""}" data-cont="${i}" aria-pressed="${r.cont}">継続して取り組む</button>
-        </div>
-      </div>`).join(""):`<p class="empty">前回の宿題はありません。</p>`}
-  </section>
-  <section class="card">
-    <h3>今回の課題設定</h3>
-    ${PDCA_TEXTS.map(t=>`<div class="field"><label>${esc(t.label)}</label><textarea data-pdca="${t.key}">${esc(p[t.key])}</textarea></div>`).join("")}
-  </section>
-  <section class="card" id="card-pdca-numbers">
-    <h3>数字確認</h3>
-    <p class="desc">数値を直接入力します（将来的にはPOS・店舗ダッシュボードから自動取得予定）。人件費率と客単価は売上などから自動計算されます。</p>
-    <div class="row2">
-      ${NUM_FIELDS.map(f=>`<div class="field"><label>${esc(f.label)}<span class="unit">（${esc(f.unit)}）</span></label><input type="number" inputmode="decimal" value="${esc(n[f.key]??"")}" data-num="${f.key}" ${f.key==="laborRate"&&laborRateAuto!=null?`placeholder="自動: ${laborRateAuto}"`:""} ${f.key==="avgSpend"&&spendAuto!=null?`placeholder="自動: ${spendAuto}"`:""}></div>`).join("")}
-    </div>
-    <div class="sec-label">数字に対する評価 <span class="req">必須</span></div>
-    <div class="chips">
-      ${["目標達成","要注意","未達"].map((s,si)=>`<button class="chip${n.eval===s?" on-"+["good","warn","bad"][si]:""}" data-numeval="${s}" aria-pressed="${n.eval===s}">${s}</button>`).join("")}
-    </div>
-    ${NUM_TEXTS.map(t=>`<div class="field"><label>${esc(t.label)}</label><textarea data-numtext="${t.key}">${esc(n[t.key]??"")}</textarea></div>`).join("")}
   </section>
   <section class="card" id="card-pdca-homework">
     <h3>次回来店までの宿題</h3>
@@ -933,15 +875,14 @@ function previewInspection(){
 }
 function buildInspection(d,preview){
   const autoTasks=computeAutoTasks(d);
-  const contHw=d.pdca.reviews.filter(r=>r.cont).map(r=>({text:r.text+"（継続）",owner:r.owner,due:"",priority:r.priority||"中"}));
   return {
     id:d.id, store:d.store, inspector:d.inspector, date:d.date,
     startedAt:d.startedAt, completedAt:preview?"":new Date().toISOString(),
-    answers:d.answers, pdca:d.pdca, numbers:d.numbers, prevDate:d.prevDate,
+    answers:d.answers, pdca:d.pdca, prevDate:d.prevDate,
     totalScore:totalScore(d),
     issues:issueItems(d).map(it=>it.id),
     autoTasks,
-    homework:[...d.pdca.homework.filter(h=>filled(h.text)),...contHw],
+    homework:d.pdca.homework.filter(h=>filled(h.text)),
   };
 }
 function viewReport(){
@@ -963,7 +904,6 @@ function evalBadge(o){return `<span class="badge ${o.issue?"issue":(o.lv==="good
 function reportBody(insp,isPreview){
   const byId=id=>insp.answers[id]||{photos:[],evals:{},fields:{}};
   const issueList=ALL_ITEMS.filter(it=>insp.issues.includes(it.id));
-  const n=insp.numbers;
   return `
   <section class="card">
     <div class="rep-h">
@@ -1006,21 +946,6 @@ function reportBody(insp,isPreview){
         <div class="v">面談日：${fmtDate(iv.date)}／時間：${esc(iv.start||"—")}〜${esc(iv.end||"—")}／面談者：${esc(iv.interviewer||"—")}／被面談者：${esc(iv.interviewee||"—")}</div></div>
       ${INTERVIEW_QS.filter(q=>filled(iv[q.key])).map(q=>`<div class="txt-block"><div class="k">${esc(q.label)}</div><div class="v">${esc(iv[q.key])}</div></div>`).join("")}
     </section>`;})()}
-  <section class="card">
-    <h3>振り返り・課題設定</h3>
-    ${insp.pdca.reviews.length?`
-      <div class="sec-label">前回宿題の振り返り</div>
-      ${insp.pdca.reviews.map(r=>`<div class="hw-item">${esc(r.text)}
-        <div class="hw-meta">評価：${esc(r.status||"—")}${r.cont?"／継続して取り組む":""}</div></div>`).join("")}`:""}
-    ${PDCA_TEXTS.filter(t=>filled(insp.pdca[t.key])).map(t=>`<div class="txt-block"><div class="k">${esc(t.label)}</div><div class="v">${esc(insp.pdca[t.key])}</div></div>`).join("")||""}
-  </section>
-  <section class="card">
-    <h3>数字確認 ${n.eval?evalBadge({v:n.eval,lv:n.eval==="目標達成"?"good":"warn",issue:n.eval==="未達"}):""}</h3>
-    <div class="kv">
-      ${NUM_FIELDS.filter(f=>filled(n[f.key])).map(f=>`<div class="cell"><div class="k">${esc(f.label)}</div><div class="v">${Number(n[f.key]).toLocaleString("ja-JP")}<small style="font-size:11px;font-weight:400"> ${esc(f.unit)}</small></div></div>`).join("")||`<p class="empty">数値の入力はありません。</p>`}
-    </div>
-    ${NUM_TEXTS.filter(t=>filled(n[t.key])).map(t=>`<div class="txt-block"><div class="k">${esc(t.label)}</div><div class="v">${esc(n[t.key])}</div></div>`).join("")}
-  </section>
   <section class="card">
     <h3>次回までの宿題・タスク（${insp.homework.length+insp.autoTasks.length}件）</h3>
     ${[...insp.homework,...insp.autoTasks].map(h=>`<div class="hw-item">${esc(h.text)}${h.auto?` <span class="badge todo">自動作成</span>`:""}
@@ -1074,19 +999,6 @@ document.addEventListener("click",async e=>{
     const [id,idx]=t.dataset.delph.split(":");
     if(!confirm("この写真を削除しますか？")) return;
     ans(id).photos.splice(+idx,1); persistDraft(); refreshCard(id); return;
-  }
-  if(t.dataset.review){
-    const [i,s]=t.dataset.review.split(":");
-    const r=state.draft.pdca.reviews[+i]; r.status=r.status===s?"":s;
-    persistDraft(); render(); return;
-  }
-  if(t.dataset.cont!=null&&t.dataset.cont!==""){
-    const r=state.draft.pdca.reviews[+t.dataset.cont]; r.cont=!r.cont;
-    persistDraft(); render(); return;
-  }
-  if(t.dataset.numeval){
-    const n=state.draft.numbers; n.eval=n.eval===t.dataset.numeval?"":t.dataset.numeval;
-    persistDraft(); render(); return;
   }
   if(t.id==="hw-add"){
     state.draft.pdca.homework.push({text:"",owner:"",due:"",priority:"中"});
@@ -1142,10 +1054,7 @@ document.addEventListener("change",async e=>{
 document.addEventListener("input",e=>{
   const t=e.target;
   if(t.dataset.field){const [id,key]=t.dataset.field.split(":");ans(id).fields[key]=t.value;persistDraft();refreshHeader();return;}
-  if(t.dataset.pdca){state.draft.pdca[t.dataset.pdca]=t.value;persistDraft();return;}
   if(t.dataset.iv){(state.draft.pdca.interview||(state.draft.pdca.interview={}))[t.dataset.iv]=t.value;persistDraft();return;}
-  if(t.dataset.num){state.draft.numbers[t.dataset.num]=t.value===""?"":+t.value;persistDraft();return;}
-  if(t.dataset.numtext){state.draft.numbers[t.dataset.numtext]=t.value;persistDraft();return;}
   if(t.dataset.hw){const [i,k]=t.dataset.hw.split(":");state.draft.pdca.homework[+i][k]=t.value;persistDraft();refreshHeader();return;}
 });
 

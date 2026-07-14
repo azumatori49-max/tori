@@ -212,6 +212,8 @@ function s5(defs){
   return {key:"main",label:"評価（5段階）",scale:true,
     options:meta.map(([v,s,lv,issue],i)=>({v,s,lv,issue,t:defs[i][0],desc:defs[i][1]||""}))};
 }
+// 汎用の5段階評価基準
+const G5=[["非常に良い",""],["良い",""],["普通",""],["改善が必要",""],["早急な改善が必要",""]];
 const CHECK_CATS = [
   { id:"exterior", name:"店舗外観・入口", short:"外観・入口", items:[
     { id:"lighting", name:"照明・看板・提灯・周辺POP",
@@ -223,14 +225,9 @@ const CHECK_CATS = [
         ["複数消灯・目立つ汚損","複数箇所が点灯していない、または周辺POPに目立つ汚れ・破損がある"],
         ["ほとんど消灯","ほとんど点灯していない、または周辺POPが著しく汚れている・破損している"]])],
       note:"将来的には写真から点灯状態をAIで自動判定します。" },
-    { id:"entrance", name:"入口・階段清掃",
+    { id:"entrance", name:"入口",
       desc:["入口・階段・店舗前が清掃されているか"],
-      groups:[s5([
-        ["非常にきれい","すみずみまで清掃され、ゴミ・汚れがない"],
-        ["ほぼきれい","おおむね清掃されているが、細部に軽い汚れがある"],
-        ["一部汚れあり","目につく汚れやゴミが一部残っている"],
-        ["清掃不十分","清掃が不十分で、汚れ・ゴミが目立つ"],
-        ["未清掃","清掃されておらず、著しく汚れている"]])],
+      groups:[s5(G5)],
       extras:[
         {key:"reason",label:"清掃できていない理由",type:"textarea",show:a=>["1点","2点"].includes(a.evals.main),req:true},
         {key:"cleanReq",label:"清掃会社への依頼が必要か",type:"select",options:["必要","不要"],show:a=>["1点","2点"].includes(a.evals.main),req:true,
@@ -238,34 +235,22 @@ const CHECK_CATS = [
       ] },
   ]},
   { id:"hall", name:"ホール", short:"ホール", items:[
-    { id:"tables", name:"テーブル清掃",
+    { id:"tables", name:"テーブル",
       desc:["店内の全テーブルを清掃できているか"],
-      groups:[s5([
-        ["全卓完了","全卓が拭き上げられ、ベタつき・汚れがない"],
-        ["ほぼ完了","全卓拭けているが、一部に拭き残しがある"],
-        ["半分程度","半分程度しか拭けていない"],
-        ["一部のみ","数卓しか拭けていない"],
-        ["未実施","ほとんど拭けていない"]])] },
-    { id:"condiments", name:"メニュー・テーブルコンディメンツ",
+      groups:[s5(G5)] },
+    { id:"condiments", name:"メニュー",
       desc:["メニューが整理され、汚れや破損がないか","箸・調味料・卓上備品が整っているか","不足しているものがないか"],
-      groups:[s5([
-        ["問題なし","メニュー・卓上備品が整い、汚れ・破損・不足がない"],
-        ["軽微な乱れ","整っているが、軽い汚れや乱れがある"],
-        ["一部問題あり","一部に汚れ・破損・不足がある"],
-        ["要補充・交換","複数の汚れ・破損・不足があり、補充・交換が必要"],
-        ["要早急改善","汚れ・破損・不足が多く、早急な改善が必要"]])],
+      groups:[s5(G5)],
       extras:[{key:"detail",label:"不足・破損内容",type:"textarea",show:a=>hasIssueEval(a,"condiments"),req:true}] },
-    { id:"chairs", name:"椅子・客席の状態",
+    { id:"chairs", name:"椅子",
       desc:["椅子の汚れ・破損・ぐらつきがないか","必要数が足りているか"],
-      groups:[s5([
-        ["問題なし","状態・数量ともに問題なし"],
-        ["ほぼ良好","おおむね良好だが、軽い汚れがある"],
-        ["一部不良","一部に汚れ・ぐらつき・破損がある"],
-        ["複数不良・数量不足","複数の不良がある、または数量が不足している"],
-        ["使用に支障","使用に支障がある椅子が多い、または大幅に不足している"]])],
+      groups:[s5(G5)],
       extras:[
         {key:"shortage",label:"不足数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true},
         {key:"broken",label:"破損数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true}] },
+    { id:"hall_floor", name:"ホール・床",
+      desc:["ホール・床が清掃され、きれいに保たれているか"],
+      groups:[s5(G5)] },
   ]},
   { id:"kitchen", name:"キッチン", short:"キッチン", items:[
     { id:"fridge", name:"冷蔵庫温度",
@@ -317,25 +302,12 @@ const CHECK_CATS = [
       extras:[{key:"detail",label:"問題内容",type:"textarea",show:a=>hasIssueEval(a,"garbage"),req:true}] },
   ]},
   { id:"sales", name:"営業・商品品質", short:"営業・品質", items:[
-    { id:"peak", name:"ピーク帯の現場確認",
-      desc:["ピーク帯の現場感","人員配置","声かけ・連携","オペレーションのスムーズさ"], photoLabel:"現場写真",
-      groups:[s5([
-        ["非常に良い","人員配置・声かけ・連携が良く、オペレーションが非常にスムーズ"],
-        ["良い","おおむねスムーズで、大きな問題はない"],
-        ["普通","ところどころ滞りがある"],
-        ["悪い","連携不足で、提供遅れや混乱がある"],
-        ["非常に悪い","オペレーションが回っていない"]])] },
-    { id:"service", name:"接客・商品提供",
-      desc:["実際にドリンク・料理提供を行い営業状態を確認","提供スピード・見た目・量・盛り付けを確認","レシピ通りに作られているか確認"], photoLabel:"商品写真", photoOptional:true,
-      groups:[
-        {key:"recipe",label:"レシピ遵守",options:[
-          {v:"レシピ通り",s:100,lv:"good"},{v:"一部違いあり",s:50,lv:"warn",issue:true},{v:"レシピ通りではない",s:0,lv:"bad",issue:true}]},
-        {...s5([
-          ["非常に良い","提供スピード・見た目・量・盛り付けが非常に良い"],
-          ["良い","おおむね良い"],
-          ["普通","普通"],
-          ["悪い","提供が遅い、または見た目・量に問題がある"],
-          ["非常に悪い","提供に大きな問題がある"]]),key:"serve",label:"提供状態（5段階）"}] },
+    { id:"peak", name:"ピーク帯・オペレーション力",
+      desc:["ピーク帯でもスムーズに営業できているか","「0秒スピード」が実践できているか"], photoLabel:"現場写真",
+      groups:[s5(G5)] },
+    { id:"service", name:"接客・笑顔",
+      desc:["「0秒スマイル」が実践できているか","大きな声で「いらっしゃいませ」と挨拶できているか","笑顔で接客できているか"], photoOptional:true,
+      groups:[s5(G5)] },
     { id:"quality", name:"商品品質",
       desc:["味・温度・見た目・量・盛り付けが基準通りか"], photoOptional:true,
       groups:[s5([
@@ -348,9 +320,39 @@ const CHECK_CATS = [
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality"),req:true},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality"),req:true}] },
   ]},
+  { id:"fives", name:"5S", short:"5S", items:[
+    { id:"uniform", name:"ユニフォーム",
+      desc:["ユニフォームを正しく着用しているか","ユニフォームに汚れや乱れがないか"],
+      groups:[s5(G5)] },
+    { id:"greeting", name:"挨拶",
+      desc:["スタッフ同士で挨拶しているか","臨店した際に、スタッフから挨拶があったか"], photoOptional:true,
+      groups:[s5(G5)] },
+    { id:"register", name:"レジ周り",
+      desc:["レジ周りが整理整頓されているか","不要な物や私物が置かれていないか"],
+      groups:[s5(G5)] },
+    { id:"toilet", name:"トイレチェック",
+      desc:["トイレが清潔に保たれているか","便器や床に汚れがないか","使用後にきちんと流されているか","トイレットペーパーなどの備品が補充されているか"],
+      groups:[s5(G5)] },
+  ]},
 ];
 const ALL_ITEMS = CHECK_CATS.flatMap(c=>c.items);
-const CAT_NAMES = [...CHECK_CATS.map(c=>c.short), "PDCA・数字", "報告・完了"];
+const CAT_NAMES = [...CHECK_CATS.map(c=>c.short), "面談", "報告・完了"];
+const PDCA_CAT = CHECK_CATS.length;      // 面談タブのインデックス
+const REPORT_CAT = CHECK_CATS.length+1;  // 報告・完了タブのインデックス
+const INTERVIEW_FIELDS=[
+  {key:"date",label:"面談日",type:"date"},
+  {key:"start",label:"面談開始時間",type:"time"},
+  {key:"end",label:"面談終了時間",type:"time"},
+  {key:"interviewer",label:"面談者名",type:"text"},
+  {key:"interviewee",label:"被面談者名（社員名）",type:"text"},
+];
+const INTERVIEW_QS=[
+  {key:"q1",label:"1. 最近良かったことはありますか？",hint:"最近の仕事や店舗運営の中で、良かったことや成長を感じたことを記入"},
+  {key:"q2",label:"2. 人間関係はうまくいっていますか？",hint:"社員・アルバイトスタッフとの関係や、コミュニケーション上の悩みを記入"},
+  {key:"q3",label:"3. 人員数・スタッフ育成についてどうですか？",hint:"現在の人員数が足りているか、スタッフ育成が順調に進んでいるかを記入"},
+  {key:"q4",label:"4. 設備・備品で困っていることはありますか？",hint:"故障している設備、不足している備品、修理や交換が必要な物を記入"},
+  {key:"q5",label:"5. その他の課題などはありますか？",hint:"上記以外に、店舗運営や業務上で困っていること、改善したいことを記入"},
+];
 const NUM_FIELDS = [
   {key:"sales",label:"売上",unit:"円"},{key:"laborCost",label:"人件費",unit:"円"},
   {key:"laborRate",label:"人件費率",unit:"%"},{key:"guests",label:"客数",unit:"人"},
@@ -460,9 +462,9 @@ function collectMissing(){
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
     for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) m.push({ci,id:item.id,label:item.name,what:`「${f.label}」が未入力`}); }
   }));
-  d.pdca.reviews.forEach((r,i)=>{ if(!r.status) m.push({ci:4,id:"pdca-review",label:"前回の振り返り",what:`宿題${i+1}「${r.text.slice(0,12)}…」の評価が未選択`}); });
-  if(!d.numbers.eval) m.push({ci:4,id:"pdca-numbers",label:"数字確認",what:"数字に対する評価が未選択"});
-  d.pdca.homework.forEach((h,i)=>{ if(!filled(h.text)) m.push({ci:4,id:"pdca-homework",label:"次回までの宿題",what:`宿題${i+1}の内容が未入力`}); });
+  d.pdca.reviews.forEach((r,i)=>{ if(!r.status) m.push({ci:PDCA_CAT,id:"pdca-review",label:"前回の振り返り",what:`宿題${i+1}「${r.text.slice(0,12)}…」の評価が未選択`}); });
+  if(!d.numbers.eval) m.push({ci:PDCA_CAT,id:"pdca-numbers",label:"数字確認",what:"数字に対する評価が未選択"});
+  d.pdca.homework.forEach((h,i)=>{ if(!filled(h.text)) m.push({ci:PDCA_CAT,id:"pdca-homework",label:"次回までの宿題",what:`宿題${i+1}の内容が未入力`}); });
   return m;
 }
 function compressPhoto(file){return new Promise((res,rej)=>{
@@ -719,7 +721,7 @@ function bindHome(){
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ reviews:carriedHomework(last).map(h=>({text:h.text,owner:h.owner||"",due:h.due||"",priority:h.priority||"中",status:"",cont:false})),
              goodPoints:"",needsImprove:"",improvedToday:"",futureImprove:"",coaching:"",
-             homework:[],nextVisit:"" },
+             homework:[],nextVisit:"",interview:{} },
       numbers:{eval:""},
       prevDate:last?last.date:"",
     };
@@ -767,8 +769,8 @@ function viewCheck(){
   const doneItems=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
   const pct=Math.round(progressRatio(d)*100);
   let body="";
-  if(state.catIndex<=3) body=CHECK_CATS[state.catIndex].items.map(itemCard).join("");
-  else if(state.catIndex===4) body=pdcaView();
+  if(state.catIndex<PDCA_CAT) body=CHECK_CATS[state.catIndex].items.map(itemCard).join("");
+  else if(state.catIndex===PDCA_CAT) body=pdcaView();
   else body=finishView();
   return `
   <header class="hd">
@@ -782,13 +784,13 @@ function viewCheck(){
   <div class="wrap">${body}</div>
   <div class="navbar"><div class="in">
     ${state.catIndex>0?`<button class="btn sub" data-nav="-1">前へ</button>`:`<button class="btn ghost" id="to-home">ホーム</button>`}
-    ${state.catIndex<5?`<button class="btn" data-nav="1">次へ：${esc(CAT_NAMES[state.catIndex+1])}</button>`:""}
+    ${state.catIndex<REPORT_CAT?`<button class="btn" data-nav="1">次へ：${esc(CAT_NAMES[state.catIndex+1])}</button>`:""}
   </div></div>`;
 }
 function catDoneMark(i){
   if(!state.draft) return "";
-  if(i<=3){ const ok=CHECK_CATS[i].items.every(it=>itemComplete(it,ans(it.id))); return ok?` <span class="st">✓</span>`:""; }
-  if(i===4) return pdcaComplete(state.draft)?` <span class="st">✓</span>`:"";
+  if(i<PDCA_CAT){ const ok=CHECK_CATS[i].items.every(it=>itemComplete(it,ans(it.id))); return ok?` <span class="st">✓</span>`:""; }
+  if(i===PDCA_CAT) return pdcaComplete(state.draft)?` <span class="st">✓</span>`:"";
   return "";
 }
 function itemCard(item){
@@ -842,9 +844,21 @@ function issueBox(itemId,a){
 /* ---------- PDCA ---------- */
 function pdcaView(){
   const d=state.draft, p=d.pdca, n=d.numbers;
+  const iv=p.interview||(p.interview={});
   const laborRateAuto=(n.sales>0&&n.laborCost>0)?(n.laborCost/n.sales*100).toFixed(1):null;
   const spendAuto=(n.sales>0&&n.guests>0)?Math.round(n.sales/n.guests):null;
   return `
+  <section class="card" id="card-pdca-interview">
+    <h3>面談記録</h3>
+    <p class="desc">店舗社員との面談内容を記録します。</p>
+    <div class="row2">
+      ${INTERVIEW_FIELDS.map(f=>`<div class="field"><label>${esc(f.label)}</label><input type="${f.type}" value="${esc(iv[f.key]||"")}" data-iv="${f.key}"></div>`).join("")}
+    </div>
+    ${INTERVIEW_QS.map(q=>`
+      <div class="field"><label>${esc(q.label)}</label>
+        <textarea data-iv="${q.key}" placeholder="${esc(q.hint)}">${esc(iv[q.key]||"")}</textarea>
+      </div>`).join("")}
+  </section>
   <section class="card" id="card-pdca-review">
     <h3>前回の振り返り${d.prevDate?`<span class="badge todo">${fmtDate(d.prevDate)}分</span>`:""}</h3>
     <p class="desc">前回の宿題・改善事項が改善できたか、継続して取り組む必要があるかを評価します。</p>
@@ -983,8 +997,17 @@ function reportBody(insp,isPreview){
         ${a.photos.length?`<div class="photos" style="margin-top:8px">${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(it.name)}の写真${i+1}"></div>`).join("")}</div>`:""}
       </div>`;}).join("")}
   </section>`).join("")}
+  ${(()=>{const iv=insp.pdca.interview||{};
+    const hasIv=INTERVIEW_FIELDS.some(f=>filled(iv[f.key]))||INTERVIEW_QS.some(q=>filled(iv[q.key]));
+    if(!hasIv) return "";
+    return `<section class="card">
+      <h3>面談記録</h3>
+      <div class="txt-block"><div class="k">基本情報</div>
+        <div class="v">面談日：${fmtDate(iv.date)}／時間：${esc(iv.start||"—")}〜${esc(iv.end||"—")}／面談者：${esc(iv.interviewer||"—")}／被面談者：${esc(iv.interviewee||"—")}</div></div>
+      ${INTERVIEW_QS.filter(q=>filled(iv[q.key])).map(q=>`<div class="txt-block"><div class="k">${esc(q.label)}</div><div class="v">${esc(iv[q.key])}</div></div>`).join("")}
+    </section>`;})()}
   <section class="card">
-    <h3>PDCA・社員育成</h3>
+    <h3>振り返り・課題設定</h3>
     ${insp.pdca.reviews.length?`
       <div class="sec-label">前回宿題の振り返り</div>
       ${insp.pdca.reviews.map(r=>`<div class="hw-item">${esc(r.text)}
@@ -1040,7 +1063,7 @@ document.addEventListener("click",async e=>{
   if(!t) return;
   if(t.id==="to-home"){state.view="home";render();scrollTo(0,0);return;}
   if(t.dataset.cat!=null){state.catIndex=+t.dataset.cat;render();scrollTo(0,0);return;}
-  if(t.dataset.nav){state.catIndex=Math.max(0,Math.min(5,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);return;}
+  if(t.dataset.nav){state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);return;}
   if(t.dataset.eval){
     const [id,gk,...v]=t.dataset.eval.split(":");
     const a=ans(id); const val=v.join(":");
@@ -1114,11 +1137,13 @@ document.addEventListener("change",async e=>{
     return;
   }
   if(t.dataset.pdcaDate){state.draft.pdca[t.dataset.pdcaDate]=t.value;persistDraft();return;}
+  if(t.dataset.iv){(state.draft.pdca.interview||(state.draft.pdca.interview={}))[t.dataset.iv]=t.value;persistDraft();return;}
 });
 document.addEventListener("input",e=>{
   const t=e.target;
   if(t.dataset.field){const [id,key]=t.dataset.field.split(":");ans(id).fields[key]=t.value;persistDraft();refreshHeader();return;}
   if(t.dataset.pdca){state.draft.pdca[t.dataset.pdca]=t.value;persistDraft();return;}
+  if(t.dataset.iv){(state.draft.pdca.interview||(state.draft.pdca.interview={}))[t.dataset.iv]=t.value;persistDraft();return;}
   if(t.dataset.num){state.draft.numbers[t.dataset.num]=t.value===""?"":+t.value;persistDraft();return;}
   if(t.dataset.numtext){state.draft.numbers[t.dataset.numtext]=t.value;persistDraft();return;}
   if(t.dataset.hw){const [i,k]=t.dataset.hw.split(":");state.draft.pdca.homework[+i][k]=t.value;persistDraft();refreshHeader();return;}

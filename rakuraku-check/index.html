@@ -108,6 +108,20 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .chip.on-good{background:var(--good-bg);border-color:var(--good);color:var(--good)}
 .chip.on-warn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
 .chip.on-bad{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.scale{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.scale button{
+  text-align:left;width:100%;border:1.5px solid var(--line);border-radius:10px;
+  padding:10px 12px;background:var(--card);font-size:13px;line-height:1.5;
+}
+.scale .sv{font-weight:800;font-variant-numeric:tabular-nums;margin-right:8px}
+.scale .st{font-weight:700}
+.scale .sd{display:block;font-size:12px;color:var(--sub);margin-top:2px}
+.scale button.on-good{background:var(--good-bg);border-color:var(--good)}
+.scale button.on-good .sv,.scale button.on-good .st{color:var(--good)}
+.scale button.on-warn{background:var(--warn-bg);border-color:var(--warn)}
+.scale button.on-warn .sv,.scale button.on-warn .st{color:var(--warn)}
+.scale button.on-bad{background:var(--bad-bg);border-color:var(--bad)}
+.scale button.on-bad .sv,.scale button.on-bad .st{color:var(--bad)}
 .issue-box{
   margin-top:14px;border:1px solid var(--bad);border-radius:10px;padding:12px;
   background:var(--bad-bg);
@@ -191,48 +205,64 @@ const ISSUE_FIELDS = [
   {key:"owner",label:"担当者",    type:"text"},
 ];
 const PRIORITIES = ["高","中","低"];
-// 評価オプション: v=表示, s=点数, lv=色, issue=問題扱い(対応内容・期限・担当者が必須になる)
+// 評価オプション: v=表示, s=点数, lv=色, issue=問題扱い(対応内容・期限・担当者を登録できる)
+// s5(): 5段階評価グループを生成。defs=[ [短い要約, 詳しい基準文], ... ]（5点→1点の順）
+function s5(defs){
+  const meta=[["5点",100,"good",false],["4点",75,"good",false],["3点",50,"warn",true],["2点",25,"bad",true],["1点",0,"bad",true]];
+  return {key:"main",label:"評価（5段階）",scale:true,
+    options:meta.map(([v,s,lv,issue],i)=>({v,s,lv,issue,t:defs[i][0],desc:defs[i][1]||""}))};
+}
 const CHECK_CATS = [
   { id:"exterior", name:"店舗外観・入口", short:"外観・入口", items:[
-    { id:"lighting", name:"照明・看板・提灯",
-      desc:["店舗外観の電気・看板・提灯が点灯しているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"すべて点灯している",s:100,lv:"good"},
-        {v:"一部点灯していない",s:50,lv:"warn",issue:true},
-        {v:"点灯していない",s:0,lv:"bad",issue:true}]}],
+    { id:"lighting", name:"照明・看板・提灯・周辺POP",
+      desc:["店舗外観の電気・看板・提灯が正常に点灯しており、周辺POPに汚れや破損がないか"],
+      groups:[s5([
+        ["すべて正常","すべて正常に点灯しており、周辺POPにも汚れや破損がない"],
+        ["POPに軽い乱れ","すべて点灯しているが、周辺POPに軽い汚れや乱れがある"],
+        ["一部暗い・軽微な汚損","一部の照明が暗い、または周辺POPに軽微な汚れ・破損がある"],
+        ["複数消灯・目立つ汚損","複数箇所が点灯していない、または周辺POPに目立つ汚れ・破損がある"],
+        ["ほとんど消灯","ほとんど点灯していない、または周辺POPが著しく汚れている・破損している"]])],
       note:"将来的には写真から点灯状態をAIで自動判定します。" },
     { id:"entrance", name:"入口・階段清掃",
       desc:["入口・階段・店舗前が清掃されているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"きれいにできた",s:100,lv:"good"},
-        {v:"普通",s:50,lv:"warn"},
-        {v:"できなかった",s:0,lv:"bad",issue:true}]}],
+      groups:[s5([
+        ["非常にきれい","すみずみまで清掃され、ゴミ・汚れがない"],
+        ["ほぼきれい","おおむね清掃されているが、細部に軽い汚れがある"],
+        ["一部汚れあり","目につく汚れやゴミが一部残っている"],
+        ["清掃不十分","清掃が不十分で、汚れ・ゴミが目立つ"],
+        ["未清掃","清掃されておらず、著しく汚れている"]])],
       extras:[
-        {key:"reason",label:"できなかった理由",type:"textarea",show:a=>a.evals.main==="できなかった",req:true},
-        {key:"cleanReq",label:"清掃会社への依頼が必要か",type:"select",options:["必要","不要"],show:a=>a.evals.main==="できなかった",req:true,
+        {key:"reason",label:"清掃できていない理由",type:"textarea",show:a=>["1点","2点"].includes(a.evals.main),req:true},
+        {key:"cleanReq",label:"清掃会社への依頼が必要か",type:"select",options:["必要","不要"],show:a=>["1点","2点"].includes(a.evals.main),req:true,
          hint:"「必要」を選ぶと、完了時に清掃依頼タスクを自動作成します。"},
       ] },
   ]},
   { id:"hall", name:"ホール", short:"ホール", items:[
     { id:"tables", name:"テーブル清掃",
       desc:["店内の全テーブルを清掃できているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"全卓拭けた",s:100,lv:"good"},
-        {v:"半分程度拭けた",s:50,lv:"warn",issue:true},
-        {v:"できていない",s:0,lv:"bad",issue:true}]}] },
+      groups:[s5([
+        ["全卓完了","全卓が拭き上げられ、ベタつき・汚れがない"],
+        ["ほぼ完了","全卓拭けているが、一部に拭き残しがある"],
+        ["半分程度","半分程度しか拭けていない"],
+        ["一部のみ","数卓しか拭けていない"],
+        ["未実施","ほとんど拭けていない"]])] },
     { id:"condiments", name:"メニュー・テーブルコンディメンツ",
       desc:["メニューが整理され、汚れや破損がないか","箸・調味料・卓上備品が整っているか","不足しているものがないか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"問題なし",s:100,lv:"good"},
-        {v:"一部問題あり",s:50,lv:"warn",issue:true},
-        {v:"改善が必要",s:0,lv:"bad",issue:true}]}],
+      groups:[s5([
+        ["問題なし","メニュー・卓上備品が整い、汚れ・破損・不足がない"],
+        ["軽微な乱れ","整っているが、軽い汚れや乱れがある"],
+        ["一部問題あり","一部に汚れ・破損・不足がある"],
+        ["要補充・交換","複数の汚れ・破損・不足があり、補充・交換が必要"],
+        ["要早急改善","汚れ・破損・不足が多く、早急な改善が必要"]])],
       extras:[{key:"detail",label:"不足・破損内容",type:"textarea",show:a=>hasIssueEval(a,"condiments"),req:true}] },
     { id:"chairs", name:"椅子・客席の状態",
       desc:["椅子の汚れ・破損・ぐらつきがないか","必要数が足りているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"状態・数量ともに問題なし",s:100,lv:"good"},
-        {v:"一部不良あり",s:50,lv:"warn",issue:true},
-        {v:"数量不足",s:30,lv:"bad",issue:true}]}],
+      groups:[s5([
+        ["問題なし","状態・数量ともに問題なし"],
+        ["ほぼ良好","おおむね良好だが、軽い汚れがある"],
+        ["一部不良","一部に汚れ・ぐらつき・破損がある"],
+        ["複数不良・数量不足","複数の不良がある、または数量が不足している"],
+        ["使用に支障","使用に支障がある椅子が多い、または大幅に不足している"]])],
       extras:[
         {key:"shortage",label:"不足数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true},
         {key:"broken",label:"破損数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true}] },
@@ -249,51 +279,71 @@ const CHECK_CATS = [
     ...[["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]].map(([id,label])=>(
     { id, name:label,
       desc:["汚れ・欠け・破損・劣化がないか","衛生的に管理されているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"問題なし",s:100,lv:"good"},
-        {v:"汚れている",s:50,lv:"warn",issue:true},
-        {v:"欠け・破損あり",s:30,lv:"bad",issue:true},
-        {v:"買い替えが必要",s:20,lv:"bad",issue:true}]}],
-      extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="買い替えが必要",req:true,
+      groups:[s5([
+        ["清潔・良好","清潔で状態も良好"],
+        ["軽い汚れ","おおむね清潔だが、軽い汚れがある"],
+        ["要洗浄","汚れが目立ち、洗浄・漂白が必要"],
+        ["欠け・破損あり","欠け・破損・劣化がある"],
+        ["要買い替え","使用に適さず、買い替えが必要"]])],
+      extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",req:true,
         hint:"完了時に購入・交換タスクを自動作成します。"}] })),
     { id:"fryer", name:"フライヤー",
       desc:["清掃されているか","油の色や状態が正常か"],
       groups:[
-        {key:"clean",label:"清掃状態",options:[
-          {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]},
+        {...s5([
+          ["清掃済み","きれいに清掃され、油汚れがない"],
+          ["軽い汚れ","おおむね清掃されているが、軽い油汚れがある"],
+          ["汚れが目立つ","油汚れが目立つ"],
+          ["清掃不足","清掃されておらず、汚れがひどい"],
+          ["衛生上問題","著しく汚れ、衛生上問題がある"]]),key:"clean",label:"清掃状態（5段階）"},
         {key:"oil",label:"油の状態",options:[
           {v:"正常",s:100,lv:"good"},{v:"交換推奨",s:50,lv:"warn",issue:true},{v:"交換が必要",s:0,lv:"bad",issue:true}]}] },
     { id:"stove", name:"コンロ",
       desc:["清掃されているか","正常な青い火が出ているか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"正常",s:100,lv:"good"},
-        {v:"清掃が必要",s:50,lv:"warn",issue:true},
-        {v:"火の色・強さに異常あり",s:30,lv:"bad",issue:true},
-        {v:"点火しない",s:0,lv:"bad",issue:true}]}] },
+      groups:[s5([
+        ["正常","清掃されており、正常な青い火が出ている"],
+        ["軽い汚れ","火は正常だが、軽い汚れがある"],
+        ["要清掃","清掃が必要"],
+        ["火に異常","火の色・強さに異常がある"],
+        ["点火しない","点火しない"]])] },
     { id:"garbage", name:"ゴミ置き場・ゴミ箱",
       desc:["ゴミ置き場が整理されているか","ゴミ箱が清掃されているか","臭い・汚れ・害虫の発生がないか"],
-      groups:[{key:"main",label:"評価",options:[
-        {v:"問題なし",s:100,lv:"good"},
-        {v:"普通",s:50,lv:"warn"},
-        {v:"改善が必要",s:0,lv:"bad",issue:true}]}],
+      groups:[s5([
+        ["問題なし","整理・清掃されており、臭い・害虫もない"],
+        ["ほぼ良好","おおむね良好だが、軽い汚れ・臭いがある"],
+        ["一部問題","汚れ・臭いが一部気になる"],
+        ["要改善","整理されておらず、汚れ・臭いが目立つ"],
+        ["不衛生","著しく不衛生で、害虫発生の恐れがある"]])],
       extras:[{key:"detail",label:"問題内容",type:"textarea",show:a=>hasIssueEval(a,"garbage"),req:true}] },
   ]},
   { id:"sales", name:"営業・商品品質", short:"営業・品質", items:[
     { id:"peak", name:"ピーク帯の現場確認",
       desc:["ピーク帯の現場感","人員配置","声かけ・連携","オペレーションのスムーズさ"], photoLabel:"現場写真",
-      groups:[{key:"main",label:"評価",options:[
-        {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]}] },
+      groups:[s5([
+        ["非常に良い","人員配置・声かけ・連携が良く、オペレーションが非常にスムーズ"],
+        ["良い","おおむねスムーズで、大きな問題はない"],
+        ["普通","ところどころ滞りがある"],
+        ["悪い","連携不足で、提供遅れや混乱がある"],
+        ["非常に悪い","オペレーションが回っていない"]])] },
     { id:"service", name:"接客・商品提供",
       desc:["実際にドリンク・料理提供を行い営業状態を確認","提供スピード・見た目・量・盛り付けを確認","レシピ通りに作られているか確認"], photoLabel:"商品写真", photoOptional:true,
       groups:[
         {key:"recipe",label:"レシピ遵守",options:[
           {v:"レシピ通り",s:100,lv:"good"},{v:"一部違いあり",s:50,lv:"warn",issue:true},{v:"レシピ通りではない",s:0,lv:"bad",issue:true}]},
-        {key:"serve",label:"提供状態",options:[
-          {v:"良い",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"悪い",s:0,lv:"bad",issue:true}]}] },
+        {...s5([
+          ["非常に良い","提供スピード・見た目・量・盛り付けが非常に良い"],
+          ["良い","おおむね良い"],
+          ["普通","普通"],
+          ["悪い","提供が遅い、または見た目・量に問題がある"],
+          ["非常に悪い","提供に大きな問題がある"]]),key:"serve",label:"提供状態（5段階）"}] },
     { id:"quality", name:"商品品質",
       desc:["味・温度・見た目・量・盛り付けが基準通りか"], photoOptional:true,
-      groups:[{key:"main",label:"評価",options:[
-        {v:"正常",s:100,lv:"good"},{v:"普通",s:50,lv:"warn"},{v:"できていない",s:0,lv:"bad",issue:true}]}],
+      groups:[s5([
+        ["基準通り","味・温度・見た目・量すべて基準通り"],
+        ["ほぼ基準通り","おおむね基準通り"],
+        ["一部基準外","一部が基準から外れている"],
+        ["基準外が複数","複数の項目で基準から外れている"],
+        ["基準未達","提供基準を満たしていない"]])],
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality"),req:true},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality"),req:true}] },
@@ -383,7 +433,7 @@ function computeAutoTasks(draft){
     t.push({text:"清掃会社へ清掃を依頼（入口・階段・店舗前）",owner:e.fields.owner||"",due:e.fields.due||"",priority:"高",auto:true});
   for(const [id,label] of [["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]]){
     const c=draft.answers[id];
-    if(c&&c.evals.main==="買い替えが必要")
+    if(c&&c.evals.main==="1点")
       t.push({text:"購入・交換："+(c.fields.buyList||label),owner:c.fields.owner||"",due:c.fields.due||"",priority:"高",auto:true});
   }
   return t;
@@ -465,7 +515,7 @@ async function getAIModel(){
   return aiModel;
 }
 function buildJudgePrompt(item){
-  const groups=item.groups.map(g=>`- ${g.key}（${g.label}）：${g.options.map(o=>o.v).join(" ／ ")}`).join("\n");
+  const groups=item.groups.map(g=>`- ${g.key}（${g.label}）：${g.options.map(o=>o.v+(o.desc?`（${o.desc}）`:"")).join(" ／ ")}`).join("\n");
   return `あなたは飲食店の店舗巡回チェックの検査員です。添付の写真を確認し、次のチェック項目を判定してください。
 チェック項目：${item.name}
 確認内容：${item.desc.join("、")}
@@ -757,9 +807,16 @@ function itemCard(item){
     </div>
     ${item.groups.map(g=>`
       <div class="sec-label">${esc(g.label)} <span class="req">必須</span></div>
+      ${g.scale?`
+      <div class="scale" role="group" aria-label="${esc(g.label)}">
+        ${g.options.map(o=>`<button class="${a.evals[g.key]===o.v?"on-"+o.lv:""}" data-eval="${item.id}:${g.key}:${esc(o.v)}" aria-pressed="${a.evals[g.key]===o.v}">
+          <span class="sv">${esc(o.v)}</span><span class="st">${esc(o.t)}</span>
+          ${o.desc?`<span class="sd">${esc(o.desc)}</span>`:""}
+        </button>`).join("")}
+      </div>`:`
       <div class="chips" role="group" aria-label="${esc(g.label)}">
         ${g.options.map(o=>`<button class="chip${a.evals[g.key]===o.v?" on-"+o.lv:""}" data-eval="${item.id}:${g.key}:${esc(o.v)}" aria-pressed="${a.evals[g.key]===o.v}">${esc(o.v)}</button>`).join("")}
-      </div>`).join("")}
+      </div>`}`).join("")}
     ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
     ${issue?issueBox(item.id,a):""}
@@ -888,7 +945,7 @@ function viewReport(){
     </div>
   </div>`;
 }
-function evalBadge(o){return `<span class="badge ${o.issue?"issue":(o.lv==="good"?"done":"todo")}">${esc(o.v)}</span>`;}
+function evalBadge(o){return `<span class="badge ${o.issue?"issue":(o.lv==="good"?"done":"todo")}">${esc(o.v)}${o.t?"・"+esc(o.t):""}</span>`;}
 function reportBody(insp,isPreview){
   const byId=id=>insp.answers[id]||{photos:[],evals:{},fields:{}};
   const issueList=ALL_ITEMS.filter(it=>insp.issues.includes(it.id));

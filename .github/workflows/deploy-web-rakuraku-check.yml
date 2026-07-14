@@ -1,0 +1,90 @@
+name: Deploy Web (rakuraku-check)
+
+# らくらく隣店チェック（rakuraku-check/）を GitHub Pages に公開する。
+#
+# 同じ Pages サイトには「らくらく店舗メンテナンス」（tsundokudo/ の Web 版、
+# claude/spreadsheet-hygiene-app-r0qya3 ブランチの Deploy Web ワークフロー）も
+# デプロイされるため、ここでは両方を合成してデプロイする:
+#   ルート          … らくらく店舗メンテナンス（tsundokudo build）
+#   /rakuraku-check … らくらく隣店チェック（静的ファイル）
+#
+# 注意: Deploy Web（相手側）が単独で走ると /rakuraku-check が消える。
+# 恒久対応は相手側ワークフローにも同じ合成ステップを入れること。
+
+on:
+  push:
+    branches:
+      - claude/store-checklist-app-ld80bz
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 相手側ワークフローと同じ concurrency group で直列化する
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (this branch / rakuraku-check)
+        uses: actions/checkout@v4
+
+      - name: Checkout maintenance app branch
+        uses: actions/checkout@v4
+        with:
+          ref: claude/spreadsheet-hygiene-app-r0qya3
+          path: maint
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: maint/tsundokudo/pnpm-lock.yaml
+
+      - name: Install maintenance app dependencies
+        working-directory: maint/tsundokudo
+        run: pnpm install --frozen-lockfile
+
+      - name: Export maintenance app web build
+        working-directory: maint/tsundokudo
+        env:
+          EXPO_PUBLIC_FIREBASE_CONFIG: ${{ vars.EXPO_PUBLIC_FIREBASE_CONFIG }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npx expo export --platform web --clear
+
+      - name: Compose site (maintenance at root + rakuraku-check subpath)
+        run: |
+          mkdir -p site
+          cp -r maint/tsundokudo/dist/* site/
+          cp site/index.html site/404.html
+          mkdir -p site/rakuraku-check
+          cp -r rakuraku-check/* site/rakuraku-check/
+          touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

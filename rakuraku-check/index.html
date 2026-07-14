@@ -64,6 +64,15 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .hd .bar{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .hd h1{font-size:16px;font-weight:700}
 .hd .meta{font-size:12px;color:var(--sub)}
+.save-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+.save-state{font-size:11px;color:var(--sub)}
+.save-btn{font-size:12px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 14px;background:var(--card);white-space:nowrap}
+#toast{
+  position:fixed;bottom:96px;left:50%;transform:translateX(-50%);z-index:60;
+  background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;
+  font-size:13px;max-width:90vw;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;
+}
+#toast.show{opacity:1}
 .progress{height:4px;background:var(--line);border-radius:2px;margin:10px 0 0;overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
 .cats{display:flex;gap:6px;overflow-x:auto;padding:10px 0;scrollbar-width:none}
@@ -426,7 +435,19 @@ let saveTimer=null;
 function persistDraft(){
   if(!state.draft) return;
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>kvSet("draft",state.draft).catch(()=>{}),400);
+  saveTimer=setTimeout(()=>kvSet("draft",state.draft).then(markSaved).catch(()=>{}),400);
+}
+function markSaved(){
+  const el=document.getElementById("save-state");
+  if(!el) return;
+  const d=new Date();
+  el.textContent=`自動保存済み ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function showToast(msg){
+  let el=document.getElementById("toast");
+  if(!el){el=document.createElement("div");el.id="toast";document.body.appendChild(el);}
+  el.textContent=msg; el.classList.add("show");
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove("show"),2500);
 }
 
 /* ================= ユーティリティ ================= */
@@ -710,6 +731,14 @@ function viewHome(){
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
     </div>`:""}
     <div class="card">
+      <h3>データの保存・バックアップ</h3>
+      <p class="desc">チェックの記録と下書きは、この端末のブラウザ内に自動保存されます。機種変更・他の端末への引き継ぎ・念のための控えには、ファイルへの書き出しを使ってください。</p>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn sub" id="bk-export">ファイルに書き出す</button>
+        <label class="btn ghost" style="cursor:pointer">ファイルを読み込む<input type="file" accept=".json,application/json" hidden id="bk-import"></label>
+      </div>
+    </div>
+    <div class="card">
       <h3>過去のチェック</h3>
       ${past.length?past.map(i=>`
         <div class="hw-item">
@@ -754,6 +783,8 @@ function bindHome(){
   document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{
     state.reportId=b.dataset.open; state.view="report"; render(); scrollTo(0,0);
   }));
+  $("#bk-export")?.addEventListener("click",exportBackup);
+  $("#bk-import")?.addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
   $("#fb-save")?.addEventListener("click",async()=>{
     const status=$("#fb-status");
     const cfg=parseFirebaseConfig($("#fb-config").value);
@@ -782,6 +813,35 @@ function bindHome(){
   });
 }
 
+/* ---------- バックアップ ---------- */
+function exportBackup(){
+  const data={app:"rakuraku-check",version:1,exportedAt:new Date().toISOString(),
+    inspections:state.inspections,draft:state.draft||null};
+  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`らくらく臨店チェック-バックアップ-${todayStr()}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  showToast(`ファイルに書き出しました（記録 ${state.inspections.length}件）`);
+}
+async function importBackup(file){
+  try{
+    const data=JSON.parse(await file.text());
+    if(!data||data.app!=="rakuraku-check"||!Array.isArray(data.inspections))
+      throw new Error("このアプリのバックアップファイルではありません");
+    for(const insp of data.inspections){ if(insp&&insp.id) await putInspection(insp); }
+    if(data.draft&&(!state.draft||confirm("バックアップ内の下書きで、現在の下書きを置き換えますか？"))){
+      state.draft=data.draft; await kvSet("draft",state.draft);
+    }
+    state.inspections=(await allInspections())||[];
+    render();
+    showToast(`バックアップを読み込みました（記録 ${data.inspections.length}件）`);
+  }catch(err){
+    alert("読み込みに失敗しました："+String(err&&err.message||err));
+  }
+}
+
 /* ---------- チェック画面 ---------- */
 function viewCheck(){
   const d=state.draft;
@@ -798,6 +858,10 @@ function viewCheck(){
       <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${ALL_ITEMS.length}項目${pdcaComplete(d)?"＋PDCA":""}</span>
     </div>
     <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+    <div class="save-row">
+      <span class="save-state" id="save-state">入力内容はこの端末に自動保存されます</span>
+      <button class="save-btn" id="save-now">保存して中断</button>
+    </div>
     <nav class="cats">${CAT_NAMES.map((n,i)=>`<button class="cat-chip${i===state.catIndex?" on":""}" data-cat="${i}">${i+1}. ${esc(n)}${catDoneMark(i)}</button>`).join("")}</nav>
   </header>
   <div class="wrap">${body}</div>
@@ -1013,6 +1077,13 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="save-now"){
+    clearTimeout(saveTimer);
+    try{ await kvSet("draft",state.draft); }catch(e){}
+    state.view="home"; render(); scrollTo(0,0);
+    showToast("保存しました。「続きから再開」でいつでも再開できます。");
+    return;
+  }
   if(t.dataset.cat!=null){state.catIndex=+t.dataset.cat;render();scrollTo(0,0);return;}
   if(t.dataset.nav){state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);return;}
   if(t.dataset.eval){
@@ -1052,7 +1123,9 @@ document.addEventListener("click",async e=>{
     await putInspection(insp); await kvDel("draft");
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
-    render(); scrollTo(0,0); return;
+    render(); scrollTo(0,0);
+    showToast("チェックを完了し、報告書を保存しました。");
+    return;
   }
 });
 document.addEventListener("change",async e=>{

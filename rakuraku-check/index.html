@@ -3,33 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#189B8B">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>らくらく臨店チェック</title>
 </head>
 <body>
 <style>
 :root{
   --bg:#F7F6F2; --card:#FFFFFF; --ink:#1E232B; --sub:#5C6470; --line:#E3E1DA;
-  --accent:#2E4E7E; --accent-ink:#FFFFFF; --accent-soft:#E8EEF7;
+  --accent:#0E8577; --accent-ink:#FFFFFF; --accent-soft:#DFF2EF;
   --good:#1E7F4C; --good-bg:#E3F2E9; --warn:#B26A00; --warn-bg:#FBF0DC; --bad:#BE3E36; --bad-bg:#F9E7E5;
   --shadow:0 1px 3px rgba(30,35,43,.08);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#14171C; --card:#1D2129; --ink:#E8EAEE; --sub:#99A1AD; --line:#2C323C;
-    --accent:#8FB0DE; --accent-ink:#101826; --accent-soft:#25324A;
+    --accent:#4EC8B6; --accent-ink:#06231F; --accent-soft:#1C3B36;
     --good:#5BC489; --good-bg:#1C3227; --warn:#E0A44E; --warn-bg:#38301D; --bad:#E37F76; --bad-bg:#3A2320;
     --shadow:0 1px 3px rgba(0,0,0,.4);
   }
 }
 :root[data-theme="light"]{
   --bg:#F7F6F2; --card:#FFFFFF; --ink:#1E232B; --sub:#5C6470; --line:#E3E1DA;
-  --accent:#2E4E7E; --accent-ink:#FFFFFF; --accent-soft:#E8EEF7;
+  --accent:#0E8577; --accent-ink:#FFFFFF; --accent-soft:#DFF2EF;
   --good:#1E7F4C; --good-bg:#E3F2E9; --warn:#B26A00; --warn-bg:#FBF0DC; --bad:#BE3E36; --bad-bg:#F9E7E5;
   --shadow:0 1px 3px rgba(30,35,43,.08);
 }
 :root[data-theme="dark"]{
   --bg:#14171C; --card:#1D2129; --ink:#E8EAEE; --sub:#99A1AD; --line:#2C323C;
-  --accent:#8FB0DE; --accent-ink:#101826; --accent-soft:#25324A;
+  --accent:#4EC8B6; --accent-ink:#06231F; --accent-soft:#1C3B36;
   --good:#5BC489; --good-bg:#1C3227; --warn:#E0A44E; --warn-bg:#38301D; --bad:#E37F76; --bad-bg:#3A2320;
   --shadow:0 1px 3px rgba(0,0,0,.4);
 }
@@ -149,6 +153,8 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .navbar .in{max-width:640px;margin:0 auto;display:flex;gap:10px}
 .navbar .btn{padding:12px}
 .home-hero{padding:34px 16px 10px;text-align:left}
+.hero-top{display:flex;align-items:center;gap:14px}
+.hero-top svg{width:68px;height:68px;flex:0 0 auto}
 .home-hero .eyebrow{font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--accent)}
 .home-hero h1{font-size:26px;font-weight:800;letter-spacing:.02em;margin-top:4px;text-wrap:balance}
 .home-hero p{font-size:13px;color:var(--sub);margin-top:6px;max-width:34em}
@@ -450,6 +456,7 @@ function showToast(msg){
 
 /* ================= ユーティリティ ================= */
 const $=(s,el=document)=>el.querySelector(s);
+const LOGO_SVG=`<svg viewBox="0 0 512 512" role="img" aria-label="らくらく臨店チェックのロゴ"><circle cx="256" cy="256" r="256" fill="#189B8B"/><rect x="163" y="115" width="186" height="216" rx="20" fill="none" stroke="#fff" stroke-width="24"/><rect x="206" y="90" width="100" height="42" rx="12" fill="#fff"/><circle cx="256" cy="104" r="10" fill="#189B8B"/><g><rect x="192" y="156" width="38" height="38" rx="8" fill="#fff"/><path d="M200 175l9 9 17-19" stroke="#189B8B" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="248" y="168" width="72" height="13" rx="6.5" fill="#fff"/></g><g transform="translate(0,52)"><rect x="192" y="156" width="38" height="38" rx="8" fill="#fff"/><path d="M200 175l9 9 17-19" stroke="#189B8B" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="248" y="168" width="72" height="13" rx="6.5" fill="#fff"/></g><g transform="translate(0,104)"><rect x="192" y="156" width="38" height="38" rx="8" fill="#fff"/><path d="M200 175l9 9 17-19" stroke="#189B8B" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="248" y="168" width="72" height="13" rx="6.5" fill="#fff"/></g><g fill="#fff"><circle cx="118" cy="298" r="37"/><path d="M64 416v-22a54 54 0 0 1 108 0v22z"/><circle cx="394" cy="298" r="37"/><path d="M340 416v-22a54 54 0 0 1 108 0v22z"/><rect x="192" y="298" width="128" height="70" rx="24"/><path d="M228 356l-16 34 40-16z"/><rect x="168" y="392" width="176" height="24" rx="12"/></g><g fill="#189B8B"><circle cx="226" cy="333" r="9"/><circle cx="256" cy="333" r="9"/><circle cx="286" cy="333" r="9"/></g></svg>`;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function fmtDate(s){if(!s)return "—";const [y,m,d]=s.split("-");return `${y}/${+m}/${+d}`;}
@@ -522,9 +529,9 @@ function compressPhoto(file){return new Promise((res,rej)=>{
   img.src=url;});}
 
 /* ================= AI自動判定（Firebase AI Logic / Gemini） =================
-   一時的に無効化中。再度有効にするには下の FEATURE_AI を true にするか、
-   URLに ?ai=on を付けて開く（例：https://.../rakuraku-check/?ai=on）。 */
-const FEATURE_AI=false;
+   AIの判定はあくまで補助。提案を表示するだけで、評価は人が「反映」して確定する。
+   無効にするには FEATURE_AI を false に（?ai=on のURLで一時的に有効化も可）。 */
+const FEATURE_AI=true;
 const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
@@ -633,13 +640,14 @@ function aiSection(item,a){
       return !g.options.some(o=>o.v===v)||a.evals[g.key]===v;
     });
     return `<div class="ai-box">
-      <div class="ttl">AI判定の提案${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>
+      <div class="ttl">AI判定の提案（補助）${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>
       ${rows}
       ${a.ai.reason?`<div class="rsn">${esc(a.ai.reason)}</div>`:""}
       <div class="acts">
         ${applied?`<span class="badge done">評価に反映済み</span>`:`<button class="chip" data-aiapply="${item.id}">提案を評価に反映</button>`}
         <button class="chip" data-ai="${item.id}">再判定</button>
       </div>
+      <div class="rsn">※AIの判定は補助的な参考情報です。最終的な評価はご自身の確認で決めてください。</div>
     </div>`;
   }
   return `<div class="ai-box">
@@ -674,9 +682,14 @@ function viewHome(){
   const past=[...state.inspections].sort((a,b)=>(b.date+(b.completedAt||"")).localeCompare(a.date+(a.completedAt||"")));
   return `
   <div class="home-hero">
-    <div class="eyebrow">AM改善チェック</div>
-    <h1>らくらく臨店チェック</h1>
-    <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが自動判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
+    <div class="hero-top">
+      ${LOGO_SVG}
+      <div>
+        <div class="eyebrow">AM改善チェック</div>
+        <h1>らくらく臨店チェック</h1>
+      </div>
+    </div>
+    <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
   </div>
   <div class="wrap">
     ${state.draft?`
@@ -704,7 +717,7 @@ function viewHome(){
     ${AI_ENABLED?`
     <div class="card">
       <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
-      <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価を自動判定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
+      <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価の候補を提案します。<b>AIの判定はあくまで補助</b>で、評価は必ず人が確認して確定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
       <div class="field"><label>firebaseConfig（JSON、またはコンソールのコードをそのまま貼り付け）</label>
         <textarea id="fb-config" placeholder='{"apiKey":"AIza...","authDomain":"xxx.firebaseapp.com","projectId":"xxx","appId":"1:..."}'>${esc(state.fb&&state.fb.config?JSON.stringify(state.fb.config,null,1):"")}</textarea>
       </div>

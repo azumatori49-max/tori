@@ -13,11 +13,7 @@ npx http-server rakuraku-check
 
 ## 写真のAI自動判定（Firebase AI Logic）のセットアップ
 
-> **現在この機能はオフになっています（機能自体は実装済み・動作確認済み）。** 再度有効にする方法は2つ：
-> 1. 一時的に試す：URLの末尾に `?ai=on` を付けて開く（例：`https://azumatori49-max.github.io/tori/rakuraku-check/?ai=on`）
-> 2. 常時有効にする：`index.html` 内の `const FEATURE_AI=false;` を `true` に書き換える（1行だけ）
->
-> 有効化すると、ホーム画面に設定カードが再表示され、以前保存したFirebase設定もそのまま使えます。
+> **AIの判定はあくまで補助です。** AIは評価の候補と理由を提案するだけで、評価は必ず人が「提案を評価に反映」を押して確定します。機能を無効にしたい場合は `index.html` 内の `const FEATURE_AI=true;` を `false` にしてください。
 
 写真から「照明が点灯しているか」「テーブルが清掃されているか」などをAIが判定し、評価の提案を表示します。利用にはFirebaseプロジェクトが必要です。
 

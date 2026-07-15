@@ -262,7 +262,7 @@ const CHECK_CATS = [
   ]},
   { id:"hall", name:"ホール", short:"ホール", items:[
     { id:"tables", name:"テーブル",
-      desc:["店内の全テーブルを清掃できているか"],
+      desc:["店内の全テーブルを清掃できているか","テーブルの卓上はキレイに磨かれてますか？"],
       groups:[s5([
         ["全卓完璧","全卓が拭き上げられ、ベタつき・汚れがない"],
         ["ほぼ完了","全卓拭けているが、一部に拭き残しがある"],
@@ -599,7 +599,7 @@ function parseFirebaseConfig(text){
 }
 async function getAIModel(){
   if(aiModel) return aiModel;
-  if(!aiConfigured()) throw new Error("Firebase設定が未登録です。ホーム画面の「写真AI自動判定の設定」から登録してください。");
+  if(!aiConfigured()) throw new Error("Firebase設定が未登録です。管理画面の「写真AI自動判定の設定」から登録してください。");
   let appMod,aiMod;
   try{
     [appMod,aiMod]=await Promise.all([
@@ -645,7 +645,7 @@ async function judgeItem(itemId){
   const item=findItem(itemId); if(!item) return;
   const a=ans(itemId);
   if(!a.photos.length){alert("先に写真を追加してください。");return;}
-  if(!aiConfigured()){alert("ホーム画面の「写真AI自動判定の設定」でFirebase設定を登録すると利用できます。");return;}
+  if(!aiConfigured()){alert("管理画面の「写真AI自動判定の設定」でFirebase設定を登録すると利用できます。");return;}
   if(aiBusy.has(itemId)) return;
   aiBusy.add(itemId); aiErr.delete(itemId); refreshCard(itemId);
   try{
@@ -700,7 +700,7 @@ function aiSection(item,a){
   return `<div class="ai-box">
     ${err?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(err)}</div>`:""}
     <button class="chip" data-ai="${item.id}">写真からAI自動判定</button>
-    ${aiConfigured()?"":`<div class="rsn">ホーム画面でFirebase設定を登録すると利用できます。</div>`}
+    ${aiConfigured()?"":`<div class="rsn">管理画面でFirebase設定を登録すると利用できます。</div>`}
   </div>`;
 }
 
@@ -712,8 +712,10 @@ function render(){
   else if(state.view==="check") html=viewCheck();
   else if(state.view==="report") html=viewReport();
   else if(state.view==="trends") html=viewTrends();
+  else if(state.view==="admin") html=viewAdmin();
   app.innerHTML=html;
   if(state.view==="home") bindHome();
+  if(state.view==="admin") bindAdmin();
 }
 
 /* ---------- ホーム ---------- */
@@ -762,33 +764,6 @@ function viewHome(){
       <div id="prev-hw"></div>
       <div style="margin-top:16px"><button class="btn" id="start">チェックを開始する</button></div>
     </div>
-    ${AI_ENABLED?`
-    <div class="card">
-      <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
-      <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価の候補を提案します。<b>AIの判定はあくまで補助</b>で、評価は必ず人が確認して確定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
-      <div class="field"><label>firebaseConfig（JSON、またはコンソールのコードをそのまま貼り付け）</label>
-        <textarea id="fb-config" placeholder='{"apiKey":"AIza...","authDomain":"xxx.firebaseapp.com","projectId":"xxx","appId":"1:..."}'>${esc(state.fb&&state.fb.config?JSON.stringify(state.fb.config,null,1):"")}</textarea>
-      </div>
-      <div class="row2">
-        <div class="field"><label>モデル</label>
-          <select id="fb-model">
-            ${(()=>{const cur=(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;const known=KNOWN_MODELS.some(([v])=>v===cur);
-              return KNOWN_MODELS.map(([v,l])=>`<option value="${v}"${known&&cur===v?" selected":""}>${l}</option>`).join("");})()}
-          </select>
-        </div>
-        <div class="field"><label>モデル名を直接入力（任意・上級者向け）</label>
-          <input id="fb-model-custom" placeholder="空欄なら上の選択を使用" value="${(()=>{const cur=state.fb&&state.fb.model;return cur&&!KNOWN_MODELS.some(([v])=>v===cur)?esc(cur):"";})()}">
-        </div>
-        <div class="field"><label>写真追加時に自動判定</label>
-          <select id="fb-auto"><option value="1"${state.fb&&state.fb.auto?" selected":""}>する</option><option value=""${state.fb&&!state.fb.auto?" selected":""}>しない</option></select>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:12px">
-        <button class="btn sub" id="fb-save">設定を保存</button>
-        <button class="btn ghost" id="fb-test">接続テスト</button>
-      </div>
-      <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
-    </div>`:""}
     <div class="card">
       <h3>項目別の推移・アラート</h3>
       <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
@@ -817,7 +792,74 @@ function viewHome(){
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
     </div>
+    <button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>
   </div>`;
+}
+
+/* ---------- 管理画面 ---------- */
+function viewAdmin(){
+  return `
+  <header class="hd"><div class="bar" style="padding-bottom:10px">
+    <h1>管理画面</h1><span class="meta">AI判定の設定</span>
+  </div></header>
+  <div class="wrap">
+    ${AI_ENABLED?`
+    <div class="card">
+      <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
+      <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価の候補を提案します。<b>AIの判定はあくまで補助</b>で、評価は必ず人が確認して確定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
+      <div class="field"><label>firebaseConfig（JSON、またはコンソールのコードをそのまま貼り付け）</label>
+        <textarea id="fb-config" placeholder='{"apiKey":"AIza...","authDomain":"xxx.firebaseapp.com","projectId":"xxx","appId":"1:..."}'>${esc(state.fb&&state.fb.config?JSON.stringify(state.fb.config,null,1):"")}</textarea>
+      </div>
+      <div class="row2">
+        <div class="field"><label>モデル</label>
+          <select id="fb-model">
+            ${(()=>{const cur=(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;const known=KNOWN_MODELS.some(([v])=>v===cur);
+              return KNOWN_MODELS.map(([v,l])=>`<option value="${v}"${known&&cur===v?" selected":""}>${l}</option>`).join("");})()}
+          </select>
+        </div>
+        <div class="field"><label>モデル名を直接入力（任意・上級者向け）</label>
+          <input id="fb-model-custom" placeholder="空欄なら上の選択を使用" value="${(()=>{const cur=state.fb&&state.fb.model;return cur&&!KNOWN_MODELS.some(([v])=>v===cur)?esc(cur):"";})()}">
+        </div>
+        <div class="field"><label>写真追加時に自動判定</label>
+          <select id="fb-auto"><option value="1"${state.fb&&state.fb.auto?" selected":""}>する</option><option value=""${state.fb&&!state.fb.auto?" selected":""}>しない</option></select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn sub" id="fb-save">設定を保存</button>
+        <button class="btn ghost" id="fb-test">接続テスト</button>
+      </div>
+      <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
+    </div>`:`<div class="card"><p class="empty">AI機能は現在無効化されています。</p></div>`}
+    <button class="btn" id="to-home">ホームへ戻る</button>
+  </div>`;
+}
+function bindAdmin(){
+  $("#fb-save")?.addEventListener("click",async()=>{
+    const status=$("#fb-status");
+    const cfg=parseFirebaseConfig($("#fb-config").value);
+    if(!cfg){status.textContent="設定を読み取れませんでした。apiKeyを含むfirebaseConfigを貼り付けてください。";return;}
+    state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
+    aiModel=null;
+    await kvSet("fb",state.fb).catch(()=>{});
+    render();
+    const st=$("#fb-status"); if(st) st.textContent="保存しました。「接続テスト」で動作確認できます。";
+  });
+  $("#fb-test")?.addEventListener("click",async()=>{
+    const status=$("#fb-status");
+    status.textContent="接続テスト中…";
+    try{
+      const cfg=parseFirebaseConfig($("#fb-config").value);
+      if(cfg){
+        state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
+        aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
+      }
+      const m=await getAIModel();
+      const r=await m.generateContent("接続テストです。「OK」とだけ返してください。");
+      status.textContent="接続成功："+r.response.text().trim().slice(0,40);
+    }catch(err){
+      status.textContent="接続失敗："+friendlyAIError(err);
+    }
+  });
 }
 function bindHome(){
   const storeIn=$("#f-store");
@@ -856,32 +898,6 @@ function bindHome(){
   }));
   $("#bk-export")?.addEventListener("click",exportBackup);
   $("#bk-import")?.addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
-  $("#fb-save")?.addEventListener("click",async()=>{
-    const status=$("#fb-status");
-    const cfg=parseFirebaseConfig($("#fb-config").value);
-    if(!cfg){status.textContent="設定を読み取れませんでした。apiKeyを含むfirebaseConfigを貼り付けてください。";return;}
-    state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
-    aiModel=null;
-    await kvSet("fb",state.fb).catch(()=>{});
-    render();
-    const st=$("#fb-status"); if(st) st.textContent="保存しました。「接続テスト」で動作確認できます。";
-  });
-  $("#fb-test")?.addEventListener("click",async()=>{
-    const status=$("#fb-status");
-    status.textContent="接続テスト中…";
-    try{
-      const cfg=parseFirebaseConfig($("#fb-config").value);
-      if(cfg){
-        state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
-        aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
-      }
-      const m=await getAIModel();
-      const r=await m.generateContent("接続テストです。「OK」とだけ返してください。");
-      status.textContent="接続成功："+r.response.text().trim().slice(0,40);
-    }catch(err){
-      status.textContent="接続失敗："+friendlyAIError(err);
-    }
-  });
 }
 
 /* ---------- 項目別推移ビュー ---------- */
@@ -997,7 +1013,9 @@ function itemCard(item){
     <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
-      ${a.photos.length<4?`<label class="photo-add"><span>＋</span><span>撮影・追加</span><input type="file" accept="image/*" capture="environment" hidden data-photo="${item.id}"></label>`:""}
+      ${a.photos.length<4?`
+      <label class="photo-add"><span>＋</span><span>撮影</span><input type="file" accept="image/*" capture="environment" hidden data-photo="${item.id}"></label>
+      <label class="photo-add"><span>＋</span><span>フォルダから</span><input type="file" accept="image/*" multiple hidden data-photo="${item.id}"></label>`:""}
     </div>
     ${item.groups.map(g=>`
       <div class="sec-label">${esc(g.label)} <span class="req">必須</span></div>
@@ -1229,6 +1247,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.hwdel!=null&&t.dataset.hwdel!==""){
     state.draft.pdca.homework.splice(+t.dataset.hwdel,1); persistDraft(); render(); return;
   }
+  if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
   if(t.dataset.trend){state.trendStore=t.dataset.trend;state.view="trends";render();scrollTo(0,0);return;}
   if(t.dataset.ai){judgeItem(t.dataset.ai);return;}
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
@@ -1253,14 +1272,16 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",async e=>{
   const t=e.target;
   if(t.dataset.photo!=null){
-    const file=t.files&&t.files[0]; if(!file) return;
-    try{
-      const url=await compressPhoto(file);
-      const id=t.dataset.photo;
-      ans(id).photos.push(url);
-      persistDraft(); refreshCard(id);
-      if(AI_ENABLED&&state.fb&&state.fb.auto) judgeItem(id);
-    }catch(err){alert("写真の読み込みに失敗しました。もう一度お試しください。");}
+    const files=Array.from(t.files||[]); if(!files.length) return;
+    const id=t.dataset.photo; const a=ans(id);
+    let failed=0;
+    for(const file of files){
+      if(a.photos.length>=4) break;
+      try{ a.photos.push(await compressPhoto(file)); }catch(err){ failed++; }
+    }
+    persistDraft(); refreshCard(id);
+    if(failed) alert("一部の写真の読み込みに失敗しました。もう一度お試しください。");
+    if(AI_ENABLED&&state.fb&&state.fb.auto&&a.photos.length) judgeItem(id);
     return;
   }
   if(t.dataset.field){

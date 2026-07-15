@@ -68,6 +68,20 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .hd .bar{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .hd h1{font-size:16px;font-weight:700}
 .hd .meta{font-size:12px;color:var(--sub)}
+.item-alert{margin-top:10px;background:var(--bad-bg);color:var(--bad);font-size:12px;font-weight:700;border-radius:8px;padding:8px 10px}
+.trend-bars{display:flex;gap:3px;align-items:flex-end;height:48px;margin-top:8px}
+.tb{width:12px;border-radius:4px 4px 0 0;background:var(--line);min-height:4px}
+.tb.lv5,.tb.lv4{background:var(--good)}
+.tb.lv3{background:var(--warn)}
+.tb.lv2,.tb.lv1{background:var(--bad)}
+.month-row{display:flex;gap:8px;margin-top:10px;overflow-x:auto;padding-bottom:2px}
+.mcell{text-align:center;min-width:48px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;flex:0 0 auto}
+.mcell .mk{font-size:10px;color:var(--sub);white-space:nowrap}
+.mcell .mv{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+.mcell .mb{height:3px;border-radius:2px;margin-top:3px;background:var(--line)}
+.mcell .mb.lv5,.mcell .mb.lv4{background:var(--good)}
+.mcell .mb.lv3{background:var(--warn)}
+.mcell .mb.lv2,.mcell .mb.lv1{background:var(--bad)}
 .save-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
 .save-state{font-size:11px;color:var(--sub)}
 .save-btn{font-size:12px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 14px;background:var(--card);white-space:nowrap}
@@ -501,6 +515,39 @@ function computeAutoTasks(draft){
 function pdcaComplete(draft){
   return !draft.pdca.homework.some(h=>!filled(h.text));
 }
+/* ---------- 項目別の推移・アラート ---------- */
+const ALERT_LOW=3;      // 3点以下を「低評価」とする
+const ALERT_COUNT=5;    // 低評価が5回以上でアラート
+function completedFor(store){
+  return state.inspections.filter(i=>i.store===store&&i.completedAt)
+    .sort((a,b)=>(a.date+a.completedAt).localeCompare(b.date+b.completedAt));
+}
+function score5Of(item,insp){
+  const a=insp.answers&&insp.answers[item.id]; if(!a) return null;
+  const s=itemScoreOf(item,a); return s==null?null:Math.round(s/25)+1;
+}
+function itemHistory(store,item){
+  return completedFor(store).map(i=>({date:i.date,s5:score5Of(item,i)})).filter(h=>h.s5!=null);
+}
+function lowCount(store,item){return itemHistory(store,item).filter(h=>h.s5<=ALERT_LOW).length;}
+function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
+function monthlyAvg(hist){
+  const m={};
+  hist.forEach(h=>{const k=h.date.slice(0,7);(m[k]||(m[k]=[])).push(h.s5);});
+  return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(([k,v])=>({month:k,avg:v.reduce((a,b)=>a+b,0)/v.length}));
+}
+function beep(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.value=880;g.gain.value=0.12;o.start();
+    o.frequency.setValueAtTime(660,ctx.currentTime+0.15);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.45);
+    o.stop(ctx.currentTime+0.45);
+  }catch(e){}
+}
 function progressRatio(draft){
   const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length + (pdcaComplete(draft)?1:0);
   return done/(ALL_ITEMS.length+1);
@@ -664,6 +711,7 @@ function render(){
   if(state.view==="home") html=viewHome();
   else if(state.view==="check") html=viewCheck();
   else if(state.view==="report") html=viewReport();
+  else if(state.view==="trends") html=viewTrends();
   app.innerHTML=html;
   if(state.view==="home") bindHome();
 }
@@ -742,6 +790,16 @@ function viewHome(){
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
     </div>`:""}
     <div class="card">
+      <h3>項目別の推移・アラート</h3>
+      <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
+      ${stores.length?stores.map(s=>{
+        const n=storeAlerts(s).length;
+        return `<div class="hw-item"><button class="list-card" data-trend="${esc(s)}">
+          <span><b>${esc(s)}</b>${n?`<span class="hw-meta">　<span style="color:var(--bad);font-weight:700">⚠ アラート ${n}件</span></span>`:""}</span>
+          <span style="color:var(--accent);font-weight:700;font-size:13px">推移を見る</span>
+        </button></div>`;}).join(""):`<p class="empty">完了したチェックがまだありません。チェックを重ねると推移が見られます。</p>`}
+    </div>
+    <div class="card">
       <h3>データの保存・バックアップ</h3>
       <p class="desc">チェックの記録と下書きは、この端末のブラウザ内に自動保存されます。機種変更・他の端末への引き継ぎ・念のための控えには、ファイルへの書き出しを使ってください。</p>
       <div style="display:flex;gap:10px;margin-top:12px">
@@ -785,6 +843,8 @@ function bindHome(){
       prevDate:last?last.date:"",
     };
     persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+    const alerts=storeAlerts(store);
+    if(alerts.length){ showToast(`⚠ 3点以下が${ALERT_COUNT}回以上の項目が${alerts.length}件あります`); beep(); }
   });
   $("#resume")?.addEventListener("click",()=>{state.view="check";render();scrollTo(0,0);});
   $("#discard")?.addEventListener("click",async()=>{
@@ -822,6 +882,43 @@ function bindHome(){
       status.textContent="接続失敗："+friendlyAIError(err);
     }
   });
+}
+
+/* ---------- 項目別推移ビュー ---------- */
+function viewTrends(){
+  const store=state.trendStore;
+  const hist=completedFor(store);
+  const alerts=storeAlerts(store);
+  return `
+  <header class="hd"><div class="bar" style="padding-bottom:10px">
+    <h1>${esc(store)}｜項目別の推移</h1><span class="meta">チェック${hist.length}回分</span>
+  </div></header>
+  <div class="wrap">
+    ${alerts.length?`<div class="card" style="border-color:var(--bad)">
+      <h3 style="color:var(--bad)">⚠ アラート（3点以下が${ALERT_COUNT}回以上）</h3>
+      ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
+    </div>`:`<div class="card"><h3>アラートはありません</h3><p class="desc">3点以下が${ALERT_COUNT}回以上になった項目はありません。</p></div>`}
+    <p class="desc" style="margin:0 2px 12px">縦棒は各チェックの点数（1〜5点・直近12回）、下の欄は月ごとの平均点です。</p>
+    ${CHECK_CATS.map(cat=>`
+    <div class="card"><h3>${esc(cat.name)}</h3>
+      ${cat.items.map(it=>{
+        const h=itemHistory(store,it);
+        if(!h.length) return `<div class="rep-item"><div class="nm"><span>${esc(it.name)}</span></div><p class="empty">データがまだありません</p></div>`;
+        const ma=monthlyAvg(h);
+        const diff=ma.length<2?null:ma[ma.length-1].avg-ma[0].avg;
+        const trend=diff==null?`<span style="color:var(--sub);font-size:12px">データ1ヶ月分</span>`
+          :diff>0.2?`<span style="color:var(--good);font-size:12px;font-weight:700">改善 +${diff.toFixed(1)}</span>`
+          :diff<-0.2?`<span style="color:var(--bad);font-size:12px;font-weight:700">悪化 ${diff.toFixed(1)}</span>`
+          :`<span style="color:var(--sub);font-size:12px">横ばい</span>`;
+        const lc=lowCount(store,it);
+        return `<div class="rep-item">
+          <div class="nm"><span>${esc(it.name)}${lc>=ALERT_COUNT?` <span class="badge issue">⚠ 3点以下${lc}回</span>`:""}</span>${trend}</div>
+          <div class="trend-bars">${h.slice(-12).map(p=>`<div class="tb lv${p.s5}" style="height:${p.s5*20}%" title="${fmtDate(p.date)}：${p.s5}点"></div>`).join("")}</div>
+          <div class="month-row">${ma.slice(-6).map(m=>`<div class="mcell"><div class="mk">${m.month.slice(2,4)}/${+m.month.slice(5)}</div><div class="mv">${m.avg.toFixed(1)}</div><div class="mb lv${Math.round(m.avg)}"></div></div>`).join("")}</div>
+        </div>`;}).join("")}
+    </div>`).join("")}
+    <button class="btn" id="to-home">ホームへ戻る</button>
+  </div>`;
 }
 
 /* ---------- バックアップ ---------- */
@@ -895,6 +992,8 @@ function itemCard(item){
   <section class="card ${complete?"done":""}" id="card-${item.id}">
     <h3>${esc(item.name)} ${badge}</h3>
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
+    ${(()=>{const lc=state.draft?lowCount(state.draft.store,item):0;
+      return lc>=ALERT_COUNT?`<div class="item-alert">⚠ アラート：この項目は3点以下が${lc}回になっています。重点的に確認・改善してください。</div>`:"";})()}
     <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
@@ -1023,6 +1122,17 @@ function reportBody(insp,isPreview){
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
     </div>
   </section>
+  ${(()=>{
+    const alerts=ALL_ITEMS.map(it=>{
+      const prior=state.inspections.filter(i=>i.store===insp.store&&i.completedAt&&i.id!==insp.id);
+      let c=prior.reduce((n,i)=>{const s=score5Of(it,i);return n+(s!=null&&s<=ALERT_LOW?1:0);},0);
+      const cur=score5Of(it,insp); if(cur!=null&&cur<=ALERT_LOW)c++;
+      return {it,c};
+    }).filter(x=>x.c>=ALERT_COUNT);
+    return alerts.length?`<section class="card" style="border-color:var(--bad)">
+      <h3 style="color:var(--bad)">⚠ アラート項目（3点以下が${ALERT_COUNT}回以上）</h3>
+      ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
+    </section>`:"";})()}
   ${CHECK_CATS.map(cat=>`
   <section class="card">
     <h3>${esc(cat.name)}</h3>
@@ -1119,6 +1229,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.hwdel!=null&&t.dataset.hwdel!==""){
     state.draft.pdca.homework.splice(+t.dataset.hwdel,1); persistDraft(); render(); return;
   }
+  if(t.dataset.trend){state.trendStore=t.dataset.trend;state.view="trends";render();scrollTo(0,0);return;}
   if(t.dataset.ai){judgeItem(t.dataset.ai);return;}
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
   if(t.dataset.jump){

@@ -530,6 +530,26 @@ function itemHistory(store,item){
   return completedFor(store).map(i=>({date:i.date,s5:score5Of(item,i)})).filter(h=>h.s5!=null);
 }
 function lowCount(store,item){return itemHistory(store,item).filter(h=>h.s5<=ALERT_LOW).length;}
+function aiScoreOf(item,a){
+  if(!a||!a.ai||!a.ai.suggest) return null;
+  let sum=0;
+  for(const g of item.groups){
+    const o=g.options.find(o=>o.v===a.ai.suggest[g.key]);
+    if(!o) return null; sum+=o.s;
+  }
+  return Math.round(sum/item.groups.length);
+}
+function aiTotalScore(insp){
+  const ss=ALL_ITEMS.map(it=>aiScoreOf(it,insp.answers&&insp.answers[it.id])).filter(s=>s!=null);
+  return ss.length?Math.round(ss.reduce((a,b)=>a+b,0)/ss.length):null;
+}
+function storeRanking(){
+  const stores=[...new Set(state.inspections.filter(i=>i.completedAt).map(i=>i.store))];
+  return stores.map(s=>{
+    const list=completedFor(s); const last=list[list.length-1];
+    return {store:s,score:last.totalScore,date:last.date,alerts:storeAlerts(s).length};
+  }).sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
+}
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
 function monthlyAvg(hist){
   const m={};
@@ -580,6 +600,9 @@ function compressPhoto(file){return new Promise((res,rej)=>{
    無効にするには FEATURE_AI を false に（?ai=on のURLで一時的に有効化も可）。 */
 const FEATURE_AI=true;
 const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
+// 共通のFirebase設定。ここに設定を書き込むと全ユーザー共通になり、個人での設定が不要になる。
+// 例: const SHARED_FB_CONFIG={config:{apiKey:"AIza...",authDomain:"xxx.firebaseapp.com",projectId:"xxx",appId:"1:..."},model:"gemini-3.5-flash",auto:true};
+const SHARED_FB_CONFIG=null;
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[
@@ -764,6 +787,18 @@ function viewHome(){
       <div id="prev-hw"></div>
       <div style="margin-top:16px"><button class="btn" id="start">チェックを開始する</button></div>
     </div>
+    ${(()=>{const rank=storeRanking();
+      if(!rank.length) return "";
+      return `<div class="card">
+      <h3>全店舗ランキング（総合点が低い順）</h3>
+      <p class="desc">各店舗の最新チェックの総合点を低い順に並べています。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
+      ${rank.map((r,i)=>`
+        <div class="hw-item"><button class="list-card" data-trend="${esc(r.store)}">
+          <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
+            <span class="hw-meta">　最終：${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
+          <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
+        </button></div>`).join("")}
+      </div>`;})()}
     <div class="card">
       <h3>項目別の推移・アラート</h3>
       <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
@@ -803,7 +838,12 @@ function viewAdmin(){
     <h1>管理画面</h1><span class="meta">AI判定の設定</span>
   </div></header>
   <div class="wrap">
-    ${AI_ENABLED?`
+    ${AI_ENABLED&&SHARED_FB_CONFIG?`
+    <div class="card">
+      <h3>写真AI自動判定 <span class="badge done">利用可能（設定不要）</span></h3>
+      <p class="desc">AI判定の設定はアプリに組み込み済みです。個人での設定は不要で、写真を追加するとそのままAI判定（補助）が使えます。使用モデル：${esc(SHARED_FB_CONFIG.model||DEFAULT_AI_MODEL)}</p>
+    </div>`:""}
+    ${AI_ENABLED&&!SHARED_FB_CONFIG?`
     <div class="card">
       <h3>写真AI自動判定の設定 <span class="badge ${aiConfigured()?"done":"todo"}">${aiConfigured()?"設定済み":"未設定"}</span></h3>
       <p class="desc">Firebase AI Logic（Gemini）で、アップロードした写真から評価の候補を提案します。<b>AIの判定はあくまで補助</b>で、評価は必ず人が確認して確定します。Firebaseコンソールの「firebaseConfig」を貼り付けて保存してください。</p>
@@ -829,7 +869,8 @@ function viewAdmin(){
         <button class="btn ghost" id="fb-test">接続テスト</button>
       </div>
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
-    </div>`:`<div class="card"><p class="empty">AI機能は現在無効化されています。</p></div>`}
+    </div>`:""}
+    ${AI_ENABLED?"":`<div class="card"><p class="empty">AI機能は現在無効化されています。</p></div>`}
     <button class="btn" id="to-home">ホームへ戻る</button>
   </div>`;
 }
@@ -881,7 +922,7 @@ function bindHome(){
     state.draft={
       id:"insp-"+Date.now().toString(36), store, inspector, date,
       startedAt:new Date().toISOString(), answers:{},
-      pdca:{ homework:[],nextVisit:"",interview:{} },
+      pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
     };
     persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
@@ -1076,7 +1117,6 @@ function pdcaView(){
         <button class="del-row" data-hwdel="${i}">この宿題を削除</button>
       </div>`).join("")}
     <div style="margin-top:12px"><button class="btn sub" id="hw-add">＋ 宿題を追加</button></div>
-    <div class="field"><label>次回来店予定日</label><input type="date" value="${esc(p.nextVisit)}" data-pdca-date="nextVisit"></div>
   </section>`;
 }
 
@@ -1138,6 +1178,7 @@ function reportBody(insp,isPreview){
       <h2>${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}</h2>
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
+      ${(()=>{const ai=aiTotalScore(insp);return ai!=null?`<div class="meta" style="margin-top:8px">AI判定の平均：${ai}点／100（補助）</div>`:"";})()}
     </div>
   </section>
   ${(()=>{
@@ -1155,11 +1196,11 @@ function reportBody(insp,isPreview){
   <section class="card">
     <h3>${esc(cat.name)}</h3>
     ${cat.items.map(it=>{
-      const a=byId(it.id); const sc=itemScoreOf(it,a);
+      const a=byId(it.id); const sc=itemScoreOf(it,a); const aiSc=aiScoreOf(it,a);
       const extras=(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
         .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`).join("／");
       return `<div class="rep-item">
-        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}</span></div>
+        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}${aiSc!=null?`<span class="hw-meta">（AI：${aiSc}点）</span>`:""}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
         ${AI_ENABLED&&a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
@@ -1179,7 +1220,6 @@ function reportBody(insp,isPreview){
     <h3>次回までの宿題・タスク（${insp.homework.length+insp.autoTasks.length}件）</h3>
     ${[...insp.homework,...insp.autoTasks].map(h=>`<div class="hw-item">${esc(h.text)}${h.auto?` <span class="badge todo">自動作成</span>`:""}
       <div class="hw-meta">担当：${esc(h.owner||"—")}／期限：${fmtDate(h.due)}／優先度：${esc(h.priority||"—")}</div></div>`).join("")||`<p class="empty">宿題はありません。</p>`}
-    <div class="txt-block"><div class="k">次回来店予定日</div><div class="v">${fmtDate(insp.pdca.nextVisit)}</div></div>
   </section>`;
 }
 function itemScoreOf(item,a){
@@ -1307,11 +1347,15 @@ document.addEventListener("input",e=>{
     state.inspections=(await allInspections())||[];
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
-    state.fb=(await kvGet("fb"))||null;
-    // 提供終了した旧モデル設定を自動で現行モデルへ移行
-    if(state.fb&&/^gemini-2\.5/.test(state.fb.model||"")){
-      state.fb.model=DEFAULT_AI_MODEL;
-      kvSet("fb",state.fb).catch(()=>{});
+    if(SHARED_FB_CONFIG){
+      state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
+    }else{
+      state.fb=(await kvGet("fb"))||null;
+      // 提供終了した旧モデル設定を自動で現行モデルへ移行
+      if(state.fb&&/^gemini-2\.5/.test(state.fb.model||"")){
+        state.fb.model=DEFAULT_AI_MODEL;
+        kvSet("fb",state.fb).catch(()=>{});
+      }
     }
   }catch(e){ /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */ }
   render();

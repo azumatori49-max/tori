@@ -28,6 +28,16 @@ npx http-server rakuraku-check
 - 判定理由と信頼度は最終報告書にも記載されます
 - 本番運用時は、Google CloudコンソールでAPIキーに「HTTPリファラー制限」を設定することを推奨します
 
+## セキュリティ（無断利用・不正アクセス対策）
+
+3層で保護します。①はアプリに実装済み、②③はFirebase/Google Cloud側の設定が必要です。
+
+1. **アクセスコードゲート（実装済み）** — アプリを開くとコード入力画面が表示され、正しいコードを入れるまで使えません（入力は端末に記憶され、次回からは不要）。コードの変更は `index.html` の `ACCESS_CODE_HASH` を新しいコードのSHA-256ハッシュに置き換えます。※静的ページのため確実な防御は②③で行い、①は簡易的な抑止です
+2. **Firebase App Check（推奨・AI利用の本命の防御）** — Firebaseコンソール → **App Check** → ウェブアプリに **reCAPTCHA v3** を登録しサイトキーを取得 → `index.html` の `SHARED_APPCHECK_SITE_KEY` に設定 → コンソールで **Firebase AI Logic API の「適用（Enforce）」を有効化**。これで承認したサイト以外からのAI呼び出しはGoogleのサーバー側で拒否されます
+3. **APIキーのHTTPリファラー制限** — [Google Cloudコンソールの認証情報](https://console.cloud.google.com/apis/credentials)で対象のAPIキーを開き、「アプリケーションの制限」→「ウェブサイト」で `https://azumatori49-max.github.io/*` を追加。キーが他のサイトで無断利用されるのを防ぎます
+
+なお、チェック記録・写真は各端末のブラウザ内にのみ保存され、サーバーには送信されません（AI判定時の写真はGoogleのAPIに送信されます）。
+
 ## 実装済みの仕様
 
 - **基本ルール**

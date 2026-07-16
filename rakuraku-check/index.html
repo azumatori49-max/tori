@@ -603,6 +603,12 @@ const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="o
 // 共通のFirebase設定。ここに設定を書き込むと全ユーザー共通になり、個人での設定が不要になる。
 // 例: const SHARED_FB_CONFIG={config:{apiKey:"AIza...",authDomain:"xxx.firebaseapp.com",projectId:"xxx",appId:"1:..."},model:"gemini-3.5-flash",auto:true};
 const SHARED_FB_CONFIG=null;
+// Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
+// AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
+const SHARED_APPCHECK_SITE_KEY=null;
+// アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
+// 変更するときは新しいコードのSHA-256（16進）に置き換える。null でゲート無効。
+const ACCESS_CODE_HASH="fa1ce0516b18b8c8cabffb772fe8593f6751b3cb33283fe8ac32a6c48b0feb11";
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[
@@ -631,6 +637,13 @@ async function getAIModel(){
     ]);
   }catch(e){ throw new Error("Firebase SDKを読み込めませんでした。ネットワーク接続を確認してください（プレビュー環境では外部接続がブロックされる場合があります）。"); }
   const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(state.fb.config);
+  if(SHARED_APPCHECK_SITE_KEY&&!getAIModel._appCheckDone){
+    try{
+      const acMod=await import(`https://www.gstatic.com/firebasejs/${FB_SDK_VERSION}/firebase-app-check.js`);
+      acMod.initializeAppCheck(app,{provider:new acMod.ReCaptchaV3Provider(SHARED_APPCHECK_SITE_KEY),isTokenAutoRefreshEnabled:true});
+      getAIModel._appCheckDone=true;
+    }catch(e){ /* App Checkが読み込めない環境でもAI呼び出し自体は試みる（サーバー側で拒否される） */ }
+  }
   const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
   aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||DEFAULT_AI_MODEL});
   return aiModel;
@@ -729,8 +742,47 @@ function aiSection(item,a){
 
 /* ================= 描画 ================= */
 const app=$("#app");
+async function sha256hex(s){
+  const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function viewLock(){
+  return `
+  <div class="home-hero" style="text-align:center;padding-top:64px">
+    <div style="display:flex;justify-content:center">${LOGO_SVG.replace("<svg ","<svg style=\"width:88px;height:88px\" ")}</div>
+    <h1 style="margin-top:12px">らくらく臨店チェック</h1>
+    <p style="margin:8px auto 0">アクセスコードを入力してください。</p>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="field"><label>アクセスコード</label>
+        <input type="password" id="lock-code" autocomplete="off" inputmode="text" placeholder="コードを入力">
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="lock-go">解除する</button></div>
+      <p class="note" id="lock-msg">コードがわからない場合は、管理者にお問い合わせください。</p>
+    </div>
+  </div>`;
+}
+function bindLock(){
+  const tryUnlock=async()=>{
+    const code=$("#lock-code").value.trim();
+    if(!code) return;
+    try{
+      const h=await sha256hex(code);
+      if(h===ACCESS_CODE_HASH){
+        await kvSet("access",h).catch(()=>{});
+        state.locked=false; render(); return;
+      }
+    }catch(e){}
+    const m=$("#lock-msg"); if(m){m.textContent="コードが違います。もう一度お試しください。";m.style.color="var(--bad)";}
+  };
+  $("#lock-go")?.addEventListener("click",tryUnlock);
+  $("#lock-code")?.addEventListener("keydown",e=>{if(e.key==="Enter")tryUnlock();});
+  $("#lock-code")?.focus();
+}
 function render(){
   let html="";
+  if(state.locked){app.innerHTML=viewLock();bindLock();return;}
   if(state.view==="home") html=viewHome();
   else if(state.view==="check") html=viewCheck();
   else if(state.view==="report") html=viewReport();
@@ -1344,6 +1396,10 @@ document.addEventListener("input",e=>{
 (async function init(){
   try{
     db=await openDB();
+    if(ACCESS_CODE_HASH){
+      const ok=await kvGet("access").catch(()=>null);
+      if(ok!==ACCESS_CODE_HASH) state.locked=true;
+    }
     state.inspections=(await allInspections())||[];
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
@@ -1357,7 +1413,10 @@ document.addEventListener("input",e=>{
         kvSet("fb",state.fb).catch(()=>{});
       }
     }
-  }catch(e){ /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */ }
+  }catch(e){
+    /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */
+    if(ACCESS_CODE_HASH) state.locked=true;
+  }
   render();
 })();
 </script>

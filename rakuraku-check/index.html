@@ -899,13 +899,21 @@ function viewHome(){
       <div id="prev-hw"></div>
       <div style="margin-top:16px"><button class="btn" id="start">チェックを開始する</button></div>
     </div>
+    ${state.inspections.length?`
+    <div class="card">
+      <h3>店舗検索</h3>
+      <div class="field"><label>店舗名で絞り込み</label>
+        <input id="search-store" autocomplete="off" placeholder="店舗名を入力すると、下の一覧が絞り込まれます">
+      </div>
+      <p class="note" id="search-hit" style="border:none;padding-top:4px;margin-top:2px"></p>
+    </div>`:""}
     ${(()=>{const rank=storeRanking();
       if(!rank.length) return "";
       return `<div class="card">
       <h3>全店舗ランキング（総合点が低い順）</h3>
       <p class="desc">各店舗の最新チェックの総合点を低い順に並べています。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
       ${rank.map((r,i)=>`
-        <div class="hw-item"><button class="list-card" data-trend="${esc(r.store)}">
+        <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
           <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
             <span class="hw-meta">　最終：${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
@@ -914,7 +922,7 @@ function viewHome(){
     ${(()=>{const ds=dangerStores(); if(!ds.length) return ""; return `<div class="card" style="border-color:var(--bad)">
       <h3 style="color:var(--bad)">⚠ 面談リスクの高い店舗</h3>
       <p class="desc">面談内容のAI分析でリスクが検出された店舗です（補助情報）。タップで報告書を確認できます。</p>
-      ${ds.map(d=>`<div class="hw-item"><button class="list-card" data-open="${esc(d.id)}">
+      ${ds.map(d=>`<div class="hw-item" data-sname="${esc(d.store)}"><button class="list-card" data-open="${esc(d.id)}">
         <span><b>${esc(d.store)}</b> ${riskBadge({level:d.level,risk:d.risk})}<span class="hw-meta">　${fmtDate(d.date)}${d.summary?`／${esc(String(d.summary).slice(0,24))}…`:""}</span></span>
         <span class="sc" style="color:${d.level==="高"?"var(--bad)":"var(--warn)"}">${d.risk}</span>
       </button></div>`).join("")}
@@ -924,7 +932,7 @@ function viewHome(){
       <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
       ${stores.length?stores.map(s=>{
         const n=storeAlerts(s).length;
-        return `<div class="hw-item"><button class="list-card" data-trend="${esc(s)}">
+        return `<div class="hw-item" data-sname="${esc(s)}"><button class="list-card" data-trend="${esc(s)}">
           <span><b>${esc(s)}</b>${n?`<span class="hw-meta">　<span style="color:var(--bad);font-weight:700">⚠ アラート ${n}件</span></span>`:""}</span>
           <span style="color:var(--accent);font-weight:700;font-size:13px">推移を見る</span>
         </button></div>`;}).join(""):`<p class="empty">完了したチェックがまだありません。チェックを重ねると推移が見られます。</p>`}
@@ -940,7 +948,7 @@ function viewHome(){
     <div class="card">
       <h3>過去のチェック</h3>
       ${past.length?past.map(i=>`
-        <div class="hw-item">
+        <div class="hw-item" data-sname="${esc(i.store)}">
           <button class="list-card" data-open="${esc(i.id)}">
             <span><b>${esc(i.store)}</b><span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc">${i.totalScore}<small>点</small></span>
@@ -1090,6 +1098,17 @@ function bindHome(){
   document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{
     state.reportId=b.dataset.open; state.view="report"; render(); scrollTo(0,0);
   }));
+  $("#search-store")?.addEventListener("input",e=>{
+    const q=e.target.value.trim().toLowerCase();
+    let hits=0, total=0;
+    document.querySelectorAll("[data-sname]").forEach(el=>{
+      const on=!q||el.dataset.sname.toLowerCase().includes(q);
+      el.style.display=on?"":"none";
+      total++; if(on) hits++;
+    });
+    const h=$("#search-hit");
+    if(h) h.textContent=q?`「${e.target.value.trim()}」に一致：ランキング・推移・過去のチェックを絞り込み中（該当 ${hits}行）`:"";
+  });
   $("#bk-export")?.addEventListener("click",exportBackup);
   $("#bk-import")?.addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
 }

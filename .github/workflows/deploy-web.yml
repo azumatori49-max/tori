@@ -73,6 +73,17 @@ jobs:
       - name: SPA fallback (deep-link / reload 対応)
         run: cp dist/index.html dist/404.html
 
+      # らくらく臨店チェック（claude/store-checklist-app-ld80bz ブランチ）を
+      # /rakuraku-check として同じ Pages サイトに含める。
+      # これが無いと、このワークフローのデプロイで臨店チェックが消えてしまう。
+      - name: Include rakuraku-check (らくらく臨店チェック)
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin claude/store-checklist-app-ld80bz --depth=1
+          git checkout FETCH_HEAD -- rakuraku-check
+          mkdir -p tsundokudo/dist/rakuraku-check
+          cp -r rakuraku-check/* tsundokudo/dist/rakuraku-check/
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

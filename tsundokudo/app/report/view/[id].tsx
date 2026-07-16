@@ -15,6 +15,7 @@ import { C } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { formatWorkDate } from '@/lib/format';
 import { exportReportPdf } from '@/lib/exportPdf';
+import { pdfBlockReason } from '@/lib/reportValidation';
 import { notify } from '@/lib/dialog';
 import type { ReportPhoto } from '@/types/report';
 
@@ -71,6 +72,11 @@ export default function ReportViewScreen() {
   async function onExport() {
     try {
       if (!report) return;
+      const reason = pdfBlockReason(report);
+      if (reason) {
+        notify('PDFに変換できません', `未完成の項目があります。\n${reason}`);
+        return;
+      }
       const res = await exportReportPdf(report);
       if (res.message) notify('PDF', res.message);
     } catch (e) {

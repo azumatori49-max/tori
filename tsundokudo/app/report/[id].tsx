@@ -42,6 +42,7 @@ import {
 import { C, CONDITION_COLOR } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { exportReportPdf } from '@/lib/exportPdf';
+import { pdfBlockReason } from '@/lib/reportValidation';
 import type {
   AnnualSchedule,
   ChecklistItem,
@@ -180,56 +181,9 @@ export default function ReportFormScreen() {
   }
 
   async function onSave() {
+    // 途中でも一時保存できる（写真などの必須チェックはPDF出力時に行う）
     if (!form.storeName.trim()) {
       notify('店舗名を入力してください');
-      return;
-    }
-    if (!form.pestControl.presence) {
-      notify(
-        '害虫の状況を選択してください',
-        '害虫駆除の「多い・少ない・見ない」のいずれかを選んでください。',
-      );
-      return;
-    }
-    // 写真はすべて必須（トッピングを除く各セクション）
-    if (form.photos.length === 0) {
-      notify(
-        '写真を添付してください',
-        '「写真」欄（店舗外観など）に1枚以上添付してください。',
-      );
-      return;
-    }
-    const noPhotoCheck = form.checklist.find(
-      (c) => c.photos.length === 0 && !OPTIONAL_PHOTO_CHECK_NAMES.includes(c.name),
-    );
-    if (noPhotoCheck) {
-      notify(
-        '写真を添付してください',
-        `定期点検「${noPhotoCheck.name}」に写真を添付してください。\n（項目にチェックを入れると写真を追加できます）`,
-      );
-      return;
-    }
-    if (form.pestControl.photos.length === 0) {
-      notify(
-        '写真を添付してください',
-        '害虫駆除の欄に写真を1枚以上添付してください。',
-      );
-      return;
-    }
-    const noPhotoDiy = form.diy.find((d) => d.photos.length === 0);
-    if (noPhotoDiy) {
-      notify(
-        '写真を添付してください',
-        `プチDIY「${noPhotoDiy.name.trim() || '追加した項目'}」に写真を添付してください。`,
-      );
-      return;
-    }
-    const annual = form.annualSchedule;
-    if ((annual.comment.trim() || annual.fee > 0) && annual.photos.length === 0) {
-      notify(
-        '写真を添付してください',
-        '年間スケジュールを入力した場合は写真を添付してください。',
-      );
       return;
     }
     const ok = isNew
@@ -243,6 +197,12 @@ export default function ReportFormScreen() {
   }
 
   async function onExport() {
+    // 提出（PDF）は必須項目が揃っていないと出力できない
+    const reason = pdfBlockReason(form);
+    if (reason) {
+      notify('PDFに変換できません', `未完成の項目があります。\n${reason}`);
+      return;
+    }
     try {
       const res = await exportReportPdf(form);
       if (res.message) notify('PDF', res.message);
@@ -358,11 +318,12 @@ export default function ReportFormScreen() {
 
           {/* ── 写真 ── */}
           <SectionTitle>
-            写真 <Text style={styles.required}>必須</Text>
+            写真 <Text style={styles.required}>PDF出力に必須</Text>
           </SectionTitle>
           <Card>
             <Text style={styles.hintText}>
-              各項目に写真の添付が必要です（店舗外観・定期点検の全項目・害虫駆除・プチDIY・年間スケジュール）。
+              写真がなくても「保存」で一時保存できます。
+              PDF出力（提出）には各項目の写真が必要です（「任意」表示の項目を除く）。
             </Text>
             <PhotoSection
               photos={form.photos}
@@ -416,7 +377,7 @@ export default function ReportFormScreen() {
 
           {/* ── 定期点検 ── */}
           <SectionTitle>
-            定期点検 <Text style={styles.required}>写真必須</Text>
+            定期点検 <Text style={styles.required}>写真はPDF出力に必須</Text>
             <Text style={styles.optionalTag}>（「任意」表示の項目を除く）</Text>
           </SectionTitle>
           {form.checklist.map((item, idx) => (
@@ -516,7 +477,7 @@ export default function ReportFormScreen() {
               />
             </View>
             <Text style={styles.subLabel}>
-              害虫の状況（いるかいないか）<Text style={styles.required}>必須</Text>
+              害虫の状況（いるかいないか）<Text style={styles.required}>PDF出力に必須</Text>
             </Text>
             <ChipSelect
               options={[...PEST_PRESENCE_OPTIONS]}
@@ -532,7 +493,7 @@ export default function ReportFormScreen() {
               }
             />
             <Text style={styles.subLabel}>
-              写真（最大6枚）<Text style={styles.required}>必須</Text>
+              写真（最大6枚）<Text style={styles.required}>PDF出力に必須</Text>
             </Text>
             <PhotoSection
               photos={form.pestControl.photos}

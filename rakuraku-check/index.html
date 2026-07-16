@@ -710,7 +710,7 @@ const autoJudgeTimers={};
 let aiGen=0;  // まとめて判定の後に古い単体判定が上書きしないようにする世代番号
 function scheduleAutoJudge(id){
   clearTimeout(autoJudgeTimers[id]);
-  autoJudgeTimers[id]=setTimeout(()=>{ if(!aiBusy.has(id)) judgeItem(id); },2000);
+  autoJudgeTimers[id]=setTimeout(()=>{ if(state.draft&&!aiBusy.has(id)) judgeItem(id); },2000);
 }
 // 写真のある全項目を、API呼び出し1回でまとめて判定する（利用制限の節約）
 let batchBusy=false, batchErr="";
@@ -748,6 +748,7 @@ async function judgeAllItems(){
   finally{ batchBusy=false; render(); }
 }
 async function judgeItem(itemId){
+  if(!state.draft) return;
   const item=findItem(itemId); if(!item) return;
   const a=ans(itemId);
   if(!a.photos.length){alert("先に写真を追加してください。");return;}
@@ -1680,6 +1681,7 @@ document.addEventListener("click",async e=>{
   if(t.id==="finalize"){
     const missing=collectMissing();
     if(missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
+    for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
     const insp=buildInspection(state.draft,false);
     await putInspection(insp).catch(()=>{}); await kvDel("draft");
     if(fsDb){ cloudSave(insp).catch(()=>showToast("クラウドへの保存に失敗しました（この端末には保存済み。オンラインになると自動では再送されないため、後で管理画面から状態を確認してください）")); }

@@ -417,7 +417,7 @@ export default function ReportFormScreen() {
           {/* ── 定期点検 ── */}
           <SectionTitle>
             定期点検 <Text style={styles.required}>写真必須</Text>
-            <Text style={styles.optionalTag}>（グリストラップ洗浄は任意）</Text>
+            <Text style={styles.optionalTag}>（「任意」表示の項目を除く）</Text>
           </SectionTitle>
           {form.checklist.map((item, idx) => (
             <Card key={item.name}>

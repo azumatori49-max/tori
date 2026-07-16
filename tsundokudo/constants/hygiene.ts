@@ -21,7 +21,11 @@ export const CONDITION_OPTIONS: ConditionLabel[] = [
 ];
 
 /** 写真の添付を任意にする定期点検の項目名 */
-export const OPTIONAL_PHOTO_CHECK_NAMES: string[] = ['グリストラップ洗浄'];
+export const OPTIONAL_PHOTO_CHECK_NAMES: string[] = [
+  'グリストラップ洗浄',
+  '厨房換気扇フィルター清掃',
+  '入口チャイム確認',
+];
 
 /** まとめ項目「各種フィルター清掃」の内訳（1枚の写真にまとめて撮影する運用） */
 export const FILTER_GROUP_NAME = '各種フィルター清掃';

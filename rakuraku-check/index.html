@@ -690,6 +690,73 @@ async function judgeItem(itemId){
     aiBusy.delete(itemId); refreshCard(itemId);
   }
 }
+let ivBusy=false, ivErr="";
+async function judgeInterview(){
+  const iv=state.draft.pdca.interview||(state.draft.pdca.interview={});
+  const qs=INTERVIEW_QS.map(q=>({q,t:String(iv[q.key]||"").trim()}));
+  if(!qs.some(x=>x.t)){alert("面談内容が未入力です。5つの質問のいずれかに入力してから実行してください。");return;}
+  if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
+  if(ivBusy) return;
+  ivBusy=true; ivErr=""; render();
+  try{
+    const model=await getAIModel();
+    const prompt=`あなたは飲食チェーンのスーパーバイザーを補佐するAIです。以下は店舗「${state.draft.store}」の社員との面談記録です。
+${qs.map(x=>`${x.q.label}
+${x.t||"（未回答）"}`).join("\n")}
+
+この面談内容を分析し、次のJSONのみを出力してください（コードブロックや説明文は不要）：
+{"summary":"面談内容の要約（100字以内）","risk":0,"level":"高か中か低","concerns":["懸念点を最大4つ"],"reason":"リスク判定の理由（60字以内）"}
+riskは0〜100の整数で、人間関係の悪化・人手不足・退職リスク・設備の故障放置・衛生問題・業務過多などが深刻なほど高くしてください。`;
+    const res=await model.generateContent(prompt);
+    const out=parseAIJson(res.response.text());
+    if(!out||out.summary==null) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
+    iv.ai={
+      summary:String(out.summary||""),
+      risk:Math.max(0,Math.min(100,Math.round(+out.risk||0))),
+      level:["高","中","低"].includes(out.level)?out.level:"中",
+      concerns:Array.isArray(out.concerns)?out.concerns.slice(0,4).map(String):[],
+      reason:String(out.reason||""),
+      at:todayStr(),
+    };
+    persistDraft();
+  }catch(err){ ivErr=friendlyAIError(err); }
+  finally{ ivBusy=false; render(); }
+}
+function riskBadge(ai){
+  const cls=ai.level==="高"?"issue":ai.level==="中"?"todo":"done";
+  return `<span class="badge ${cls}">リスク${esc(ai.level)}・${ai.risk}/100</span>`;
+}
+function ivAiBox(iv){
+  if(!AI_ENABLED) return "";
+  if(ivBusy) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが面談内容を分析しています…</div>`;
+  if(iv.ai){
+    return `<div class="ai-box">
+      <div class="ttl">AI要約・リスク判定（補助）</div>
+      <div class="sug">${riskBadge(iv.ai)}${iv.ai.concerns.map(c=>` <span class="badge todo">${esc(c)}</span>`).join("")}</div>
+      <div style="font-size:13px;margin-top:6px">${esc(iv.ai.summary)}</div>
+      ${iv.ai.reason?`<div class="rsn">理由：${esc(iv.ai.reason)}</div>`:""}
+      <div class="acts"><button class="chip" id="iv-ai">再分析</button></div>
+      <div class="rsn">※AIの分析は補助的な参考情報です。</div>
+    </div>`;
+  }
+  return `<div class="ai-box">
+    ${ivErr?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(ivErr)}</div>`:""}
+    <button class="chip" id="iv-ai">AIで面談内容を要約・リスク判定</button>
+    <div class="rsn">面談の回答をAIが要約し、店舗運営のリスクを点数化します（補助）。</div>
+  </div>`;
+}
+function dangerStores(){
+  const stores=[...new Set(state.inspections.filter(i=>i.completedAt).map(i=>i.store))];
+  return stores.map(s=>{
+    const list=completedFor(s);
+    for(let i=list.length-1;i>=0;i--){
+      const ai=list[i].pdca&&list[i].pdca.interview&&list[i].pdca.interview.ai;
+      if(ai) return {store:s,risk:ai.risk,level:ai.level,date:list[i].date,id:list[i].id,summary:ai.summary};
+    }
+    return null;
+  }).filter(Boolean).filter(x=>x.level==="高"||x.level==="中")
+    .sort((a,b)=>b.risk-a.risk);
+}
 function applyAISuggestion(itemId){
   const item=findItem(itemId); const a=ans(itemId);
   if(!a.ai||!a.ai.suggest) return;
@@ -843,6 +910,14 @@ function viewHome(){
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
         </button></div>`).join("")}
       </div>`;})()}
+    ${(()=>{const ds=dangerStores(); if(!ds.length) return ""; return `<div class="card" style="border-color:var(--bad)">
+      <h3 style="color:var(--bad)">⚠ 面談リスクの高い店舗</h3>
+      <p class="desc">面談内容のAI分析でリスクが検出された店舗です（補助情報）。タップで報告書を確認できます。</p>
+      ${ds.map(d=>`<div class="hw-item"><button class="list-card" data-open="${esc(d.id)}">
+        <span><b>${esc(d.store)}</b> ${riskBadge({level:d.level,risk:d.risk})}<span class="hw-meta">　${fmtDate(d.date)}${d.summary?`／${esc(String(d.summary).slice(0,24))}…`:""}</span></span>
+        <span class="sc" style="color:${d.level==="高"?"var(--bad)":"var(--warn)"}">${d.risk}</span>
+      </button></div>`).join("")}
+    </div>`;})()}
     <div class="card">
       <h3>項目別の推移・アラート</h3>
       <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
@@ -1176,6 +1251,7 @@ function pdcaView(){
       <div class="field"><label>${esc(q.label)}</label>
         <textarea data-iv="${q.key}" placeholder="${esc(q.hint)}">${esc(iv[q.key]||"")}</textarea>
       </div>`).join("")}
+    ${ivAiBox(iv)}
   </section>
   <section class="card" id="card-pdca-homework">
     <h3>次回来店までの宿題</h3>
@@ -1287,6 +1363,10 @@ function reportBody(insp,isPreview){
       <h3>面談記録</h3>
       <div class="txt-block"><div class="k">基本情報</div>
         <div class="v">時間：${esc(iv.start||"—")}〜${esc(iv.end||"—")}／被面談者：${esc(iv.interviewee||"—")}</div></div>
+      ${iv.ai?`<div class="txt-block"><div class="k">AI要約・リスク判定（補助）</div>
+        <div class="v">${riskBadge(iv.ai)}${iv.ai.concerns.map(c=>` <span class="badge todo">${esc(c)}</span>`).join("")}
+${esc(iv.ai.summary)}${iv.ai.reason?`
+理由：${esc(iv.ai.reason)}`:""}</div></div>`:""}
       ${INTERVIEW_QS.filter(q=>filled(iv[q.key])).map(q=>`<div class="txt-block"><div class="k">${esc(q.label)}</div><div class="v">${esc(iv[q.key])}</div></div>`).join("")}
     </section>`;})()}
   <section class="card">
@@ -1361,6 +1441,7 @@ document.addEventListener("click",async e=>{
     state.draft.pdca.homework.splice(+t.dataset.hwdel,1); persistDraft(); render(); return;
   }
   if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
+  if(t.id==="iv-ai"){judgeInterview();return;}
   if(t.dataset.trend){state.trendStore=t.dataset.trend;state.view="trends";render();scrollTo(0,0);return;}
   if(t.dataset.ai){judgeItem(t.dataset.ai);return;}
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}

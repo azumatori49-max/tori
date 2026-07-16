@@ -602,13 +602,13 @@ const FEATURE_AI=true;
 const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
 // 共通のFirebase設定。ここに設定を書き込むと全ユーザー共通になり、個人での設定が不要になる。
 // 例: const SHARED_FB_CONFIG={config:{apiKey:"AIza...",authDomain:"xxx.firebaseapp.com",projectId:"xxx",appId:"1:..."},model:"gemini-3.5-flash",auto:true};
-const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.5-flash","auto":true};;
+const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.5-flash","auto":true};
 // Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
-// 変更するときは新しいコードのSHA-256（16進）に置き換える。null でゲート無効。
-const ACCESS_CODE_HASH="e92d2f7f88638dea5369997b205a1376a8ac95358124f1177e058c474d695f44";
+// 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
+const ACCESS_CODE_HASH=null;
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[

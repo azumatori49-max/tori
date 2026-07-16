@@ -923,10 +923,43 @@ function viewAdmin(){
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
     </div>`:""}
     ${AI_ENABLED?"":`<div class="card"><p class="empty">AI機能は現在無効化されています。</p></div>`}
+    <div class="card">
+      <h3>セットアップ支援（管理者向け）</h3>
+      <p class="desc">firebaseConfigやアクセスコードを<b>チャットやメールに貼らずに</b>共通設定するためのツールです。入力内容はこの画面の中だけで処理され、どこにも送信されません。生成された行をコピーして、GitHub上で <code>rakuraku-check/index.html</code> の同じ名前の行と置き換えれば設定完了です。</p>
+      <div class="field"><label>共通AI設定にする firebaseConfig（任意）</label>
+        <textarea id="gen-fb" placeholder="firebaseConfig を貼り付け"></textarea>
+      </div>
+      <div class="field"><label>新しいアクセスコード（任意）</label>
+        <input id="gen-code" autocomplete="off" placeholder="例：新しい合言葉">
+      </div>
+      <div style="margin-top:12px"><button class="btn sub" id="gen-go">設定行を生成</button></div>
+      <div class="field" id="gen-out-wrap" hidden><label>生成結果 — index.html の同名の行と置き換えてください</label>
+        <textarea id="gen-out" readonly style="min-height:110px;font-size:12px"></textarea>
+      </div>
+      <p class="note" id="gen-msg"></p>
+    </div>
     <button class="btn" id="to-home">ホームへ戻る</button>
   </div>`;
 }
 function bindAdmin(){
+  $("#gen-go")?.addEventListener("click",async()=>{
+    const msg=$("#gen-msg"); const out=[];
+    const fbText=$("#gen-fb").value.trim();
+    if(fbText){
+      const cfg=parseFirebaseConfig(fbText);
+      if(!cfg){msg.textContent="firebaseConfigを読み取れませんでした。apiKeyを含む形で貼り付けてください。";return;}
+      out.push(`const SHARED_FB_CONFIG=${JSON.stringify({config:cfg,model:DEFAULT_AI_MODEL,auto:true})};`);
+    }
+    const code=$("#gen-code").value.trim();
+    if(code){
+      try{ out.push(`const ACCESS_CODE_HASH="${await sha256hex(code)}";`); }
+      catch(e){ msg.textContent="この環境ではハッシュを生成できませんでした（httpsで開いてください）。"; return; }
+    }
+    if(!out.length){msg.textContent="firebaseConfigか新しいアクセスコードのどちらかを入力してください。";return;}
+    $("#gen-out").value=out.join("\n");
+    $("#gen-out-wrap").hidden=false;
+    msg.textContent="生成しました。GitHubでindex.htmlを開き、同じ名前で始まる行と置き換えてください（コミットすると自動で再公開されます）。";
+  });
   $("#fb-save")?.addEventListener("click",async()=>{
     const status=$("#fb-status");
     const cfg=parseFirebaseConfig($("#fb-config").value);

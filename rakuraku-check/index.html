@@ -447,6 +447,7 @@ const kvGet=k=>tx("kv","readonly",s=>s.get(k));
 const kvSet=(k,v)=>tx("kv","readwrite",s=>s.put(v,k));
 const kvDel=k=>tx("kv","readwrite",s=>s.delete(k));
 const putInspection=i=>tx("inspections","readwrite",s=>s.put(i));
+const delInspection=id=>tx("inspections","readwrite",s=>s.delete(id));
 const allInspections=()=>tx("inspections","readonly",s=>s.getAll());
 
 let saveTimer=null;
@@ -1127,6 +1128,9 @@ function viewTrends(){
         </div>`;}).join("")}
     </div>`).join("")}
     <button class="btn" id="to-home">ホームへ戻る</button>
+    <div style="margin-top:10px">
+      <button class="btn ghost" id="store-del" style="color:var(--bad);border-color:var(--bad)">この店舗の記録をすべて削除（${hist.length}件）</button>
+    </div>
   </div>`;
 }
 
@@ -1275,14 +1279,17 @@ function pdcaView(){
 /* ---------- 完了・報告 ---------- */
 function finishView(){
   const missing=collectMissing();
+  if(missing.length){
+    return `
+    <div class="miss no-print">
+      <div class="ttl">点数が未選択の項目があるため完了できません（${missing.length}件）</div>
+      ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
+    </div>
+    ${reportBody(previewInspection(),true)}`;
+  }
   return `
-  ${missing.length?`
-  <div class="miss no-print">
-    <div class="ttl">未入力の評価があります（${missing.length}件）— このまま完了して保存することもできます</div>
-    ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
-  </div>`:""}
   <div class="card no-print" style="text-align:center">
-    <h3 style="justify-content:center">${missing.length?"チェックを完了できます":"すべての項目が入力済みです"}</h3>
+    <h3 style="justify-content:center">すべての点数が選択済みです</h3>
     <p class="desc" style="margin:8px 0 12px">完了すると報告書が保存され、全店舗ランキングと項目別の推移に集計されます。宿題は次回来店時に自動表示されます。</p>
     <button class="btn" id="finalize">チェックを完了して報告書を保存</button>
   </div>
@@ -1315,6 +1322,9 @@ function viewReport(){
     <div class="no-print" style="display:flex;gap:10px;margin-top:4px">
       <button class="btn sub" onclick="window.print()">印刷・PDF保存</button>
       <button class="btn" id="to-home">ホームへ戻る</button>
+    </div>
+    <div class="no-print" style="margin-top:10px">
+      <button class="btn ghost" id="rep-del" style="color:var(--bad);border-color:var(--bad)">この報告書を削除</button>
     </div>
   </div>`;
 }
@@ -1442,6 +1452,27 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
   if(t.id==="iv-ai"){judgeInterview();return;}
+  if(t.id==="rep-del"){
+    const insp=state.inspections.find(i=>i.id===state.reportId);
+    if(!insp) return;
+    if(!confirm(`この報告書（${insp.store}／${fmtDate(insp.date)}）を削除しますか？\n削除すると元に戻せません。ランキング・推移からも除外されます。`)) return;
+    await delInspection(insp.id).catch(()=>{});
+    state.inspections=state.inspections.filter(i=>i.id!==insp.id);
+    state.view="home"; render(); scrollTo(0,0);
+    showToast("報告書を削除しました。");
+    return;
+  }
+  if(t.id==="store-del"){
+    const store=state.trendStore;
+    const targets=state.inspections.filter(i=>i.store===store);
+    if(!targets.length) return;
+    if(!confirm(`店舗「${store}」の記録${targets.length}件をすべて削除しますか？\n削除すると元に戻せません。`)) return;
+    for(const i of targets){ await delInspection(i.id).catch(()=>{}); }
+    state.inspections=state.inspections.filter(i=>i.store!==store);
+    state.view="home"; render(); scrollTo(0,0);
+    showToast(`店舗「${store}」の記録を削除しました。`);
+    return;
+  }
   if(t.dataset.trend){state.trendStore=t.dataset.trend;state.view="trends";render();scrollTo(0,0);return;}
   if(t.dataset.ai){judgeItem(t.dataset.ai);return;}
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
@@ -1452,6 +1483,8 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(t.id==="finalize"){
+    const missing=collectMissing();
+    if(missing.length){alert("点数が未選択の項目があります。");render();return;}
     const insp=buildInspection(state.draft,false);
     await putInspection(insp); await kvDel("draft");
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);

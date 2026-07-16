@@ -36,6 +36,7 @@ import { DatePicker } from '@/components/report/DatePicker';
 import {
   CONDITION_OPTIONS,
   DEFAULT_TOPPING_NAMES,
+  OPTIONAL_PHOTO_CHECK_NAMES,
   PEST_PRESENCE_OPTIONS,
 } from '@/constants/hygiene';
 import { C, CONDITION_COLOR } from '@/constants/colors';
@@ -198,7 +199,9 @@ export default function ReportFormScreen() {
       );
       return;
     }
-    const noPhotoCheck = form.checklist.find((c) => c.photos.length === 0);
+    const noPhotoCheck = form.checklist.find(
+      (c) => c.photos.length === 0 && !OPTIONAL_PHOTO_CHECK_NAMES.includes(c.name),
+    );
     if (noPhotoCheck) {
       notify(
         '写真を添付してください',
@@ -413,7 +416,8 @@ export default function ReportFormScreen() {
 
           {/* ── 定期点検 ── */}
           <SectionTitle>
-            定期点検 <Text style={styles.required}>全項目写真必須</Text>
+            定期点検 <Text style={styles.required}>写真必須</Text>
+            <Text style={styles.optionalTag}>（グリストラップ洗浄は任意）</Text>
           </SectionTitle>
           {form.checklist.map((item, idx) => (
             <Card key={item.name}>
@@ -457,7 +461,12 @@ export default function ReportFormScreen() {
                     onChangeText={(v) => patchChecklist(idx, { note: v })}
                     placeholder="備考"
                   />
-                  <Text style={styles.subLabel}>写真（最大6枚）</Text>
+                  <Text style={styles.subLabel}>
+                    写真（最大6枚）
+                    {OPTIONAL_PHOTO_CHECK_NAMES.includes(item.name) && (
+                      <Text style={styles.optionalTag}>任意</Text>
+                    )}
+                  </Text>
                   <PhotoSection
                     photos={item.photos}
                     onChange={(photos: ReportPhoto[]) => patchChecklist(idx, { photos })}
@@ -786,6 +795,7 @@ const styles = StyleSheet.create({
   subChecks: { gap: 10, marginBottom: 4 },
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
   required: { fontSize: 10, fontWeight: '800', color: C.danger },
+  optionalTag: { fontSize: 10, fontWeight: '700', color: C.textFaint },
   hintText: { fontSize: 11, color: C.textFaint, marginBottom: 8, lineHeight: 17 },
   techWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   techChip: {

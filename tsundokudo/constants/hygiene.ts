@@ -20,6 +20,9 @@ export const CONDITION_OPTIONS: ConditionLabel[] = [
   'できてない',
 ];
 
+/** 写真の添付を任意にする定期点検の項目名 */
+export const OPTIONAL_PHOTO_CHECK_NAMES: string[] = ['グリストラップ洗浄'];
+
 /** まとめ項目「各種フィルター清掃」の内訳（1枚の写真にまとめて撮影する運用） */
 export const FILTER_GROUP_NAME = '各種フィルター清掃';
 export const FILTER_SUB_CHECKS: string[] = [

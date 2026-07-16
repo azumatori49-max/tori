@@ -255,8 +255,8 @@ const CHECK_CATS = [
         ["改善が必要","清掃が不十分で、汚れ・ゴミが目立つ"],
         ["早急な改善が必要","清掃されておらず、著しく汚れている"]])],
       extras:[
-        {key:"reason",label:"清掃できていない理由",type:"textarea",show:a=>["1点","2点"].includes(a.evals.main),req:true},
-        {key:"cleanReq",label:"清掃会社への依頼が必要か",type:"select",options:["必要","不要"],show:a=>["1点","2点"].includes(a.evals.main),req:true,
+        {key:"reason",label:"清掃できていない理由",type:"textarea",show:a=>["1点","2点"].includes(a.evals.main)},
+        {key:"cleanReq",label:"清掃会社への依頼が必要か",type:"select",options:["必要","不要"],show:a=>["1点","2点"].includes(a.evals.main),
          hint:"「必要」を選ぶと、完了時に清掃依頼タスクを自動作成します。"},
       ] },
   ]},
@@ -277,7 +277,7 @@ const CHECK_CATS = [
         ["一部問題あり","一部に汚れ・破損・不足がある"],
         ["要補充・交換","複数の汚れ・破損・不足があり、補充・交換が必要"],
         ["要早急改善","汚れ・破損・不足が多く、早急な改善が必要"]])],
-      extras:[{key:"detail",label:"不足・破損内容",type:"textarea",show:a=>hasIssueEval(a,"condiments"),req:true}] },
+      extras:[{key:"detail",label:"不足・破損内容",type:"textarea",show:a=>hasIssueEval(a,"condiments")}] },
     { id:"chairs", name:"椅子",
       desc:["椅子の汚れ・破損・ぐらつきがないか","必要数が足りているか"],
       groups:[s5([
@@ -287,8 +287,8 @@ const CHECK_CATS = [
         ["複数不良・数量不足","複数の不良がある、または数量が不足している"],
         ["使用に支障","使用に支障がある椅子が多い、または大幅に不足している"]])],
       extras:[
-        {key:"shortage",label:"不足数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true},
-        {key:"broken",label:"破損数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs"),req:true}] },
+        {key:"shortage",label:"不足数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs")},
+        {key:"broken",label:"破損数",type:"number",unit:"脚",show:a=>hasIssueEval(a,"chairs")}] },
     { id:"hall_floor", name:"ホール・床",
       desc:["ホール・床が清掃され、きれいに保たれているか"],
       groups:[s5([
@@ -316,7 +316,7 @@ const CHECK_CATS = [
         ["要洗浄","汚れが目立ち、洗浄・漂白が必要"],
         ["欠け・破損あり","欠け・破損・劣化がある"],
         ["要買い替え","使用に適さず、買い替えが必要"]])],
-      extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",req:true,
+      extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",
         hint:"完了時に購入・交換タスクを自動作成します。"}] })),
     { id:"fryer", name:"フライヤー",
       desc:["油の色や状態が正常か"],
@@ -341,7 +341,7 @@ const CHECK_CATS = [
         ["一部問題","汚れ・臭いが一部気になる"],
         ["要改善","整理されておらず、汚れ・臭いが目立つ"],
         ["不衛生","著しく不衛生で、害虫発生の恐れがある"]])],
-      extras:[{key:"detail",label:"問題内容",type:"textarea",show:a=>hasIssueEval(a,"garbage"),req:true}] },
+      extras:[{key:"detail",label:"問題内容",type:"textarea",show:a=>hasIssueEval(a,"garbage")}] },
   ]},
   { id:"sales", name:"営業・商品品質", short:"営業・品質", items:[
     { id:"peak", name:"ピーク帯・オペレーション力",
@@ -377,8 +377,8 @@ const CHECK_CATS = [
         ["基準外が複数","複数の項目で基準から外れている"],
         ["基準未達","提供基準を満たしていない"]])],
       extras:[
-        {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality"),req:true},
-        {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality"),req:true}] },
+        {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
+        {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
   ]},
   { id:"fives", name:"5S", short:"5S", items:[
     { id:"uniform", name:"ユニフォーム",
@@ -483,9 +483,7 @@ function hasIssueEval(a,itemId){
 function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
-  if(!item.photoOptional&&!a.photos.length) return false;
   for(const g of item.groups){ if(!a.evals[g.key]) return false; }
-  for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) return false; }
   return true;
 }
 function itemScore(item,a){
@@ -511,9 +509,6 @@ function computeAutoTasks(draft){
       t.push({text:"購入・交換："+(c.fields.buyList||label),owner:"",due:"",priority:"高",auto:true});
   }
   return t;
-}
-function pdcaComplete(draft){
-  return !draft.pdca.homework.some(h=>!filled(h.text));
 }
 /* ---------- 項目別の推移・アラート ---------- */
 const ALERT_LOW=3;      // 3点以下を「低評価」とする
@@ -569,18 +564,15 @@ function beep(){
   }catch(e){}
 }
 function progressRatio(draft){
-  const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length + (pdcaComplete(draft)?1:0);
-  return done/(ALL_ITEMS.length+1);
+  const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
+  return done/ALL_ITEMS.length;
 }
 function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
     const a=ans(item.id);
-    if(!item.photoOptional&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
-    for(const f of (item.extras||[])){ if(shown(f,a)&&f.req&&!filled(a.fields[f.key])) m.push({ci,id:item.id,label:item.name,what:`「${f.label}」が未入力`}); }
   }));
-  d.pdca.homework.forEach((h,i)=>{ if(!filled(h.text)) m.push({ci:PDCA_CAT,id:"pdca-homework",label:"次回までの宿題",what:`宿題${i+1}の内容が未入力`}); });
   return m;
 }
 function compressPhoto(file){return new Promise((res,rej)=>{
@@ -1105,7 +1097,7 @@ function viewCheck(){
   <header class="hd">
     <div class="bar">
       <h1>${esc(d.store)}</h1>
-      <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${ALL_ITEMS.length}項目${pdcaComplete(d)?"＋PDCA":""}</span>
+      <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${ALL_ITEMS.length}項目</span>
     </div>
     <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <div class="save-row">
@@ -1123,7 +1115,6 @@ function viewCheck(){
 function catDoneMark(i){
   if(!state.draft) return "";
   if(i<PDCA_CAT){ const ok=CHECK_CATS[i].items.every(it=>itemComplete(it,ans(it.id))); return ok?` <span class="st">✓</span>`:""; }
-  if(i===PDCA_CAT) return pdcaComplete(state.draft)?` <span class="st">✓</span>`:"";
   return "";
 }
 function itemCard(item){
@@ -1136,7 +1127,7 @@ function itemCard(item){
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
     ${(()=>{const lc=state.draft?lowCount(state.draft.store,item):0;
       return lc>=ALERT_COUNT?`<div class="item-alert">⚠ アラート：この項目は3点以下が${lc}回になっています。重点的に確認・改善してください。</div>`:"";})()}
-    <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
+    <div class="sec-label">${esc(item.photoLabel||"写真")} <span style="color:var(--sub);font-weight:600">任意</span></div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
       ${a.photos.length<4?`
@@ -1208,18 +1199,15 @@ function pdcaView(){
 /* ---------- 完了・報告 ---------- */
 function finishView(){
   const missing=collectMissing();
-  if(missing.length){
-    return `
-    <div class="miss">
-      <div class="ttl">未入力・写真未添付の項目があるため完了できません（${missing.length}件）</div>
-      ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
-    </div>
-    ${reportBody(previewInspection(),true)}`;
-  }
   return `
+  ${missing.length?`
+  <div class="miss no-print">
+    <div class="ttl">未入力の評価があります（${missing.length}件）— このまま完了して保存することもできます</div>
+    ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
+  </div>`:""}
   <div class="card no-print" style="text-align:center">
-    <h3 style="justify-content:center">すべての項目が入力済みです</h3>
-    <p class="desc" style="margin:8px 0 12px">内容を確認して完了すると、報告書が保存され、宿題が次回に引き継がれます。</p>
+    <h3 style="justify-content:center">${missing.length?"チェックを完了できます":"すべての項目が入力済みです"}</h3>
+    <p class="desc" style="margin:8px 0 12px">完了すると報告書が保存され、全店舗ランキングと項目別の推移に集計されます。宿題は次回来店時に自動表示されます。</p>
     <button class="btn" id="finalize">チェックを完了して報告書を保存</button>
   </div>
   ${reportBody(previewInspection(),true)}`;
@@ -1328,7 +1316,7 @@ function refreshHeader(){
   const bar=$(".progress i"); if(bar) bar.style.width=Math.round(progressRatio(d)*100)+"%";
   const meta=$(".hd .meta");
   if(meta){const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
-    meta.textContent=`${fmtDate(d.date)}／${d.inspector}　${done}/${ALL_ITEMS.length}項目${pdcaComplete(d)?"＋PDCA":""}`;}
+    meta.textContent=`${fmtDate(d.date)}／${d.inspector}　${done}/${ALL_ITEMS.length}項目`;}
   document.querySelectorAll(".cat-chip").forEach((c,i)=>{
     const mark=catDoneMark(i);
     c.innerHTML=`${i+1}. ${esc(CAT_NAMES[i])}${mark}`;
@@ -1383,8 +1371,6 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(t.id==="finalize"){
-    const missing=collectMissing();
-    if(missing.length){alert("未入力の項目があります。");render();return;}
     const insp=buildInspection(state.draft,false);
     await putInspection(insp); await kvDel("draft");
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);

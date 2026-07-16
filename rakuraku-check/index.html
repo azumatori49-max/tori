@@ -485,6 +485,7 @@ function hasIssueEval(a,itemId){
 function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
+  if(!item.photoOptional&&!a.photos.length) return false;
   for(const g of item.groups){ if(!a.evals[g.key]) return false; }
   return true;
 }
@@ -582,6 +583,7 @@ function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
     const a=ans(item.id);
+    if(!item.photoOptional&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
   }));
   return m;
@@ -1299,7 +1301,7 @@ function itemCard(item){
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
     ${(()=>{const lc=state.draft?lowCount(state.draft.store,item):0;
       return lc>=ALERT_COUNT?`<div class="item-alert">⚠ アラート：この項目は3点以下が${lc}回になっています。重点的に確認・改善してください。</div>`:"";})()}
-    <div class="sec-label">${esc(item.photoLabel||"写真")} <span style="color:var(--sub);font-weight:600">任意</span></div>
+    <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
       ${a.photos.length<4?`
@@ -1375,14 +1377,14 @@ function finishView(){
   if(missing.length){
     return `
     <div class="miss no-print">
-      <div class="ttl">点数が未選択の項目があるため完了できません（${missing.length}件）</div>
+      <div class="ttl">点数の未選択・写真の未添付があるため完了できません（${missing.length}件）</div>
       ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
     </div>
     ${reportBody(previewInspection(),true)}`;
   }
   return `
   <div class="card no-print" style="text-align:center">
-    <h3 style="justify-content:center">すべての点数が選択済みです</h3>
+    <h3 style="justify-content:center">すべての項目が入力済みです</h3>
     <p class="desc" style="margin:8px 0 12px">完了すると報告書が保存され、全店舗ランキングと項目別の推移に集計されます。宿題は次回来店時に自動表示されます。</p>
     <button class="btn" id="finalize">チェックを完了して報告書を保存</button>
   </div>
@@ -1597,7 +1599,7 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="finalize"){
     const missing=collectMissing();
-    if(missing.length){alert("点数が未選択の項目があります。");render();return;}
+    if(missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     const insp=buildInspection(state.draft,false);
     await putInspection(insp).catch(()=>{}); await kvDel("draft");
     if(fsDb){ cloudSave(insp).catch(()=>showToast("クラウドへの保存に失敗しました（この端末には保存済み。オンラインになると自動では再送されないため、後で管理画面から状態を確認してください）")); }

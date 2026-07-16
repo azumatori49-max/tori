@@ -448,6 +448,7 @@ const kvSet=(k,v)=>tx("kv","readwrite",s=>s.put(v,k));
 const kvDel=k=>tx("kv","readwrite",s=>s.delete(k));
 const putInspection=i=>tx("inspections","readwrite",s=>s.put(i));
 const delInspection=id=>tx("inspections","readwrite",s=>s.delete(id));
+const getInspection=id=>tx("inspections","readonly",s=>s.get(id));
 const allInspections=()=>tx("inspections","readonly",s=>s.getAll());
 
 let saveTimer=null;
@@ -875,6 +876,7 @@ function viewHome(){
       </div>
     </div>
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
+    <p class="hw-meta" style="margin-top:6px">データ共有：${cloudStatusLabel()}</p>
   </div>
   <div class="wrap">
     ${state.draft?`
@@ -938,14 +940,6 @@ function viewHome(){
         </button></div>`;}).join(""):`<p class="empty">完了したチェックがまだありません。チェックを重ねると推移が見られます。</p>`}
     </div>
     <div class="card">
-      <h3>データの保存・バックアップ</h3>
-      <p class="desc">チェックの記録と下書きは、この端末のブラウザ内に自動保存されます。機種変更・他の端末への引き継ぎ・念のための控えには、ファイルへの書き出しを使ってください。</p>
-      <div style="display:flex;gap:10px;margin-top:12px">
-        <button class="btn sub" id="bk-export">ファイルに書き出す</button>
-        <label class="btn ghost" style="cursor:pointer">ファイルを読み込む<input type="file" accept=".json,application/json" hidden id="bk-import"></label>
-      </div>
-    </div>
-    <div class="card">
       <h3>過去のチェック</h3>
       ${past.length?past.map(i=>`
         <div class="hw-item" data-sname="${esc(i.store)}">
@@ -999,6 +993,12 @@ function viewAdmin(){
       <p class="note" id="fb-status">設定はこの端末内にのみ保存されます。Firebaseコンソールで「Firebase AI Logic」を有効化しておいてください。</p>
     </div>`:""}
     ${AI_ENABLED?"":`<div class="card"><p class="empty">AI機能は現在無効化されています。</p></div>`}
+    <div class="card">
+      <h3>共通保存（Firestore） <span class="badge ${cloudReady?"done":"todo"}">${cloudReady?"接続済み":"未接続"}</span></h3>
+      <p class="desc">完了したチェックはクラウド（Cloud Firestore）に保存され、全端末・全ユーザーで共有されます。入力途中の下書きは各端末内のみです。</p>
+      ${cloudErr?`<p class="note" style="color:var(--bad)">接続エラー：${esc(cloudErr.slice(0,140))}<br>Firebaseコンソールで「Firestore Database」を作成し、「Authentication → 匿名」を有効化してください（README参照）。</p>`:""}
+      ${cloudReady?`<p class="note">共有中の記録：${state.inspections.length}件</p>`:""}
+    </div>
     <div class="card">
       <h3>セットアップ支援（管理者向け）</h3>
       <p class="desc">firebaseConfigやアクセスコードを<b>チャットやメールに貼らずに</b>共通設定するためのツールです。入力内容はこの画面の中だけで処理され、どこにも送信されません。生成された行をコピーして、GitHub上で <code>rakuraku-check/index.html</code> の同じ名前の行と置き換えれば設定完了です。</p>
@@ -1095,8 +1095,10 @@ function bindHome(){
     if(!confirm("下書きを破棄しますか？入力内容と写真は失われます。"))return;
     state.draft=null; await kvDel("draft"); render();
   });
-  document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",async()=>{
     state.reportId=b.dataset.open; state.view="report"; render(); scrollTo(0,0);
+    const insp=state.inspections.find(i=>i.id===state.reportId);
+    if(insp&&await hydratePhotos(insp)&&state.view==="report") render();
   }));
   $("#search-store")?.addEventListener("input",e=>{
     const q=e.target.value.trim().toLowerCase();
@@ -1109,8 +1111,6 @@ function bindHome(){
     const h=$("#search-hit");
     if(h) h.textContent=q?`「${e.target.value.trim()}」に一致：ランキング・推移・過去のチェックを絞り込み中（該当 ${hits}行）`:"";
   });
-  $("#bk-export")?.addEventListener("click",exportBackup);
-  $("#bk-import")?.addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)importBackup(f);e.target.value="";});
 }
 
 /* ---------- 項目別推移ビュー ---------- */
@@ -1153,33 +1153,98 @@ function viewTrends(){
   </div>`;
 }
 
-/* ---------- バックアップ ---------- */
-function exportBackup(){
-  const data={app:"rakuraku-check",version:1,exportedAt:new Date().toISOString(),
-    inspections:state.inspections,draft:state.draft||null};
-  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=`らくらく臨店チェック-バックアップ-${todayStr()}.json`;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
-  showToast(`ファイルに書き出しました（記録 ${state.inspections.length}件）`);
-}
-async function importBackup(file){
+/* ---------- 共通保存（Cloud Firestore） ----------
+   完了したチェックを全端末・全ユーザーで共有する。写真はドキュメント上限を
+   避けるため photos コレクションに分けて保存。オフライン・未設定時は端末内
+   （IndexedDB）のみで動作する。 */
+let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false;
+async function initCloud(){
+  if(!SHARED_FB_CONFIG||!SHARED_FB_CONFIG.config) return;
   try{
-    const data=JSON.parse(await file.text());
-    if(!data||data.app!=="rakuraku-check"||!Array.isArray(data.inspections))
-      throw new Error("このアプリのバックアップファイルではありません");
-    for(const insp of data.inspections){ if(insp&&insp.id) await putInspection(insp); }
-    if(data.draft&&(!state.draft||confirm("バックアップ内の下書きで、現在の下書きを置き換えますか？"))){
-      state.draft=data.draft; await kvSet("draft",state.draft);
-    }
-    state.inspections=(await allInspections())||[];
-    render();
-    showToast(`バックアップを読み込みました（記録 ${data.inspections.length}件）`);
-  }catch(err){
-    alert("読み込みに失敗しました："+String(err&&err.message||err));
+    const V=FB_SDK_VERSION;
+    const [appMod,fsMod,authMod]=await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`),
+      import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
+    ]);
+    const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(SHARED_FB_CONFIG.config);
+    try{ await authMod.signInAnonymously(authMod.getAuth(app)); }
+    catch(e){ /* 匿名認証が無効でも、テストモードのルールなら動作する */ }
+    fsMods=fsMod;
+    fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
+    fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
+      const cloudIds=new Set(snap.docs.map(d=>d.id));
+      state.inspections=snap.docs.map(d=>d.data());
+      cloudReady=true; cloudErr="";
+      if(!cloudMigrated){
+        cloudMigrated=true;
+        // この端末にだけ残っている過去の記録をクラウドへ一度だけ移行
+        const local=(await allInspections().catch(()=>[]))||[];
+        for(const insp of local){ if(insp&&insp.id&&!cloudIds.has(insp.id)){ try{ await cloudSave(insp); }catch(e){} } }
+      }
+      if(["home","trends","report"].includes(state.view)) render();
+    },err=>{
+      cloudErr=String(err&&err.message||err); cloudReady=false;
+      if(state.view==="home"||state.view==="admin") render();
+    });
+  }catch(e){ cloudErr=String(e&&e.message||e); }
+}
+function stripPhotos(insp){
+  const slim=JSON.parse(JSON.stringify(insp));
+  const photos=[];
+  for(const [itemId,a] of Object.entries(slim.answers||{})){
+    (a.photos||[]).forEach((data,idx)=>photos.push({id:`${insp.id}_${itemId}_${idx}`,inspId:insp.id,itemId,idx,data}));
+    a.photoCount=(a.photos||[]).length;
+    a.photos=[];
   }
+  return {slim,photos};
+}
+async function cloudSave(insp){
+  if(!fsDb) throw new Error("クラウド未接続");
+  const m=fsMods;
+  const {slim,photos}=stripPhotos(insp);
+  await m.setDoc(m.doc(fsDb,"inspections",insp.id),slim);
+  for(const ph of photos){ await m.setDoc(m.doc(fsDb,"photos",ph.id),ph); }
+}
+async function cloudDelete(id){
+  if(!fsDb) return;
+  const m=fsMods;
+  await m.deleteDoc(m.doc(fsDb,"inspections",id)).catch(()=>{});
+  try{
+    const snap=await m.getDocs(m.query(m.collection(fsDb,"photos"),m.where("inspId","==",id)));
+    for(const d of snap.docs){ await m.deleteDoc(d.ref).catch(()=>{}); }
+  }catch(e){}
+}
+// 報告書表示時に、クラウド保存の写真を読み込んで結合する
+async function hydratePhotos(insp){
+  const need=Object.values(insp.answers||{}).some(a=>(a.photoCount||0)>0&&!(a.photos||[]).length);
+  if(!need) return false;
+  // まずこの端末のフルコピーから
+  try{
+    const local=await getInspection(insp.id);
+    if(local&&Object.values(local.answers||{}).some(a=>(a.photos||[]).length)){
+      for(const [k,a] of Object.entries(local.answers||{})){
+        if(insp.answers[k]&&(a.photos||[]).length) insp.answers[k].photos=a.photos;
+      }
+      return true;
+    }
+  }catch(e){}
+  if(!fsDb) return false;
+  try{
+    const m=fsMods;
+    const snap=await m.getDocs(m.query(m.collection(fsDb,"photos"),m.where("inspId","==",insp.id)));
+    snap.docs.forEach(d=>{
+      const p=d.data(); const a=insp.answers&&insp.answers[p.itemId];
+      if(a){ a.photos=a.photos||[]; a.photos[p.idx]=p.data; }
+    });
+    return snap.docs.length>0;
+  }catch(e){ return false; }
+}
+function cloudStatusLabel(){
+  if(cloudReady) return `<span style="color:var(--good);font-weight:700">クラウド接続済み（全端末で共通）</span>`;
+  if(cloudErr) return `<span style="color:var(--warn);font-weight:700">この端末のみ（クラウド接続エラー）</span>`;
+  if(SHARED_FB_CONFIG) return `<span style="color:var(--sub)">クラウドに接続中…</span>`;
+  return `<span style="color:var(--sub)">この端末のみ（クラウド未設定）</span>`;
 }
 
 /* ---------- チェック画面 ---------- */
@@ -1476,6 +1541,7 @@ document.addEventListener("click",async e=>{
     if(!insp) return;
     if(!confirm(`この報告書（${insp.store}／${fmtDate(insp.date)}）を削除しますか？\n削除すると元に戻せません。ランキング・推移からも除外されます。`)) return;
     await delInspection(insp.id).catch(()=>{});
+    await cloudDelete(insp.id);
     state.inspections=state.inspections.filter(i=>i.id!==insp.id);
     state.view="home"; render(); scrollTo(0,0);
     showToast("報告書を削除しました。");
@@ -1486,7 +1552,7 @@ document.addEventListener("click",async e=>{
     const targets=state.inspections.filter(i=>i.store===store);
     if(!targets.length) return;
     if(!confirm(`店舗「${store}」の記録${targets.length}件をすべて削除しますか？\n削除すると元に戻せません。`)) return;
-    for(const i of targets){ await delInspection(i.id).catch(()=>{}); }
+    for(const i of targets){ await delInspection(i.id).catch(()=>{}); await cloudDelete(i.id); }
     state.inspections=state.inspections.filter(i=>i.store!==store);
     state.view="home"; render(); scrollTo(0,0);
     showToast(`店舗「${store}」の記録を削除しました。`);
@@ -1505,7 +1571,8 @@ document.addEventListener("click",async e=>{
     const missing=collectMissing();
     if(missing.length){alert("点数が未選択の項目があります。");render();return;}
     const insp=buildInspection(state.draft,false);
-    await putInspection(insp); await kvDel("draft");
+    await putInspection(insp).catch(()=>{}); await kvDel("draft");
+    if(fsDb){ cloudSave(insp).catch(()=>showToast("クラウドへの保存に失敗しました（この端末には保存済み。オンラインになると自動では再送されないため、後で管理画面から状態を確認してください）")); }
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
     render(); scrollTo(0,0);
@@ -1570,6 +1637,7 @@ document.addEventListener("input",e=>{
     if(ACCESS_CODE_HASH) state.locked=true;
   }
   render();
+  initCloud();
 })();
 </script>
 </body>

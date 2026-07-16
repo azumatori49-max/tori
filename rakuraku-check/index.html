@@ -527,6 +527,15 @@ function itemHistory(store,item){
   return completedFor(store).map(i=>({date:i.date,s5:score5Of(item,i)})).filter(h=>h.s5!=null);
 }
 function lowCount(store,item){return itemHistory(store,item).filter(h=>h.s5<=ALERT_LOW).length;}
+// PDF変換に必要な写真が未添付の項目（写真任意の項目は除く）
+function photoMissingItems(insp){
+  return ALL_ITEMS.filter(it=>{
+    if(it.photoOptional) return false;
+    const a=insp.answers&&insp.answers[it.id];
+    const n=a?(((a.photos||[]).filter(Boolean).length)||a.photoCount||0):0;
+    return n===0;
+  });
+}
 function aiScoreOf(item,a){
   if(!a||!a.ai||!a.ai.suggest) return null;
   let sum=0;
@@ -1403,8 +1412,13 @@ function viewReport(){
   </div></header>
   <div class="wrap">
     ${reportBody(insp,false)}
+    ${(()=>{const pm=photoMissingItems(insp);
+      return pm.length?`<div class="miss no-print" style="margin-top:4px">
+        <div class="ttl">写真が未添付の項目が${pm.length}件あるため、PDF変換はできません（保存はされています）</div>
+        <p class="note" style="border:none">未添付：${pm.slice(0,6).map(i=>esc(i.name)).join("／")}${pm.length>6?" ほか":""}</p>
+      </div>`:"";})()}
     <div class="no-print" style="display:flex;gap:10px;margin-top:4px">
-      <button class="btn sub" onclick="window.print()">印刷・PDF保存</button>
+      <button class="btn sub" id="rep-print">印刷・PDF保存</button>
       <button class="btn" id="to-home">ホームへ戻る</button>
     </div>
     <div class="no-print" style="margin-top:10px">
@@ -1536,6 +1550,20 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
   if(t.id==="iv-ai"){judgeInterview();return;}
+  if(t.id==="rep-print"){
+    const insp=state.inspections.find(i=>i.id===state.reportId);
+    if(insp){
+      const pm=photoMissingItems(insp);
+      if(pm.length){
+        alert(`写真が添付されていない項目が${pm.length}件あるため、PDFに変換できません。\n・${pm.slice(0,8).map(i=>i.name).join("\n・")}${pm.length>8?"\nほか":""}`);
+        return;
+      }
+      // クラウド保存の写真をまだ読み込んでいない場合は読み込んでから印刷
+      if(await hydratePhotos(insp)) render();
+    }
+    window.print();
+    return;
+  }
   if(t.id==="rep-del"){
     const insp=state.inspections.find(i=>i.id===state.reportId);
     if(!insp) return;

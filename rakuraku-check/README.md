@@ -35,18 +35,29 @@ npx http-server rakuraku-check
 
 1. [Firebaseコンソール](https://console.firebase.google.com/)で対象プロジェクトを開く → **構築 > Firestore Database** → 「データベースを作成」（ロケーションは `asia-northeast1`（東京）推奨 → **本番環境モード**で作成）
 2. **構築 > Authentication** → 「始める」 → ログイン方法で **「匿名」を有効化**
-3. Firestore Database の「ルール」タブを開き、以下に置き換えて「公開」：
+3. Firestore Database の「ルール」タブを開き、以下に置き換えて「公開」（認証必須＋tenantIdの一致を強制するA案ルール）：
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    match /inspections/{id} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.tenantId == "default";
+      allow delete: if request.auth != null;
+    }
+    match /photos/{id} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.tenantId == "default";
+      allow delete: if request.auth != null;
     }
   }
 }
 ```
+
+> 注意：匿名認証を使っているため、これは誤操作・他アプリからの混入を防ぐ簡易分離です。会社・店舗ごとの厳密なアクセス分離が必要になったら、Googleログイン＋メンバー管理（B案）に切り替えてください。
 
 設定後、アプリの管理画面の「共通保存（Firestore）」が「接続済み」になれば完了です。各端末に残っていた過去の記録は、接続時に自動でクラウドへ移行されます。
 
@@ -83,6 +94,12 @@ service cloud.firestore {
 - **項目別の推移・アラート**
   - 完了したチェックを項目ごとに集計し、点数の推移（直近12回の棒グラフ＋月別平均）と改善/悪化の傾向を表示
   - 各項目で3点以下が5回以上になると、推移画面・報告書・チェック中の該当項目・チェック開始時（通知音つき）にアラートを表示
+- **オフライン保存・自動再送**
+  - 完了した記録はUUIDを付けてまず端末内（IndexedDBのoutbox）に保存し、「記録を受け付けました」と即時表示（状態：draft→pending→syncing→synced/failed）
+  - 通信可能ならFirestoreへ送信し、サーバー保存の確認後に「送信済み」へ。写真を先に送り、最後に記録本体を確定（途中失敗しても同じIDで再送＝二重登録なし）
+  - 自動再送のタイミング：アプリ起動時／onlineイベント／ログイン直後／画面再表示時。「今すぐ再送」ボタンも画面上部に常設
+  - 画面上部にオンライン/オフライン・未送信件数・送信状態を常時表示。未送信の記録は一覧に「未送信」バッジ
+  - 記録には tenantId・storeId・入力日時（enteredAt）・端末保存日時（savedAt）・サーバー受信日時（receivedAt=serverTimestamp）を付与
 - **保存機能**
   - 完了したチェックはクラウド（Cloud Firestore）に保存され、**全端末・全ユーザーで自動共有**。ランキング・推移・危険店舗リストもチーム全体のデータで集計
   - 写真もクラウド保存（報告書を開いたときに読み込み）。クラウド未接続時は端末内保存で動作し、接続後に自動移行

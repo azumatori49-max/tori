@@ -82,6 +82,17 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .mcell .mb.lv5,.mcell .mb.lv4{background:var(--good)}
 .mcell .mb.lv3{background:var(--warn)}
 .mcell .mb.lv2,.mcell .mb.lv1{background:var(--bad)}
+.sync-bar{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  font-size:12px;color:var(--sub);background:var(--card);
+  border-bottom:1px solid var(--line);padding:7px 16px;
+}
+.sync-bar b{color:var(--ink);font-variant-numeric:tabular-nums}
+.sync-bar .sep{color:var(--line)}
+.sync-bar .save-btn{margin-left:auto}
+.net-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.net-dot.on{background:var(--good)}
+.net-dot.off{background:var(--bad)}
 .save-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
 .save-state{font-size:11px;color:var(--sub)}
 .save-btn{font-size:12px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 14px;background:var(--card);white-space:nowrap}
@@ -437,8 +448,13 @@ let db=null;
 const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null };
 
 function openDB(){return new Promise((res,rej)=>{
-  const r=indexedDB.open("rakuraku-check",1);
-  r.onupgradeneeded=e=>{const d=e.target.result;d.createObjectStore("kv");d.createObjectStore("inspections",{keyPath:"id"});};
+  const r=indexedDB.open("rakuraku-check",2);
+  r.onupgradeneeded=e=>{
+    const d=e.target.result;
+    if(!d.objectStoreNames.contains("kv")) d.createObjectStore("kv");
+    if(!d.objectStoreNames.contains("inspections")) d.createObjectStore("inspections",{keyPath:"id"});
+    if(!d.objectStoreNames.contains("outbox")) d.createObjectStore("outbox",{keyPath:"id"});
+  };
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
 function tx(store,mode,fn){return new Promise((res,rej)=>{
   const t=db.transaction(store,mode),s=t.objectStore(store),q=fn(s);
@@ -450,6 +466,13 @@ const putInspection=i=>tx("inspections","readwrite",s=>s.put(i));
 const delInspection=id=>tx("inspections","readwrite",s=>s.delete(id));
 const getInspection=id=>tx("inspections","readonly",s=>s.get(id));
 const allInspections=()=>tx("inspections","readonly",s=>s.getAll());
+const outboxPut=o=>tx("outbox","readwrite",s=>s.put(o));
+const outboxDel=id=>tx("outbox","readwrite",s=>s.delete(id));
+const outboxAll=()=>tx("outbox","readonly",s=>s.getAll());
+function uuid(){
+  try{ return crypto.randomUUID(); }
+  catch(e){ return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10); }
+}
 
 let saveTimer=null;
 function persistDraft(){
@@ -611,6 +634,8 @@ const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOI
 // Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
+// 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
+const SHARED_TENANT_ID="default";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -932,6 +957,8 @@ function render(){
   else if(state.view==="trends") html=viewTrends();
   else if(state.view==="admin") html=viewAdmin();
   app.innerHTML=html;
+  app.insertAdjacentHTML("afterbegin",'<div id="sync-bar" class="sync-bar"></div>');
+  updateSyncBar();
   if(state.view==="home") bindHome();
   if(state.view==="admin") bindAdmin();
 }
@@ -1026,7 +1053,7 @@ function viewHome(){
       ${past.length?past.map(i=>`
         <div class="hw-item" data-sname="${esc(i.store)}">
           <button class="list-card" data-open="${esc(i.id)}">
-            <span><b>${esc(i.store)}</b><span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
+            <span><b>${esc(i.store)}</b>${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc">${i.totalScore}<small>点</small></span>
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
@@ -1163,7 +1190,7 @@ function bindHome(){
     if(state.draft && !confirm("進行中の下書きを破棄して新しく開始しますか？")) return;
     const last=lastInspectionFor(store);
     state.draft={
-      id:"insp-"+Date.now().toString(36), store, inspector, date,
+      id:uuid(), store, inspector, date,
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
@@ -1252,17 +1279,26 @@ async function initCloud(){
     const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(SHARED_FB_CONFIG.config);
     try{ await authMod.signInAnonymously(authMod.getAuth(app)); }
     catch(e){ /* 匿名認証が無効でも、テストモードのルールなら動作する */ }
+    setTimeout(()=>syncOutbox(),0); // ログイン直後の自動再送
     fsMods=fsMod;
     fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
     fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
       const cloudIds=new Set(snap.docs.map(d=>d.id));
-      state.inspections=snap.docs.map(d=>d.data());
+      const merged=snap.docs.map(d=>d.data());
+      // 未送信（クラウドに未到達）の記録も一覧・ランキングに含める
+      const local=(await allInspections().catch(()=>[]))||[];
+      for(const l of local){ if(l&&l.id&&!cloudIds.has(l.id)) merged.push(l); }
+      state.inspections=merged;
       cloudReady=true; cloudErr="";
       if(!cloudMigrated){
         cloudMigrated=true;
-        // この端末にだけ残っている過去の記録をクラウドへ一度だけ移行
-        const local=(await allInspections().catch(()=>[]))||[];
-        for(const insp of local){ if(insp&&insp.id&&!cloudIds.has(insp.id)){ try{ await cloudSave(insp); }catch(e){} } }
+        // この端末にだけ残っている過去の記録は送信キューに載せて自動送信
+        for(const insp of local){
+          if(insp&&insp.id&&!cloudIds.has(insp.id)&&!pendingIds.has(insp.id)){
+            await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});
+          }
+        }
+        syncOutbox();
       }
       if(["home","trends","report"].includes(state.view)) render();
     },err=>{
@@ -1285,8 +1321,14 @@ async function cloudSave(insp){
   if(!fsDb) throw new Error("クラウド未接続");
   const m=fsMods;
   const {slim,photos}=stripPhotos(insp);
+  // 写真を先にすべて保存し、最後に記録本体を確定する（途中失敗しても同じIDで再送＝上書きされる）
+  for(const ph of photos){
+    await m.setDoc(m.doc(fsDb,"photos",ph.id),{...ph,tenantId:insp.tenantId||SHARED_TENANT_ID});
+  }
+  slim.tenantId=insp.tenantId||SHARED_TENANT_ID;
+  slim.storeId=insp.storeId||String(insp.store||"").trim();
+  if(m.serverTimestamp) slim.receivedAt=m.serverTimestamp();
   await m.setDoc(m.doc(fsDb,"inspections",insp.id),slim);
-  for(const ph of photos){ await m.setDoc(m.doc(fsDb,"photos",ph.id),ph); }
 }
 async function cloudDelete(id){
   if(!fsDb) return;
@@ -1321,6 +1363,74 @@ async function hydratePhotos(insp){
     });
     return snap.docs.length>0;
   }catch(e){ return false; }
+}
+/* ---------- 送信キュー（オフライン保存・自動再送） ----------
+   完了した記録はまず端末内（outbox）に pending で保存し、通信可能なときに
+   クラウドへ送信する。サーバー保存の確認が取れて初めて synced になる。
+   状態: draft(下書き) → pending(送信待ち) → syncing(送信中) → synced / failed */
+let syncRunning=false, syncNote="", pendingIds=new Set();
+function withTimeout(p,ms,msg){
+  return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error(msg||"通信がタイムアウトしました")),ms))]);
+}
+async function refreshPendingIds(){
+  try{
+    const list=(await outboxAll())||[];
+    pendingIds=new Set(list.filter(o=>o.status!=="synced").map(o=>o.id));
+  }catch(e){ pendingIds=new Set(); }
+}
+async function updateSyncBar(note){
+  if(note!==undefined) syncNote=note;
+  await refreshPendingIds();
+  const el=document.getElementById("sync-bar");
+  if(el) el.outerHTML=syncBarHtml();
+}
+function syncBarHtml(){
+  const online=navigator.onLine;
+  const n=pendingIds.size;
+  return `<div id="sync-bar" class="sync-bar">
+    <span class="net-dot ${online?"on":"off"}" aria-hidden="true"></span><span>${online?"オンライン":"オフライン"}</span>
+    <span class="sep">・</span><span>未送信 <b>${n}</b>件</span>
+    ${syncRunning?`<span class="sep">・</span><span class="spin" aria-hidden="true"></span><span>送信中…</span>`:""}
+    ${syncNote&&!syncRunning?`<span class="sep">・</span><span>${esc(syncNote)}</span>`:""}
+    ${n>0&&!syncRunning?`<button class="save-btn" id="sync-now">今すぐ再送</button>`:""}
+  </div>`;
+}
+async function syncOutbox(){
+  if(syncRunning) return;
+  const run=async()=>{
+    if(syncRunning) return;
+    syncRunning=true; await updateSyncBar();
+    try{
+      if(!fsDb){ await updateSyncBar("クラウド未接続のため端末に保存中"); return; }
+      const list=((await outboxAll())||[]).filter(o=>o.status!=="synced");
+      let ok=0,ng=0;
+      for(const o of list){
+        if(!navigator.onLine){ ng++; break; }
+        o.status="syncing"; o.attempts=(o.attempts||0)+1; await outboxPut(o);
+        try{
+          const insp=await getInspection(o.id);
+          if(!insp){ o.status="synced"; o.syncedAt=new Date().toISOString(); await outboxPut(o); continue; }
+          await withTimeout(cloudSave(insp),30000);
+          o.status="synced"; o.syncedAt=new Date().toISOString(); o.lastError="";
+          await outboxPut(o); ok++;
+        }catch(err){
+          o.status="failed"; o.lastError=String(err&&err.message||err).slice(0,200);
+          await outboxPut(o); ng++;
+        }
+      }
+      if(ok&&!ng){ showToast("送信完了：クラウドに保存されました"); await updateSyncBar("送信完了"); }
+      else if(ng){ showToast("送信に失敗しました。通信回復後に自動で再送します"); await updateSyncBar("送信に失敗しました"); }
+      else await updateSyncBar("");
+    }finally{
+      syncRunning=false; await updateSyncBar();
+    }
+  };
+  // 排他制御：同時に複数の再送処理が走らないようにする
+  if(navigator.locks&&navigator.locks.request){
+    await navigator.locks.request("rakuraku-sync",{ifAvailable:true},async lock=>{ if(lock) await run(); });
+  }else{
+    await run();
+  }
 }
 function cloudStatusLabel(){
   if(cloudReady) return `<span style="color:var(--good);font-weight:700">クラウド接続済み（全端末で共通）</span>`;
@@ -1478,6 +1588,8 @@ function buildInspection(d,preview){
   const autoTasks=computeAutoTasks(d);
   return {
     id:d.id, store:d.store, inspector:d.inspector, date:d.date,
+    tenantId:SHARED_TENANT_ID, storeId:String(d.store||"").trim(),
+    enteredAt:d.startedAt, savedAt:preview?"":new Date().toISOString(),
     startedAt:d.startedAt, completedAt:preview?"":new Date().toISOString(),
     answers:d.answers, pdca:d.pdca, prevDate:d.prevDate,
     totalScore:totalScore(d),
@@ -1633,6 +1745,7 @@ document.addEventListener("click",async e=>{
   if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
   if(t.id==="iv-ai"){judgeInterview();return;}
   if(t.id==="ai-batch"){judgeAllItems();return;}
+  if(t.id==="sync-now"){syncOutbox();return;}
   if(t.id==="rep-print"){
     const insp=state.inspections.find(i=>i.id===state.reportId);
     if(insp){
@@ -1652,6 +1765,7 @@ document.addEventListener("click",async e=>{
     if(!insp) return;
     if(!confirm(`この報告書（${insp.store}／${fmtDate(insp.date)}）を削除しますか？\n削除すると元に戻せません。ランキング・推移からも除外されます。`)) return;
     await delInspection(insp.id).catch(()=>{});
+    await outboxDel(insp.id).catch(()=>{});
     await cloudDelete(insp.id);
     state.inspections=state.inspections.filter(i=>i.id!==insp.id);
     state.view="home"; render(); scrollTo(0,0);
@@ -1663,7 +1777,7 @@ document.addEventListener("click",async e=>{
     const targets=state.inspections.filter(i=>i.store===store);
     if(!targets.length) return;
     if(!confirm(`店舗「${store}」の記録${targets.length}件をすべて削除しますか？\n削除すると元に戻せません。`)) return;
-    for(const i of targets){ await delInspection(i.id).catch(()=>{}); await cloudDelete(i.id); }
+    for(const i of targets){ await delInspection(i.id).catch(()=>{}); await outboxDel(i.id).catch(()=>{}); await cloudDelete(i.id); }
     state.inspections=state.inspections.filter(i=>i.store!==store);
     state.view="home"; render(); scrollTo(0,0);
     showToast(`店舗「${store}」の記録を削除しました。`);
@@ -1683,12 +1797,14 @@ document.addEventListener("click",async e=>{
     if(missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
     const insp=buildInspection(state.draft,false);
-    await putInspection(insp).catch(()=>{}); await kvDel("draft");
-    if(fsDb){ cloudSave(insp).catch(()=>showToast("クラウドへの保存に失敗しました（この端末には保存済み。オンラインになると自動では再送されないため、後で管理画面から状態を確認してください）")); }
+    await putInspection(insp).catch(()=>{});
+    await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});
+    await kvDel("draft");
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
     render(); scrollTo(0,0);
-    showToast("チェックを完了し、報告書を保存しました。");
+    showToast("記録を受け付けました。端末に保存し、通信回復後に送信します");
+    syncOutbox();
     return;
   }
 });
@@ -1750,6 +1866,11 @@ document.addEventListener("input",e=>{
   }
   render();
   initCloud();
+  // 通信復帰・画面再表示のたびに自動再送
+  window.addEventListener("online",()=>{updateSyncBar("オンラインに戻りました");syncOutbox();});
+  window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") syncOutbox(); });
+  syncOutbox(); // アプリ起動時の自動再送
 })();
 </script>
 </body>

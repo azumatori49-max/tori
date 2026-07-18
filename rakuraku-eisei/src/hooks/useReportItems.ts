@@ -1,17 +1,14 @@
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { deleteField, doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { useCallback, useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
 import { withRetry } from '../lib/retry';
-import type { ReportType } from '../types';
+import type { ReportItems, ReportType, Store, StoreKey } from '../types';
 
 export const SLOT_COUNT = 7;
 
-export interface ReportItems {
-  daily: string[];
-  weekly: string[];
-}
+export type { ReportItems };
 
-/** 初期値（管理者画面からいつでも変更可能） */
+/** 共通設定の初期値（管理者画面からいつでも変更可能） */
 export const DEFAULT_ITEMS: ReportItems = {
   daily: [
     'コーラサーバー洗浄',
@@ -33,14 +30,15 @@ export const DEFAULT_ITEMS: ReportItems = {
   ],
 };
 
-const pad = (arr: unknown, fallback: string[]): string[] =>
+/** 7枠に整形（欠けはfallback→空文字で補完） */
+export const padLabels = (arr: unknown, fallback: string[]): string[] =>
   Array.from({ length: SLOT_COUNT }, (_, i) => {
     const v = Array.isArray(arr) ? arr[i] : undefined;
-    return typeof v === 'string' ? v : (fallback[i] ?? '');
+    return typeof v === 'string' && v !== '' ? v : (fallback[i] ?? '');
   });
 
 /**
- * 撮影項目の名称マスタ（settings/reportItems）。
+ * 撮影項目の共通設定（settings/reportItems）。
  * 読み取りは全員可・変更はセキュリティルールにより管理者のみ。
  */
 export const useReportItems = () => {
@@ -54,8 +52,8 @@ export const useReportItems = () => {
         if (snap.exists()) {
           const d = snap.data() as Partial<ReportItems>;
           setItems({
-            daily: pad(d.daily, DEFAULT_ITEMS.daily),
-            weekly: pad(d.weekly, DEFAULT_ITEMS.weekly),
+            daily: padLabels(d.daily, DEFAULT_ITEMS.daily),
+            weekly: padLabels(d.weekly, DEFAULT_ITEMS.weekly),
           });
         }
         setLoading(false);
@@ -68,13 +66,46 @@ export const useReportItems = () => {
   const saveItems = useCallback(async (next: ReportItems) => {
     await withRetry(() =>
       setDoc(doc(db, 'settings', 'reportItems'), {
-        daily: pad(next.daily, DEFAULT_ITEMS.daily),
-        weekly: pad(next.weekly, DEFAULT_ITEMS.weekly),
+        daily: padLabels(next.daily, DEFAULT_ITEMS.daily),
+        weekly: padLabels(next.weekly, DEFAULT_ITEMS.weekly),
       })
     );
   }, []);
 
   return { items, loading, saveItems };
+};
+
+/** 店舗ごとの上書き設定を保存（stores/{key}.items）。管理者のみ */
+export const saveStoreItems = async (
+  storeKey: StoreKey,
+  next: ReportItems
+): Promise<void> => {
+  await withRetry(() =>
+    setDoc(
+      doc(db, 'stores', storeKey),
+      { items: { daily: next.daily, weekly: next.weekly } },
+      { merge: true }
+    )
+  );
+};
+
+/** 店舗ごとの上書きを解除して共通設定に戻す。管理者のみ */
+export const clearStoreItems = async (storeKey: StoreKey): Promise<void> => {
+  await withRetry(() => updateDoc(doc(db, 'stores', storeKey), { items: deleteField() }));
+};
+
+/**
+ * 表示用ラベルの解決:
+ * 店舗の個別設定があればそれを優先し、無い枠は共通設定で補完する。
+ */
+export const resolveLabels = (
+  common: ReportItems,
+  store: Store | undefined,
+  type: ReportType
+): string[] => {
+  const base = type === 'daily' ? common.daily : common.weekly;
+  const override = store?.items?.[type];
+  return padLabels(override, base);
 };
 
 export const getItemLabels = (items: ReportItems, type: ReportType): string[] =>

@@ -39,7 +39,7 @@ export const AdminScreen = ({ onLogout }: Props) => {
         ) : tab === 'dashboard' ? (
           <DashboardTab stores={stores} />
         ) : tab === 'items' ? (
-          <ItemsTab />
+          <ItemsTab stores={stores} />
         ) : (
           <StoreManageTab
             stores={stores}

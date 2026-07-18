@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { withRetry } from '../../lib/retry';
-import { useReportItems } from '../../hooks/useReportItems';
+import { resolveLabels, useReportItems } from '../../hooks/useReportItems';
+import { useStores } from '../../hooks/useStores';
 import type { StoreKey, Submission } from '../../types';
 import { formatSubmittedAt, getWeekKeyFromDate, parseDateKey, parseWeekKey } from '../../lib/dateUtils';
 import { Lightbox } from '../ui/Lightbox';
@@ -27,6 +28,7 @@ export const StoreDetailModal = ({
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const { items } = useReportItems();
+  const { stores } = useStores();
 
   useEffect(() => {
     let cancelled = false;
@@ -80,14 +82,14 @@ export const StoreDetailModal = ({
                 title="デイリー写真"
                 color="text-accent"
                 submission={daily}
-                labels={items.daily}
+                labels={resolveLabels(items, stores[storeKey], 'daily')}
                 onTap={setLightbox}
               />
               <Section
                 title="ウィークリー写真（同じ週）"
                 color="text-accent-deep"
                 submission={weekly}
-                labels={items.weekly}
+                labels={resolveLabels(items, stores[storeKey], 'weekly')}
                 onTap={setLightbox}
               />
             </>

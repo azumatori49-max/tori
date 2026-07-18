@@ -3,7 +3,8 @@ import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
 import { submitReport, useSubmission, type SubmitSlot } from '../../hooks/useSubmissions';
-import { getItemLabels, useReportItems } from '../../hooks/useReportItems';
+import { resolveLabels, useReportItems } from '../../hooks/useReportItems';
+import { useStores } from '../../hooks/useStores';
 import { getDateKey, getWeekKey } from '../../lib/dateUtils';
 import type { ReportType, StoreKey } from '../../types';
 
@@ -40,7 +41,8 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack, onDone }: Prop
   );
   const { submission, loading } = useSubmission(storeKey, type, key);
   const { items } = useReportItems();
-  const labels = getItemLabels(items, type);
+  const { stores } = useStores();
+  const labels = resolveLabels(items, stores[storeKey], type);
 
   const [slots, setSlots] = useState<SlotState[]>(emptySlots);
   const [hydrated, setHydrated] = useState(false);

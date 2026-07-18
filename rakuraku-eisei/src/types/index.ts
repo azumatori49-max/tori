@@ -1,7 +1,15 @@
 export type StoreKey = string;
 
+/** 撮影項目の名称（デイリー/ウィークリー各7つ） */
+export interface ReportItems {
+  daily: string[];
+  weekly: string[];
+}
+
 export interface Store {
   name: string;
+  /** 店舗ごとの項目名（未設定なら共通設定 settings/reportItems を使う） */
+  items?: Partial<ReportItems>;
 }
 
 export type ReportType = 'daily' | 'weekly';

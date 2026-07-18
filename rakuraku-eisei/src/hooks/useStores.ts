@@ -35,8 +35,8 @@ export const useStores = () => {
       (snap) => {
         const map: StoreMap = {};
         snap.forEach((d) => {
-          const data = d.data() as { name?: string };
-          if (data.name) map[d.id] = { name: data.name };
+          const data = d.data() as { name?: string; items?: Store['items'] };
+          if (data.name) map[d.id] = { name: data.name, items: data.items };
         });
         setStores(map);
         setLoading(false);

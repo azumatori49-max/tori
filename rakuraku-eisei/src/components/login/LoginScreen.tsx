@@ -50,7 +50,7 @@ export const LoginScreen = ({ onLoginStore, onLoginAdmin }: Props) => {
     <div className="flex min-h-full items-center justify-center px-4 py-8">
       <div className="mx-auto w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mb-2 text-5xl">✅</div>
+          <img src="/logo.svg" alt="" className="mx-auto mb-3 h-24 w-24" />
           <h1 className="text-xl font-black text-text">{APP_NAME}</h1>
           <p className="mt-1 text-xs text-text-muted">店舗ログイン</p>
         </div>

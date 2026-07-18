@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// らくらく衛生管理 — Firestore セキュリティルール
+//
+// 権限の考え方:
+//   - 管理者（下記メールアドレスの Firebase Auth アカウント）だけが
+//     店舗の追加・削除・パスワード設定を行える
+//   - 店舗は匿名ログイン後、正しいパスワードで storeSessions に「入場券」を
+//     作れた場合のみ、自店舗のレポートを読み書きできる
+//   - パスワード（storePasswords）は管理者以外は一切読めない
+//   - 店舗のパスワードを変えると、古い入場券は自動的に無効になる
+
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // ── 管理者（サービス運営者）。src/config.ts の ADMIN_EMAIL と揃えること ──
+    function isAdmin() {
+      return signedIn()
+        && ('email' in request.auth.token)
+        && request.auth.token.email in ['azumatori49@gmail.com'];
+    }
+
+    function sessionPath() {
+      return /databases/$(db)/documents/storeSessions/$(request.auth.uid);
+    }
+
+    // 店舗の「入場券」が有効か:
+    //   入場券の storeKey が一致し、かつ入場券に保存されたパスワードが
+    //   現在の storePasswords と一致していること（変更されたら無効になる）
+    function hasValidSession(storeKey) {
+      return signedIn()
+        && exists(sessionPath())
+        && get(sessionPath()).data.storeKey == storeKey
+        && get(sessionPath()).data.password
+           == get(/databases/$(db)/documents/storePasswords/$(storeKey)).data.password;
+    }
+
+    // ── 店舗マスタ（店舗名のみ。ログイン画面の一覧に使うため読み取りは公開） ──
+    match /stores/{storeKey} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 店舗パスワード（管理者のみ。店舗スタッフからも読めない） ──
+    match /storePasswords/{storeKey} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── 店舗ログインの入場券 ─────────────────────────────
+    // 正しいパスワードを提示できた本人だけが自分の分を作成できる。
+    // パスワードの照合はこのルールがサーバー側で行う。
+    match /storeSessions/{uid} {
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.storeKey is string
+        && exists(/databases/$(db)/documents/storePasswords/$(request.resource.data.storeKey))
+        && request.resource.data.password
+           == get(/databases/$(db)/documents/storePasswords/$(request.resource.data.storeKey)).data.password;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+
+    // ── 提出レポート: submissions/{storeKey}/{daily|weekly}/{日付キー} ──
+    match /submissions/{storeKey}/{type}/{key} {
+      allow read: if isAdmin() || hasValidSession(storeKey);
+      allow create, update: if (isAdmin() || hasValidSession(storeKey))
+        && (type == 'daily' || type == 'weekly')
+        // 内容の検証（壊れたデータや巨大データを防ぐ）
+        && request.resource.data.keys().hasOnly(['count', 'submittedAt', 'photos', 'storeName'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0
+        && request.resource.data.count <= 7
+        && request.resource.data.photos is list
+        && request.resource.data.photos.size() == request.resource.data.count
+        && request.resource.data.photos.size() <= 7
+        && request.resource.data.storeName is string
+        && request.resource.data.storeName.size() <= 200
+        && request.resource.data.submittedAt is string
+        && request.resource.data.submittedAt.size() <= 40;
+      allow delete: if isAdmin();
+    }
+  }
+}

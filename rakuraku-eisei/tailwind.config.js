@@ -4,19 +4,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#f5f4f0',
+        bg: '#f4f6fa',
         surface: '#ffffff',
-        surface2: '#f0efe9',
-        border: '#e0ddd6',
-        accent: '#d4500a',
+        surface2: '#edf1f7',
+        border: '#dfe5ee',
+        accent: '#1657c4',
+        'accent-deep': '#0d3d91',
         ok: '#1a7a3c',
         'ok-bg': '#e8f5ed',
         warn: '#c47d00',
         'warn-bg': '#fff8e6',
         ng: '#c0392b',
         'ng-bg': '#fdecea',
-        text: '#1a1a1a',
-        'text-muted': '#7a7570',
+        text: '#17202b',
+        'text-muted': '#64707f',
       },
       fontFamily: {
         sans: ['"Noto Sans JP"', 'system-ui', 'sans-serif'],

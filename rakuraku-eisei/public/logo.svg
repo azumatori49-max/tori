@@ -1,41 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="blue" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#29abe2"/>
-      <stop offset="1" stop-color="#1657c4"/>
-    </linearGradient>
-    <linearGradient id="blue2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2f8fe0"/>
-      <stop offset="1" stop-color="#1b62cb"/>
-    </linearGradient>
-  </defs>
-
+  <!-- ブランドカラー単色ロゴ -->
   <!-- 外周リング（右下が開いたスウッシュ） -->
-  <circle cx="256" cy="256" r="204" fill="none" stroke="url(#blue)"
+  <circle cx="256" cy="256" r="204" fill="none" stroke="#1657c4"
     stroke-width="44" stroke-linecap="round"
     stroke-dasharray="1000 282" transform="rotate(66 256 256)"/>
 
   <!-- 店舗 -->
   <g>
     <!-- 地面の影 -->
-    <rect x="150" y="330" width="200" height="12" rx="6" fill="#dbe9fb"/>
+    <rect x="150" y="330" width="200" height="12" rx="6" fill="#dce6f8"/>
     <!-- 本体 -->
-    <rect x="170" y="200" width="172" height="132" fill="#ffffff" stroke="#e3eefb" stroke-width="4"/>
+    <rect x="170" y="200" width="172" height="132" fill="#ffffff" stroke="#e8eefb" stroke-width="4"/>
     <!-- 窓 -->
-    <rect x="188" y="224" width="62" height="56" rx="6" fill="url(#blue2)"/>
+    <rect x="188" y="224" width="62" height="56" rx="6" fill="#1657c4"/>
     <!-- ドア -->
-    <rect x="268" y="224" width="52" height="108" rx="6" fill="url(#blue2)"/>
+    <rect x="268" y="224" width="52" height="108" rx="6" fill="#1657c4"/>
     <circle cx="280" cy="282" r="5" fill="#ffffff"/>
     <!-- ひさし（トラペゾイド＋ストライプ） -->
-    <path d="M186 142 L326 142 L344 202 L168 202 Z" fill="url(#blue2)"/>
+    <path d="M186 142 L326 142 L344 202 L168 202 Z" fill="#1657c4"/>
     <path d="M214.4 142 L242.4 142 L239.6 202 L204 202 Z" fill="#ffffff"/>
     <path d="M270.4 142 L298.4 142 L308.8 202 L273.2 202 Z" fill="#ffffff"/>
     <!-- スカラップ（半円の縁飾り） -->
-    <path d="M168 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="url(#blue2)"/>
-    <path d="M203.2 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#dbe9fb"/>
-    <path d="M238.4 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="url(#blue2)"/>
-    <path d="M273.6 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#dbe9fb"/>
-    <path d="M308.8 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="url(#blue2)"/>
+    <path d="M168 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#1657c4"/>
+    <path d="M203.2 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#dce6f8"/>
+    <path d="M238.4 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#1657c4"/>
+    <path d="M273.6 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#dce6f8"/>
+    <path d="M308.8 202 a17.6 17.6 0 0 0 35.2 0 Z" fill="#1657c4"/>
   </g>
 
   <!-- スマホ（チェック付き・少し傾き） -->
@@ -43,10 +33,10 @@
     <!-- 白いフチ（リングとの分離用ハロー） -->
     <rect x="320" y="218" width="144" height="228" rx="34" fill="#ffffff"/>
     <rect x="332" y="230" width="120" height="204" rx="24" fill="#ffffff"
-      stroke="url(#blue)" stroke-width="14"/>
-    <rect x="372" y="248" width="40" height="7" rx="3.5" fill="url(#blue)"/>
-    <rect x="376" y="408" width="32" height="8" rx="4" fill="url(#blue)"/>
-    <circle cx="392" cy="330" r="40" fill="url(#blue)"/>
+      stroke="#1657c4" stroke-width="14"/>
+    <rect x="372" y="248" width="40" height="7" rx="3.5" fill="#1657c4"/>
+    <rect x="376" y="408" width="32" height="8" rx="4" fill="#1657c4"/>
+    <circle cx="392" cy="330" r="40" fill="#1657c4"/>
     <path d="M374 330 L387 343 L412 316" fill="none" stroke="#ffffff"
       stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
   </g>

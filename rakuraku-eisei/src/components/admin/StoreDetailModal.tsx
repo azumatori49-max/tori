@@ -82,7 +82,7 @@ export const StoreDetailModal = ({
               />
               <Section
                 title="ウィークリー写真（同じ週）"
-                color="text-blue-700"
+                color="text-accent-deep"
                 submission={weekly}
                 onTap={setLightbox}
               />

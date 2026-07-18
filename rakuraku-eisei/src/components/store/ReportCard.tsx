@@ -22,9 +22,9 @@ const META: Record<ReportType, { label: string; title: string; desc: string; rin
     label: 'WEEKLY',
     title: '週1回の衛生チェック',
     desc: '今週中に7箇所を撮影して提出',
-    ring: 'border-l-blue-600',
-    chipBg: 'bg-blue-50',
-    chipColor: 'text-blue-700',
+    ring: 'border-l-accent-deep',
+    chipBg: 'bg-accent-deep/10',
+    chipColor: 'text-accent-deep',
   },
 };
 

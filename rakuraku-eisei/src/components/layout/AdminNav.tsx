@@ -40,9 +40,25 @@ const StoreIcon = () => (
   </svg>
 );
 
+const TagIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    className="h-6 w-6"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M4 13.5V5a1 1 0 0 1 1-1h8.5L21 11.5a1.4 1.4 0 0 1 0 2L15.5 19a1.4 1.4 0 0 1-2 0Z" transform="rotate(0)" />
+    <circle cx="9" cy="9" r="1.4" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const ITEMS: Array<{ key: AdminTab; icon: () => JSX.Element; label: string }> = [
   { key: 'dashboard', icon: ClipboardIcon, label: '提出確認' },
   { key: 'stores', icon: StoreIcon, label: '店舗管理' },
+  { key: 'items', icon: TagIcon, label: '項目設定' },
 ];
 
 export const AdminNav = ({ tab, onChange }: Props) => (

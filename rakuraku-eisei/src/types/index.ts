@@ -15,7 +15,7 @@ export interface Submission {
 
 export type Screen = 'login' | 'store-top' | 'upload' | 'admin';
 
-export type AdminTab = 'dashboard' | 'stores';
+export type AdminTab = 'dashboard' | 'stores' | 'items';
 export type ReportTab = 'daily' | 'weekly';
 export type FilterMode = 'all' | 'ng';
 

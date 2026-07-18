@@ -45,6 +45,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── アプリ設定（撮影項目の名称など）。変更は管理者のみ ──
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── 店舗パスワード（管理者のみ。店舗スタッフからも読めない） ──
     match /storePasswords/{storeKey} {
       allow read, write: if isAdmin();

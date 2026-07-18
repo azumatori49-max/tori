@@ -4,6 +4,7 @@ import { formatDateJa } from '../../lib/dateUtils';
 import type { AdminTab } from '../../types';
 import { AdminNav } from '../layout/AdminNav';
 import { DashboardTab } from './DashboardTab';
+import { ItemsTab } from './ItemsTab';
 import { StoreManageTab } from './StoreManageTab';
 
 interface Props {
@@ -37,6 +38,8 @@ export const AdminScreen = ({ onLogout }: Props) => {
           <div className="py-8 text-center text-sm text-text-muted">読み込み中…</div>
         ) : tab === 'dashboard' ? (
           <DashboardTab stores={stores} />
+        ) : tab === 'items' ? (
+          <ItemsTab />
         ) : (
           <StoreManageTab
             stores={stores}

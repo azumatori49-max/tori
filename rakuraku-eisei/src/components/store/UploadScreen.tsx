@@ -3,6 +3,7 @@ import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
 import { submitReport, useSubmission, type SubmitSlot } from '../../hooks/useSubmissions';
+import { getItemLabels, useReportItems } from '../../hooks/useReportItems';
 import { getDateKey, getWeekKey } from '../../lib/dateUtils';
 import type { ReportType, StoreKey } from '../../types';
 
@@ -38,6 +39,8 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack, onDone }: Prop
     [type]
   );
   const { submission, loading } = useSubmission(storeKey, type, key);
+  const { items } = useReportItems();
+  const labels = getItemLabels(items, type);
 
   const [slots, setSlots] = useState<SlotState[]>(emptySlots);
   const [hydrated, setHydrated] = useState(false);
@@ -152,12 +155,16 @@ export const UploadScreen = ({ storeKey, storeName, type, onBack, onDone }: Prop
 
         <div className="mt-5 grid grid-cols-3 gap-2.5">
           {slots.map((s, i) => (
-            <PhotoSlot
-              key={i}
-              index={i}
-              url={previewUrl(s)}
-              onPick={(f) => pick(i, f)}
-            />
+            <div key={i}>
+              <PhotoSlot
+                index={i}
+                url={previewUrl(s)}
+                onPick={(f) => pick(i, f)}
+              />
+              <p className="mt-1 truncate text-center text-[10px] font-bold text-text-muted">
+                {i + 1}. {labels[i] || `項目${i + 1}`}
+              </p>
+            </div>
           ))}
         </div>
 

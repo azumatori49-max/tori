@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { withRetry } from '../../lib/retry';
+import { useReportItems } from '../../hooks/useReportItems';
 import type { StoreKey, Submission } from '../../types';
 import { formatSubmittedAt, getWeekKeyFromDate, parseDateKey, parseWeekKey } from '../../lib/dateUtils';
 import { Lightbox } from '../ui/Lightbox';
@@ -25,6 +26,7 @@ export const StoreDetailModal = ({
   const [weekly, setWeekly] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const { items } = useReportItems();
 
   useEffect(() => {
     let cancelled = false;
@@ -78,12 +80,14 @@ export const StoreDetailModal = ({
                 title="デイリー写真"
                 color="text-accent"
                 submission={daily}
+                labels={items.daily}
                 onTap={setLightbox}
               />
               <Section
                 title="ウィークリー写真（同じ週）"
                 color="text-accent-deep"
                 submission={weekly}
+                labels={items.weekly}
                 onTap={setLightbox}
               />
             </>
@@ -99,11 +103,13 @@ const Section = ({
   title,
   color,
   submission,
+  labels,
   onTap,
 }: {
   title: string;
   color: string;
   submission: Submission | null;
+  labels: string[];
   onTap: (url: string) => void;
 }) => (
   <section>
@@ -114,22 +120,26 @@ const Section = ({
     <div className="grid grid-cols-4 gap-1.5">
       {Array.from({ length: 7 }).map((_, i) => {
         const url = submission?.photos?.[i];
+        const label = `${i + 1}. ${labels[i] || `項目${i + 1}`}`;
         return (
-          <button
-            key={i}
-            type="button"
-            onClick={() => url && onTap(url)}
-            disabled={!url}
-            className="aspect-square overflow-hidden rounded-md border border-border bg-surface2"
-          >
-            {url ? (
-              <img src={url} alt={`#${i + 1}`} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs text-text-muted">
-                #{i + 1}
-              </div>
-            )}
-          </button>
+          <div key={i} className="min-w-0">
+            <button
+              type="button"
+              onClick={() => url && onTap(url)}
+              disabled={!url}
+              title={label}
+              className="aspect-square w-full overflow-hidden rounded-md border border-border bg-surface2"
+            >
+              {url ? (
+                <img src={url} alt={label} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-text-muted">
+                  #{i + 1}
+                </div>
+              )}
+            </button>
+            <p className="mt-0.5 truncate text-center text-[9px] text-text-muted">{label}</p>
+          </div>
         );
       })}
     </div>

@@ -3,17 +3,22 @@ import { useAuth } from './hooks/useAuth';
 import { useStores } from './hooks/useStores';
 import { LoginScreen } from './components/login/LoginScreen';
 import { AdminLoginScreen } from './components/login/AdminLoginScreen';
+import { ViewerLoginScreen } from './components/login/ViewerLoginScreen';
 import { StoreTopScreen } from './components/store/StoreTopScreen';
 import { UploadScreen } from './components/store/UploadScreen';
 import { AdminScreen } from './components/admin/AdminScreen';
+import { ViewerScreen } from './components/viewer/ViewerScreen';
 import { APP_NAME, isFirebaseConfigured } from './config';
 import type { ReportType, Screen } from './types';
 
+const path = window.location.pathname.replace(/\/+$/, '');
 /** /admin で開いているか（管理者専用ページ。店舗一覧には出さない） */
-const isAdminRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/admin');
+const isAdminRoute = path.endsWith('/admin');
+/** /view で開いているか（閲覧専用ページ） */
+const isViewerRoute = path.endsWith('/view');
 
 export default function App() {
-  const { auth, loginStore, loginAdmin, logout } = useAuth();
+  const { auth, loginStore, loginAdmin, loginViewer, logout } = useAuth();
   const { stores } = useStores();
   const [screen, setScreen] = useState<Screen>('login');
   const [uploadType, setUploadType] = useState<ReportType>('daily');
@@ -60,6 +65,14 @@ export default function App() {
       return <AdminScreen onLogout={handleLogout} />;
     }
     return <AdminLoginScreen onLoginAdmin={loginAdmin} />;
+  }
+
+  // ── 閲覧専用ページ（/view）。見るだけ・変更不可 ──
+  if (isViewerRoute) {
+    if (auth.isViewer) {
+      return <ViewerScreen onLogout={handleLogout} />;
+    }
+    return <ViewerLoginScreen onLoginViewer={loginViewer} />;
   }
 
   // ── 店舗用ページ（/） ──

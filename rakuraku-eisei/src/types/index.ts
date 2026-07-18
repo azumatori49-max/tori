@@ -30,6 +30,8 @@ export type FilterMode = 'all' | 'ng';
 export interface AuthState {
   storeKey: StoreKey | '__admin__' | null;
   isAdmin: boolean;
+  /** 閲覧専用（/view）でログイン中か */
+  isViewer?: boolean;
 }
 
 export type SubmissionStatus = 'submitted' | 'partial' | 'none';

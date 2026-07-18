@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { StoreMap } from '../../hooks/useStores';
+import { useViewerPassword } from '../../hooks/useViewerPassword';
 
 interface Props {
   stores: StoreMap;
@@ -86,6 +87,8 @@ export const StoreManageTab = ({
 
   return (
     <div className="px-4 py-4 pb-8">
+      <ViewerAccessCard />
+
       <div className="mb-3 flex items-center justify-between">
         <span className="rounded-full bg-surface px-3 py-1 text-xs font-bold text-text shadow-sm border border-border">
           登録 {entries.length} 店舗
@@ -174,6 +177,89 @@ export const StoreManageTab = ({
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+/** 閲覧専用ページ（/view）のパスワード設定カード */
+const ViewerAccessCard = () => {
+  const { password, loading, savePassword } = useViewerPassword();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const viewerUrl = `${window.location.origin}/view`;
+
+  const handleSave = async () => {
+    if (!value.trim()) return;
+    setBusy(true);
+    setMsg('');
+    try {
+      await savePassword(value.trim());
+      setEditing(false);
+      setValue('');
+      setMsg('閲覧用パスワードを保存しました');
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : '保存に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-4 rounded-xl border border-border bg-surface p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-text">閲覧専用ページ</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setEditing((v) => !v);
+            setValue('');
+            setMsg('');
+          }}
+          className="rounded-md border border-border bg-surface px-2 py-1 text-xs font-bold text-text-muted active:bg-surface2"
+        >
+          {editing ? '閉じる' : 'パスワード変更'}
+        </button>
+      </div>
+      <p className="text-[11px] text-text-muted">
+        提出状況と写真を「見るだけ」のページです。下記URLとパスワードを共有してください。
+      </p>
+      <p className="mt-1 break-all rounded-lg bg-surface2 px-2 py-1.5 text-xs font-bold text-text">
+        {viewerUrl}
+      </p>
+      {loading ? null : password ? (
+        <p className="mt-1 text-[11px] text-text-muted">
+          現在のパスワード: <span className="font-bold text-text">{password}</span>
+        </p>
+      ) : (
+        <p className="mt-1 text-[11px] font-bold text-ng">
+          パスワード未設定のため閲覧ページはまだ使えません。「パスワード変更」から設定してください。
+        </p>
+      )}
+      {editing && (
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="新しい閲覧用パスワード"
+            className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={busy || !value.trim()}
+            className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            保存
+          </button>
+        </div>
+      )}
+      {msg && (
+        <div className="mt-2 rounded-lg bg-ok-bg px-3 py-2 text-xs font-bold text-ok">{msg}</div>
+      )}
     </div>
   );
 };

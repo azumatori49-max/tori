@@ -39,16 +39,45 @@ service cloud.firestore {
            == get(/databases/$(db)/documents/storePasswords/$(storeKey)).data.password;
     }
 
+    function viewerSessionPath() {
+      return /databases/$(db)/documents/viewerSessions/$(request.auth.uid);
+    }
+
+    // 閲覧専用の「入場券」が有効か（パスワード変更で自動失効）
+    function hasViewerSession() {
+      return signedIn()
+        && exists(viewerSessionPath())
+        && get(viewerSessionPath()).data.password
+           == get(/databases/$(db)/documents/settings/viewer).data.password;
+    }
+
     // ── 店舗マスタ（店舗名のみ。ログイン画面の一覧に使うため読み取りは公開） ──
     match /stores/{storeKey} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ── アプリ設定（撮影項目の名称など）。変更は管理者のみ ──
-    match /settings/{docId} {
+    // ── アプリ設定（撮影項目の名称）。変更は管理者のみ ──
+    match /settings/reportItems {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ── 閲覧専用ページのパスワード。読み書きとも管理者のみ ──
+    match /settings/viewer {
+      allow read, write: if isAdmin();
+    }
+
+    // ── 閲覧専用ログインの入場券（/view） ──
+    // 正しい閲覧用パスワードを提示できた本人だけが自分の分を作成できる。
+    match /viewerSessions/{uid} {
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.password
+           == get(/databases/$(db)/documents/settings/viewer).data.password;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     // ── 店舗パスワード（管理者のみ。店舗スタッフからも読めない） ──
@@ -72,8 +101,9 @@ service cloud.firestore {
     }
 
     // ── 提出レポート: submissions/{storeKey}/{daily|weekly}/{日付キー} ──
+    // 閲覧専用ログインは読み取りのみ可（書き込みルールには含めない）
     match /submissions/{storeKey}/{type}/{key} {
-      allow read: if isAdmin() || hasValidSession(storeKey);
+      allow read: if isAdmin() || hasValidSession(storeKey) || hasViewerSession();
       allow create, update: if (isAdmin() || hasValidSession(storeKey))
         && (type == 'daily' || type == 'weekly')
         // 内容の検証（壊れたデータや巨大データを防ぐ）

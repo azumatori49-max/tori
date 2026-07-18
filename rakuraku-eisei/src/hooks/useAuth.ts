@@ -46,7 +46,7 @@ export const useAuth = () => {
       const current = load();
       if (!user) {
         // Firebase セッションが無いのに画面だけログイン済みなら戻す
-        if (current.storeKey || current.isAdmin) {
+        if (current.storeKey || current.isAdmin || current.isViewer) {
           setAuth({ storeKey: null, isAdmin: false });
         }
         return;
@@ -88,6 +88,29 @@ export const useAuth = () => {
     []
   );
 
+  /** 閲覧専用ログイン。成功時 null、失敗時はエラーメッセージを返す */
+  const loginViewer = useCallback(async (password: string): Promise<string | null> => {
+    try {
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        await fbSignOut(auth);
+      }
+      const user =
+        auth.currentUser ?? (await withRetry(() => signInAnonymously(auth))).user;
+      // パスワード照合はセキュリティルール（settings/viewer と比較）が行う
+      await withRetry(() =>
+        setDoc(doc(db, 'viewerSessions', user.uid), {
+          password,
+          createdAt: serverTimestamp(),
+        })
+      );
+      setAuth({ storeKey: null, isAdmin: false, isViewer: true });
+      return null;
+    } catch (e) {
+      if (isPermissionError(e)) return 'パスワードが違います';
+      return '通信に失敗しました。電波の良い場所で再度お試しください。';
+    }
+  }, []);
+
   /** 管理者ログイン。成功時 null、失敗時はエラーメッセージを返す */
   const loginAdmin = useCallback(async (password: string): Promise<string | null> => {
     try {
@@ -105,11 +128,12 @@ export const useAuth = () => {
 
   const logout = useCallback(async () => {
     const uid = auth.currentUser?.uid;
-    const wasStore = auth.currentUser?.isAnonymous;
+    const wasAnon = auth.currentUser?.isAnonymous;
     setAuth({ storeKey: null, isAdmin: false });
     try {
-      if (wasStore && uid) {
+      if (wasAnon && uid) {
         await deleteDoc(doc(db, 'storeSessions', uid)).catch(() => undefined);
+        await deleteDoc(doc(db, 'viewerSessions', uid)).catch(() => undefined);
       }
       await fbSignOut(auth);
     } catch {
@@ -117,5 +141,5 @@ export const useAuth = () => {
     }
   }, []);
 
-  return { auth: auth_, loginStore, loginAdmin, logout };
+  return { auth: auth_, loginStore, loginAdmin, loginViewer, logout };
 };

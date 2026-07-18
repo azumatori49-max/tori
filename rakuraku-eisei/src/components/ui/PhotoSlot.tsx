@@ -37,7 +37,18 @@ export const PhotoSlot = ({ index, url, onPick }: Props) => {
         </>
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-text-muted">
-          <span className="text-2xl">📸</span>
+          <svg
+            viewBox="0 0 24 24"
+            className="h-7 w-7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 8h2.5l1.5-2.5h8L17.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+            <circle cx="12" cy="13" r="3.5" />
+          </svg>
           <span className="text-[10px] font-bold">タップして撮影</span>
           <span className="text-[10px] opacity-60">#{index + 1}</span>
         </div>

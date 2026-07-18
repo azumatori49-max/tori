@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useStores } from './hooks/useStores';
 import { LoginScreen } from './components/login/LoginScreen';
+import { AdminLoginScreen } from './components/login/AdminLoginScreen';
 import { StoreTopScreen } from './components/store/StoreTopScreen';
 import { UploadScreen } from './components/store/UploadScreen';
 import { AdminScreen } from './components/admin/AdminScreen';
 import { APP_NAME, isFirebaseConfigured } from './config';
 import type { ReportType, Screen } from './types';
+
+/** /admin で開いているか（管理者専用ページ。店舗一覧には出さない） */
+const isAdminRoute = window.location.pathname.replace(/\/+$/, '').endsWith('/admin');
 
 export default function App() {
   const { auth, loginStore, loginAdmin, logout } = useAuth();
@@ -50,12 +54,23 @@ export default function App() {
     setScreen('login');
   };
 
-  if (screen === 'login' || (!auth.storeKey && !auth.isAdmin)) {
-    return <LoginScreen onLoginStore={loginStore} onLoginAdmin={loginAdmin} />;
+  // ── 管理者専用ページ（/admin） ──
+  if (isAdminRoute) {
+    if (auth.isAdmin) {
+      return <AdminScreen onLogout={handleLogout} />;
+    }
+    return <AdminLoginScreen onLoginAdmin={loginAdmin} />;
   }
 
-  if (screen === 'admin' && auth.isAdmin) {
-    return <AdminScreen onLogout={handleLogout} />;
+  // ── 店舗用ページ（/） ──
+  // 管理者としてログイン済みなら管理者ページへ移動
+  if (auth.isAdmin) {
+    window.location.replace('/admin');
+    return null;
+  }
+
+  if (screen === 'login' || !auth.storeKey) {
+    return <LoginScreen onLoginStore={loginStore} />;
   }
 
   if (auth.storeKey && auth.storeKey !== '__admin__') {
@@ -83,5 +98,5 @@ export default function App() {
     );
   }
 
-  return <LoginScreen onLoginStore={loginStore} onLoginAdmin={loginAdmin} />;
+  return <LoginScreen onLoginStore={loginStore} />;
 }

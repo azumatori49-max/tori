@@ -1,41 +1,26 @@
-import { useMemo, useState } from 'react';
-import { useStores } from '../../hooks/useStores';
+import { useState } from 'react';
 import { APP_NAME } from '../../config';
-import type { StoreKey } from '../../types';
 
 interface Props {
-  onLoginStore: (storeKey: StoreKey, password: string) => Promise<string | null>;
+  onLoginAdmin: (password: string) => Promise<string | null>;
 }
 
-export const LoginScreen = ({ onLoginStore }: Props) => {
-  const { stores, loading } = useStores();
-  const [storeKey, setStoreKey] = useState('');
+/** 管理者専用ログインページ（/admin）。店舗一覧には表示されない */
+export const AdminLoginScreen = ({ onLoginAdmin }: Props) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const sortedStoreEntries = useMemo(
-    () =>
-      Object.entries(stores).sort(([, a], [, b]) =>
-        a.name.localeCompare(b.name, 'ja')
-      ),
-    [stores]
-  );
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!storeKey) {
-      setError('店舗を選択してください');
-      return;
-    }
     if (!password) {
       setError('パスワードを入力してください');
       return;
     }
     setBusy(true);
     try {
-      const err = await onLoginStore(storeKey, password);
+      const err = await onLoginAdmin(password);
       if (err) setError(err);
     } finally {
       setBusy(false);
@@ -48,36 +33,23 @@ export const LoginScreen = ({ onLoginStore }: Props) => {
         <div className="mb-6 text-center">
           <img src="/logo.svg" alt="" className="mx-auto mb-3 h-24 w-24" />
           <h1 className="text-xl font-black text-text">{APP_NAME}</h1>
-          <p className="mt-1 text-xs text-text-muted">店舗ログイン</p>
+          <p className="mt-1 text-xs text-text-muted">管理者ログイン</p>
         </div>
         <form
           onSubmit={handleSubmit}
           className="space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-sm"
         >
           <div>
-            <label className="mb-1 block text-xs font-bold text-text-muted">店舗</label>
-            <select
-              value={storeKey}
-              onChange={(e) => setStoreKey(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface2 px-3 py-2.5 text-sm"
-              disabled={loading}
-            >
-              <option value="">{loading ? '読み込み中…' : '店舗を選択...'}</option>
-              {sortedStoreEntries.map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-text-muted">パスワード</label>
+            <label className="mb-1 block text-xs font-bold text-text-muted">
+              管理者パスワード
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface2 px-3 py-2.5 text-sm"
               autoComplete="current-password"
+              autoFocus
             />
           </div>
           {error && (
@@ -94,7 +66,9 @@ export const LoginScreen = ({ onLoginStore }: Props) => {
           </button>
         </form>
         <p className="mt-4 text-center text-[11px] text-text-muted">
-          スタッフ用：店舗を選択しパスワードを入力してください
+          <a href="/" className="underline">
+            店舗ログインはこちら
+          </a>
         </p>
       </div>
     </div>

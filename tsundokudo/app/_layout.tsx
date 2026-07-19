@@ -18,6 +18,20 @@ import { C } from '@/constants/colors';
 // Web プレビュー時のネイティブモジュール系エラーを抑制
 LogBox.ignoreAllLogs(true);
 
+/** Web: ブラウザの自動翻訳を無効化（UI文言が別の文に書き換わる誤動作を防ぐ） */
+function disableAutoTranslate() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  document.documentElement.setAttribute('translate', 'no');
+  document.documentElement.classList.add('notranslate');
+  document.documentElement.setAttribute('lang', 'ja');
+  if (!document.querySelector('meta[name="google"][content="notranslate"]')) {
+    const meta = document.createElement('meta');
+    meta.name = 'google';
+    meta.content = 'notranslate';
+    document.head.appendChild(meta);
+  }
+}
+
 /** Web: Noto Sans JP を Google Fonts から読み込む */
 function loadWebFont() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -55,6 +69,7 @@ export default function RootLayout() {
 
   // 起動時
   useEffect(() => {
+    disableAutoTranslate();
     loadWebFont();
     if (isCloudEnabled) {
       void authInit();

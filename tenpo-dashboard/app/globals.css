@@ -279,7 +279,9 @@ textarea {
 
 a.kpi-card-link {
 	color: inherit;
-	display: block;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 	transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
@@ -290,7 +292,8 @@ a.kpi-card-link:hover {
 }
 
 .kpi-more {
-	margin-top: 12px;
+	margin-top: auto;
+	padding-top: 12px;
 	font-size: 12px;
 	font-weight: 500;
 	color: var(--brand-deep);

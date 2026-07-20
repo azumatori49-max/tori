@@ -73,8 +73,11 @@ export default async function MetricDetailPage({
 		provider.getUiSettings(),
 	]);
 	const m = data.today;
+	// KPI の満点は値から自動判定(5 以下なら 5 点満点、超えるなら 100 点満点)
+	const kpiIs5 = key === "kpi" && (m?.kpiScore ?? 0) <= 5;
+	const digits = key === "kpi" ? (kpiIs5 ? 2 : 1) : config?.digits ?? 1;
 	const fmt = (v: number | null | undefined) =>
-		v === null || v === undefined ? "-" : v.toFixed(config?.digits ?? 1);
+		v === null || v === undefined ? "-" : v.toFixed(digits);
 	const betterNote = config?.betterNote ? uiSettings.texts.betterLowNote : null;
 
 	return (
@@ -160,7 +163,7 @@ export default async function MetricDetailPage({
 										{fmt(config.value(m))}
 										<span className="unit">
 											{config.unit}
-											{key === "kpi" ? " /5" : ""}
+											{key === "kpi" ? (kpiIs5 ? " /5" : " /100") : ""}
 										</span>
 									</div>
 								</div>
@@ -205,7 +208,7 @@ export default async function MetricDetailPage({
 							<TrendChart
 								points={data.history.map((h) => ({ date: h.date, value: config.value(h) }))}
 								unit={config.unit}
-								digits={config.digits}
+								digits={digits}
 								target={config.target ? config.target(m) : null}
 							/>
 						</section>

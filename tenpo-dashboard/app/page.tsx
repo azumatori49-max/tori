@@ -204,6 +204,8 @@ export default async function DashboardPage() {
 	const m: DailyMetrics | null = data.today;
 	const prev = data.yesterday;
 	const kpiDiff = m && prev ? m.kpiScore - prev.kpiScore : null;
+	// KPI の満点は値から自動判定(5 以下なら 5 点満点、超えるなら 100 点満点)
+	const kpiIs5 = (m?.kpiScore ?? 0) <= 5;
 	const monthly = data.monthlyRankHistory;
 	const rankDelta =
 		monthly.length >= 2 ? monthly[0].rank - monthly[monthly.length - 1].rank : 0;
@@ -236,17 +238,17 @@ export default async function DashboardPage() {
 						<Link className="card kpi-card kpi-card-link" href="/metric/kpi">
 							<div className="kpi-title">KPI点数</div>
 							<div className="kpi-value">
-								{fmt2(m.kpiScore)}
-								<span className="unit">/5</span>
+								{kpiIs5 ? fmt2(m.kpiScore) : fmt1(m.kpiScore)}
+								<span className="unit">{kpiIs5 ? "/5" : "/100"}</span>
 							</div>
 							<div className="kpi-sub">
 								<div className="row">
 									<span>前日比</span>
-									<Diff value={kpiDiff} unit="pt" digits={2} />
+									<Diff value={kpiDiff} unit="pt" digits={kpiIs5 ? 2 : 1} />
 								</div>
 								<div className="row">
 									<span>全店平均</span>
-									<b>{fmt2(m.kpiAvg)}</b>
+									<b>{kpiIs5 ? fmt2(m.kpiAvg) : fmt1(m.kpiAvg)}</b>
 								</div>
 								{m.kpiRank !== null && (
 									<div className="row">

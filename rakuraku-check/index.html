@@ -647,7 +647,8 @@ const KNOWN_MODELS=[
   ["gemini-3.5-flash","gemini-3.5-flash（無料枠あり）"],
   ["gemini-3.1-pro","gemini-3.1-pro（高精度・有料プラン向け）"],
 ];
-let aiModel=null;
+let aiModels={}, lastAIError="";
+const AI_MODEL_ROTATION=["gemini-3.1-flash-lite","gemini-3.5-flash"];
 const aiBusy=new Set(), aiErr=new Map();
 function aiConfigured(){return !!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
 function parseFirebaseConfig(text){
@@ -658,8 +659,9 @@ function parseFirebaseConfig(text){
   for(const m of text.matchAll(/([A-Za-z][A-Za-z0-9]*)\s*:\s*["']([^"']*)["']/g)) o[m[1]]=m[2];
   return o.apiKey?o:null;
 }
-async function getAIModel(){
-  if(aiModel) return aiModel;
+async function getAIModel(name){
+  const model=name||(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;
+  if(aiModels[model]) return aiModels[model];
   if(!aiConfigured()) throw new Error("Firebase設定が未登録です。管理画面の「写真AI自動判定の設定」から登録してください。");
   let appMod,aiMod;
   try{
@@ -677,23 +679,32 @@ async function getAIModel(){
     }catch(e){ /* App Checkが読み込めない環境でもAI呼び出し自体は試みる（サーバー側で拒否される） */ }
   }
   const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
-  aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||DEFAULT_AI_MODEL});
-  return aiModel;
+  aiModels[model]=aiMod.getGenerativeModel(ai,{model});
+  return aiModels[model];
 }
-// モデル呼び出しの共通処理。指定モデルが提供終了していたら標準モデルで1回だけ再試行する
+// モデル呼び出しの共通処理。無料枠の上限・モデル提供終了のときは、
+// もう片方のモデル（liteとflashは無料枠が別）に自動で切り替えて再試行する。
 async function aiGenerate(input){
-  try{
-    const m=await getAIModel(); await aiThrottle();
-    const r=await m.generateContent(input); return r.response.text();
-  }catch(err){
-    const msg=String(err&&err.message||err);
-    if(/no longer available|not found|404/i.test(msg)&&state.fb&&state.fb.model!==DEFAULT_AI_MODEL){
-      state.fb={...state.fb,model:DEFAULT_AI_MODEL}; aiModel=null;
-      const m=await getAIModel(); await aiThrottle();
-      const r=await m.generateContent(input); return r.response.text();
+  const tried=[];
+  let model=(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;
+  for(let attempt=0;attempt<AI_MODEL_ROTATION.length+1;attempt++){
+    try{
+      const m=await getAIModel(model); await aiThrottle();
+      const r=await m.generateContent(input);
+      lastAIError="";
+      return r.response.text();
+    }catch(err){
+      const msg=String(err&&err.message||err);
+      lastAIError=`[${model}] ${msg}`.slice(0,300);
+      tried.push(model);
+      const alt=AI_MODEL_ROTATION.find(x=>!tried.includes(x));
+      if(alt&&/429|quota|rate.?limit|resource.?exhausted|no longer available|not found|404|limit:\s*0/i.test(msg)){
+        model=alt; continue;
+      }
+      throw err;
     }
-    throw err;
   }
+  throw new Error("2つのモデルとも無料枠の上限に達しています。数分待つか、時間を置いて再試行してください。");
 }
 function buildJudgePrompt(item){
   const groups=item.groups.map(g=>`- ${g.key}（${g.label}）：${g.options.map(o=>o.v+(o.desc?`（${o.desc}）`:"")).join(" ／ ")}`).join("\n");
@@ -1097,7 +1108,8 @@ function viewAdmin(){
     ${AI_ENABLED&&SHARED_FB_CONFIG?`
     <div class="card">
       <h3>写真AI自動判定 <span class="badge done">利用可能（設定不要）</span></h3>
-      <p class="desc">AI判定の設定はアプリに組み込み済みです。個人での設定は不要で、写真を追加するとそのままAI判定（補助）が使えます。使用モデル：${esc(SHARED_FB_CONFIG.model||DEFAULT_AI_MODEL)}</p>
+      <p class="desc">AI判定の設定はアプリに組み込み済みです。個人での設定は不要で、写真を追加するとそのままAI判定（補助）が使えます。使用モデル：${esc(SHARED_FB_CONFIG.model||DEFAULT_AI_MODEL)}（上限時は自動で別モデルに切替）</p>
+      ${lastAIError?`<p class="note" style="color:var(--bad)">直近のAIエラー詳細（診断用）：${esc(lastAIError)}</p>`:""}
     </div>`:""}
     ${AI_ENABLED&&!SHARED_FB_CONFIG?`
     <div class="card">
@@ -1175,7 +1187,7 @@ function bindAdmin(){
     const cfg=parseFirebaseConfig($("#fb-config").value);
     if(!cfg){status.textContent="設定を読み取れませんでした。apiKeyを含むfirebaseConfigを貼り付けてください。";return;}
     state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
-    aiModel=null;
+    aiModels={};
     await kvSet("fb",state.fb).catch(()=>{});
     render();
     const st=$("#fb-status"); if(st) st.textContent="保存しました。「接続テスト」で動作確認できます。";
@@ -1187,7 +1199,7 @@ function bindAdmin(){
       const cfg=parseFirebaseConfig($("#fb-config").value);
       if(cfg){
         state.fb={config:cfg,model:($("#fb-model-custom").value.trim()||$("#fb-model").value),auto:!!$("#fb-auto").value};
-        aiModel=null; await kvSet("fb",state.fb).catch(()=>{});
+        aiModels={}; await kvSet("fb",state.fb).catch(()=>{});
       }
       const m=await getAIModel();
       const r=await m.generateContent("接続テストです。「OK」とだけ返してください。");

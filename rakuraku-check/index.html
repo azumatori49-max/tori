@@ -635,9 +635,12 @@ const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOI
 // Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
+// Google AI Studio のAPIキー（https://aistudio.google.com/apikey で無料発行）。
+// 設定すると、Firebase AI Logic を経由せず Gemini API を直接呼ぶ（無料枠の問題の回避ルート）
+const SHARED_GEMINI_KEY=null;
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.2";
+const APP_VERSION="v7.20.3";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -648,10 +651,10 @@ const KNOWN_MODELS=[
   ["gemini-3.5-flash","gemini-3.5-flash（無料枠あり）"],
   ["gemini-3.1-pro","gemini-3.1-pro（高精度・有料プラン向け）"],
 ];
-let aiModels={}, lastAIError="";
+let aiModels={}, lastAIError="", lastAIErrors={};
 const AI_MODEL_ROTATION=["gemini-3.1-flash-lite","gemini-3.5-flash"];
 const aiBusy=new Set(), aiErr=new Map();
-function aiConfigured(){return !!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
+function aiConfigured(){return !!SHARED_GEMINI_KEY||!!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
 function parseFirebaseConfig(text){
   text=String(text||"").trim(); if(!text) return null;
   try{const o=JSON.parse(text); if(o&&o.apiKey) return o;}catch(e){}
@@ -683,6 +686,19 @@ async function getAIModel(name){
   aiModels[model]=aiMod.getGenerativeModel(ai,{model});
   return aiModels[model];
 }
+// AI Studio キーがある場合は Gemini API を直接呼ぶ（Firebase AI Logic 非経由）
+async function geminiRest(model,input){
+  const parts=(typeof input==="string"?[{text:input}]:input.map(p=>typeof p==="string"?{text:p}:p));
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${SHARED_GEMINI_KEY}`,{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({contents:[{parts}]})});
+  if(!res.ok){
+    const t=await res.text().catch(()=>"");
+    throw new Error(`${res.status} ${t.slice(0,400)}`);
+  }
+  const j=await res.json();
+  return (j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts||[]).map(p=>p.text||"").join("");
+}
 // モデル呼び出しの共通処理。無料枠の上限・モデル提供終了のときは、
 // もう片方のモデル（liteとflashは無料枠が別）に自動で切り替えて再試行する。
 async function aiGenerate(input){
@@ -690,18 +706,28 @@ async function aiGenerate(input){
   let model=(state.fb&&state.fb.model)||DEFAULT_AI_MODEL;
   for(let attempt=0;attempt<AI_MODEL_ROTATION.length+1;attempt++){
     try{
-      const m=await getAIModel(model); await aiThrottle();
-      const r=await m.generateContent(input);
+      let text;
+      if(SHARED_GEMINI_KEY){
+        await aiThrottle();
+        text=await geminiRest(model,input);
+      }else{
+        const m=await getAIModel(model); await aiThrottle();
+        const r=await m.generateContent(input); text=r.response.text();
+      }
       lastAIError="";
-      return r.response.text();
+      return text;
     }catch(err){
       const msg=String(err&&err.message||err);
       lastAIError=`[${model}] ${msg}`.slice(0,300);
+      lastAIErrors[model]=msg.slice(0,500);
       tried.push(model);
       const quotaLike=/429|quota|rate.?limit|resource.?exhausted|no longer available|not found|404|limit:\s*0/i.test(msg);
       const alt=AI_MODEL_ROTATION.find(x=>!tried.includes(x));
       if(quotaLike&&alt){ model=alt; continue; }
-      if(quotaLike&&!alt) throw new Error(`2つのモデル（${tried.join("、")}）とも無料枠の上限です。数分〜数時間おいて再試行してください（枠は毎日リセットされます）。`);
+      if(quotaLike&&!alt){
+        const hints=tried.map(t=>{const h=quotaHint(lastAIErrors[t]||"");return h?`${t}：${h}`:""}).filter(Boolean).join("／");
+        throw new Error(`2つのモデル（${tried.join("、")}）とも上限です。${hints||"数分〜数時間おいて再試行してください。"}`);
+      }
       throw err;
     }
   }
@@ -717,6 +743,16 @@ ${groups}
 写真から判断できる範囲で、各評価グループについて最も適切な選択肢を1つずつ、選択肢の文言そのままで選んでください。
 次のJSONのみを出力してください（コードブロックや説明文は不要）：
 {"judgments":{${item.groups.map(g=>`"${g.key}":"選択肢の文言"`).join(",")}},"reason":"判定理由を60字以内","confidence":"高か中か低"}`;
+}
+function quotaHint(msg){
+  const hints=[];
+  if(/PerMinute/i.test(msg)) hints.push("1分あたりの回数上限に到達（約1分で回復）");
+  if(/PerDay/i.test(msg)) hints.push("1日あたりの回数上限に到達（日本時間の夕方頃リセット)");
+  const m=/limit:\s*(\d+)/i.exec(msg);
+  if(m) hints.push(m[1]==="0"?"上限値=0（このモデルはこの経路では無料枠なし）":`上限値=${m[1]}回`);
+  const r=/retry in ([\d.]+)s/i.exec(msg);
+  if(r) hints.push(`約${Math.ceil(+r[1])}秒後に再試行可`);
+  return hints.join("・");
 }
 function friendlyAIError(err){
   const s=String(err&&err.message||err);
@@ -1113,6 +1149,8 @@ function viewAdmin(){
       <p class="desc">AI判定の設定はアプリに組み込み済みです。個人での設定は不要で、写真を追加するとそのままAI判定（補助）が使えます。使用モデル：${esc(SHARED_FB_CONFIG.model||DEFAULT_AI_MODEL)}（上限時は自動で別モデルに切替）</p>
       <div style="margin-top:10px"><button class="btn ghost" id="fb-test-shared">AI接続テスト（診断）</button></div>
       <p class="note" id="fb-shared-status">${lastAIError?`直近のAIエラー詳細：${esc(lastAIError)}`:"問題があるときはこのテストを実行して、表示された内容を報告してください。"}</p>
+      ${Object.keys(lastAIErrors).length?`<p class="note">モデル別の直近エラー：<br>${Object.entries(lastAIErrors).map(([m,e])=>`<b>${esc(m)}</b>：${esc(quotaHint(e)||e.slice(0,120))}`).join("<br>")}</p>`:""}
+      <p class="note">経路：${SHARED_GEMINI_KEY?"AI Studioキー直接（Firebase非経由）":"Firebase AI Logic経由"}</p>
     </div>`:""}
     ${AI_ENABLED&&!SHARED_FB_CONFIG?`
     <div class="card">
@@ -1157,6 +1195,9 @@ function viewAdmin(){
       <div class="field"><label>新しいアクセスコード（任意）</label>
         <input id="gen-code" autocomplete="off" placeholder="例：新しい合言葉">
       </div>
+      <div class="field"><label>Gemini APIキー（AI Studioで無料発行・任意）</label>
+        <input id="gen-gemini" autocomplete="off" placeholder="AIza… を貼り付け">
+      </div>
       <div style="margin-top:12px"><button class="btn sub" id="gen-go">設定行を生成</button></div>
       <div class="field" id="gen-out-wrap" hidden><label>生成結果 — index.html の同名の行と置き換えてください</label>
         <textarea id="gen-out" readonly style="min-height:110px;font-size:12px"></textarea>
@@ -1190,6 +1231,8 @@ function bindAdmin(){
       try{ out.push(`const ACCESS_CODE_HASH="${await sha256hex(code)}";`); }
       catch(e){ msg.textContent="この環境ではハッシュを生成できませんでした（httpsで開いてください）。"; return; }
     }
+    const gkey=$("#gen-gemini").value.trim();
+    if(gkey){ out.push(`const SHARED_GEMINI_KEY="${gkey.replace(/"/g,"")}";`); }
     if(!out.length){msg.textContent="firebaseConfigか新しいアクセスコードのどちらかを入力してください。";return;}
     $("#gen-out").value=out.join("\n");
     $("#gen-out-wrap").hidden=false;

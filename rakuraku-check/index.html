@@ -636,11 +636,13 @@ const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOI
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
 // Google AI Studio のAPIキー（https://aistudio.google.com/apikey で無料発行）。
-// 設定すると、Firebase AI Logic を経由せず Gemini API を直接呼ぶ（無料枠の問題の回避ルート）
+// セキュリティ上、公開ソースには書かず、管理画面から入力してこの端末内(IndexedDB)に保存する。
 const SHARED_GEMINI_KEY=null;
+let deviceGeminiKey=null;
+function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.3";
+const APP_VERSION="v7.20.4";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -654,7 +656,7 @@ const KNOWN_MODELS=[
 let aiModels={}, lastAIError="", lastAIErrors={};
 const AI_MODEL_ROTATION=["gemini-3.1-flash-lite","gemini-3.5-flash"];
 const aiBusy=new Set(), aiErr=new Map();
-function aiConfigured(){return !!SHARED_GEMINI_KEY||!!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
+function aiConfigured(){return !!geminiKey()||!!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
 function parseFirebaseConfig(text){
   text=String(text||"").trim(); if(!text) return null;
   try{const o=JSON.parse(text); if(o&&o.apiKey) return o;}catch(e){}
@@ -689,8 +691,9 @@ async function getAIModel(name){
 // AI Studio キーがある場合は Gemini API を直接呼ぶ（Firebase AI Logic 非経由）
 async function geminiRest(model,input){
   const parts=(typeof input==="string"?[{text:input}]:input.map(p=>typeof p==="string"?{text:p}:p));
-  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${SHARED_GEMINI_KEY}`,{
-    method:"POST",headers:{"Content-Type":"application/json"},
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-goog-api-key":geminiKey()},
     body:JSON.stringify({contents:[{parts}]})});
   if(!res.ok){
     const t=await res.text().catch(()=>"");
@@ -707,7 +710,7 @@ async function aiGenerate(input){
   for(let attempt=0;attempt<AI_MODEL_ROTATION.length+1;attempt++){
     try{
       let text;
-      if(SHARED_GEMINI_KEY){
+      if(geminiKey()){
         await aiThrottle();
         text=await geminiRest(model,input);
       }else{
@@ -1150,7 +1153,7 @@ function viewAdmin(){
       <div style="margin-top:10px"><button class="btn ghost" id="fb-test-shared">AI接続テスト（診断）</button></div>
       <p class="note" id="fb-shared-status">${lastAIError?`直近のAIエラー詳細：${esc(lastAIError)}`:"問題があるときはこのテストを実行して、表示された内容を報告してください。"}</p>
       ${Object.keys(lastAIErrors).length?`<p class="note">モデル別の直近エラー：<br>${Object.entries(lastAIErrors).map(([m,e])=>`<b>${esc(m)}</b>：${esc(quotaHint(e)||e.slice(0,120))}`).join("<br>")}</p>`:""}
-      <p class="note">経路：${SHARED_GEMINI_KEY?"AI Studioキー直接（Firebase非経由）":"Firebase AI Logic経由"}</p>
+      <p class="note">経路：${geminiKey()?"AI Studioキー直接（Firebase非経由）":"Firebase AI Logic経由"}</p>
     </div>`:""}
     ${AI_ENABLED&&!SHARED_FB_CONFIG?`
     <div class="card">
@@ -1186,6 +1189,20 @@ function viewAdmin(){
       ${cloudErr?`<p class="note" style="color:var(--bad)">接続エラー：${esc(cloudErr.slice(0,140))}<br>Firebaseコンソールで「Firestore Database」を作成し、「Authentication → 匿名」を有効化してください（README参照）。</p>`:""}
       ${cloudReady?`<p class="note">共有中の記録：${state.inspections.length}件</p>`:""}
     </div>
+    ${AI_ENABLED?`
+    <div class="card">
+      <h3>AI直接接続（この端末に保存） <span class="badge ${geminiKey()?"done":"todo"}">${geminiKey()?"設定済み":"未設定"}</span></h3>
+      <p class="desc">Google AI Studio（<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>）で無料発行したAPIキーを貼り付けると、Firebaseを経由せず直接Gemini APIを呼びます（無料枠の問題の回避）。キーは<b>この端末の中だけ</b>に保存され、公開されません。</p>
+      <div class="field"><label>Gemini APIキー</label>
+        <input id="gk-input" autocomplete="off" placeholder="AQ.… または AIza… を貼り付け" value="${esc(deviceGeminiKey||"")}">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn sub" id="gk-save">保存</button>
+        <button class="btn ghost" id="gk-test">接続テスト</button>
+        ${deviceGeminiKey?`<button class="btn ghost" id="gk-clear" style="color:var(--bad)">削除</button>`:""}
+      </div>
+      <p class="note" id="gk-status"></p>
+    </div>`:""}
     <div class="card">
       <h3>セットアップ支援（管理者向け）</h3>
       <p class="desc">firebaseConfigやアクセスコードを<b>チャットやメールに貼らずに</b>共通設定するためのツールです。入力内容はこの画面の中だけで処理され、どこにも送信されません。生成された行をコピーして、GitHub上で <code>rakuraku-check/index.html</code> の同じ名前の行と置き換えれば設定完了です。</p>
@@ -1195,9 +1212,7 @@ function viewAdmin(){
       <div class="field"><label>新しいアクセスコード（任意）</label>
         <input id="gen-code" autocomplete="off" placeholder="例：新しい合言葉">
       </div>
-      <div class="field"><label>Gemini APIキー（AI Studioで無料発行・任意）</label>
-        <input id="gen-gemini" autocomplete="off" placeholder="AIza… を貼り付け">
-      </div>
+
       <div style="margin-top:12px"><button class="btn sub" id="gen-go">設定行を生成</button></div>
       <div class="field" id="gen-out-wrap" hidden><label>生成結果 — index.html の同名の行と置き換えてください</label>
         <textarea id="gen-out" readonly style="min-height:110px;font-size:12px"></textarea>
@@ -1208,6 +1223,24 @@ function viewAdmin(){
   </div>`;
 }
 function bindAdmin(){
+  $("#gk-save")?.addEventListener("click",async()=>{
+    const st=$("#gk-status"); const v=$("#gk-input").value.trim();
+    if(!v){st.textContent="キーを貼り付けてください。";return;}
+    deviceGeminiKey=v; aiModels={}; await kvSet("geminiKey",v).catch(()=>{});
+    render(); const s2=$("#gk-status"); if(s2){s2.textContent="保存しました。「接続テスト」で確認できます。";}
+  });
+  $("#gk-clear")?.addEventListener("click",async()=>{
+    deviceGeminiKey=null; aiModels={}; await kvDel("geminiKey").catch(()=>{}); render();
+  });
+  $("#gk-test")?.addEventListener("click",async()=>{
+    const st=$("#gk-status"); const v=$("#gk-input").value.trim();
+    if(v&&v!==deviceGeminiKey){ deviceGeminiKey=v; aiModels={}; await kvSet("geminiKey",v).catch(()=>{}); }
+    st.textContent="接続テスト中…（最大30秒）";
+    try{
+      const t=await withTimeout(aiGenerate("接続テストです。「OK」とだけ返してください。"),30000);
+      st.textContent="接続成功："+String(t).trim().slice(0,40);
+    }catch(err){ st.textContent="接続失敗："+friendlyAIError(err).slice(0,140); }
+  });
   $("#fb-test-shared")?.addEventListener("click",async()=>{
     const st=$("#fb-shared-status");
     st.textContent="接続テスト中…（最大30秒）";
@@ -1231,8 +1264,7 @@ function bindAdmin(){
       try{ out.push(`const ACCESS_CODE_HASH="${await sha256hex(code)}";`); }
       catch(e){ msg.textContent="この環境ではハッシュを生成できませんでした（httpsで開いてください）。"; return; }
     }
-    const gkey=$("#gen-gemini").value.trim();
-    if(gkey){ out.push(`const SHARED_GEMINI_KEY="${gkey.replace(/"/g,"")}";`); }
+
     if(!out.length){msg.textContent="firebaseConfigか新しいアクセスコードのどちらかを入力してください。";return;}
     $("#gen-out").value=out.join("\n");
     $("#gen-out-wrap").hidden=false;
@@ -1942,6 +1974,7 @@ document.addEventListener("input",e=>{
     state.inspections=(await allInspections())||[];
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
+    deviceGeminiKey=(await kvGet("geminiKey"))||null;
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{

@@ -18,6 +18,24 @@ import { C } from '@/constants/colors';
 // Web プレビュー時のネイティブモジュール系エラーを抑制
 LogBox.ignoreAllLogs(true);
 
+/** Web: ホーム画面追加用のアイコン・名前を設定（iOS/Android） */
+function setupWebAppIcons() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  if (document.getElementById('rr-touch-icon')) return;
+  // GitHub Pages はサブパス /tori 配下で配信される
+  const prefix = window.location.hostname.endsWith('github.io') ? '/tori' : '';
+  const add = (tag: 'link' | 'meta', attrs: Record<string, string>) => {
+    const el = document.createElement(tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+    document.head.appendChild(el);
+  };
+  add('link', { id: 'rr-touch-icon', rel: 'apple-touch-icon', sizes: '180x180', href: `${prefix}/apple-touch-icon.png` });
+  add('link', { rel: 'manifest', href: `${prefix}/manifest.json` });
+  add('meta', { name: 'apple-mobile-web-app-title', content: 'らくらくメンテ' });
+  add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+  add('meta', { name: 'theme-color', content: '#1565D8' });
+}
+
 /** Web: ブラウザの自動翻訳を無効化（UI文言が別の文に書き換わる誤動作を防ぐ） */
 function disableAutoTranslate() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -70,6 +88,7 @@ export default function RootLayout() {
   // 起動時
   useEffect(() => {
     disableAutoTranslate();
+    setupWebAppIcons();
     loadWebFont();
     if (isCloudEnabled) {
       void authInit();

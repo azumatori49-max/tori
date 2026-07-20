@@ -642,7 +642,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.4";
+const APP_VERSION="v7.20.5";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1191,8 +1191,8 @@ function viewAdmin(){
     </div>
     ${AI_ENABLED?`
     <div class="card">
-      <h3>AI直接接続（この端末に保存） <span class="badge ${geminiKey()?"done":"todo"}">${geminiKey()?"設定済み":"未設定"}</span></h3>
-      <p class="desc">Google AI Studio（<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>）で無料発行したAPIキーを貼り付けると、Firebaseを経由せず直接Gemini APIを呼びます（無料枠の問題の回避）。キーは<b>この端末の中だけ</b>に保存され、公開されません。</p>
+      <h3>AI直接接続（全端末に共有） <span class="badge ${geminiKey()?"done":"todo"}">${geminiKey()?"設定済み":"未設定"}</span></h3>
+      <p class="desc">Google AI Studio（<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>）で無料発行したAPIキーを貼り付けると、Firebaseを経由せず直接Gemini APIを呼びます（無料枠の問題の回避）。キーは<b>端末内とチーム専用のクラウド（Firestore）</b>に保存され、公開ソースには載りません。1台で設定すれば他の端末にも自動で行き渡ります。</p>
       <div class="field"><label>Gemini APIキー</label>
         <input id="gk-input" autocomplete="off" placeholder="AQ.… または AIza… を貼り付け" value="${esc(deviceGeminiKey||"")}">
       </div>
@@ -1227,10 +1227,15 @@ function bindAdmin(){
     const st=$("#gk-status"); const v=$("#gk-input").value.trim();
     if(!v){st.textContent="キーを貼り付けてください。";return;}
     deviceGeminiKey=v; aiModels={}; await kvSet("geminiKey",v).catch(()=>{});
-    render(); const s2=$("#gk-status"); if(s2){s2.textContent="保存しました。「接続テスト」で確認できます。";}
+    const shared=await cloudSaveGeminiKey(v);
+    render();
+    const s2=$("#gk-status");
+    if(s2){s2.textContent=shared?"保存しました（全端末に自動共有されます）。「接続テスト」で確認できます。":"この端末に保存しました（クラウド未接続のため共有は保留）。";}
   });
   $("#gk-clear")?.addEventListener("click",async()=>{
-    deviceGeminiKey=null; aiModels={}; await kvDel("geminiKey").catch(()=>{}); render();
+    deviceGeminiKey=null; aiModels={}; await kvDel("geminiKey").catch(()=>{});
+    await cloudDeleteGeminiKey();
+    render();
   });
   $("#gk-test")?.addEventListener("click",async()=>{
     const st=$("#gk-status"); const v=$("#gk-input").value.trim();
@@ -1405,6 +1410,7 @@ async function initCloud(){
     try{ await authMod.signInAnonymously(authMod.getAuth(app)); }
     catch(e){ /* 匿名認証が無効でも、テストモードのルールなら動作する */ }
     setTimeout(()=>syncOutbox(),0); // ログイン直後の自動再送
+    setTimeout(()=>cloudFetchGeminiKey(),0); // 共有AIキーの取得
     fsMods=fsMod;
     fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
     fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
@@ -1556,6 +1562,30 @@ async function syncOutbox(){
   }else{
     await run();
   }
+}
+// AIキーをクラウド（Firestore config/gemini）で全端末に共有する
+async function cloudSaveGeminiKey(key){
+  if(!fsDb) return false;
+  try{
+    await fsMods.setDoc(fsMods.doc(fsDb,"config","gemini"),{key,updatedAt:new Date().toISOString()});
+    return true;
+  }catch(e){ return false; }
+}
+async function cloudDeleteGeminiKey(){
+  if(!fsDb) return;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","gemini")); }catch(e){}
+}
+async function cloudFetchGeminiKey(){
+  if(!fsDb||!fsMods.getDoc) return;
+  try{
+    const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","gemini"));
+    const k=snap&&snap.exists&&snap.exists()?(snap.data()||{}).key:null;
+    if(k&&k!==deviceGeminiKey){
+      deviceGeminiKey=k; aiModels={};
+      kvSet("geminiKey",k).catch(()=>{});
+      if(state.view==="admin") render();
+    }
+  }catch(e){}
 }
 function cloudStatusLabel(){
   if(cloudReady) return `<span style="color:var(--good);font-weight:700">クラウド接続済み（全端末で共通）</span>`;

@@ -53,6 +53,9 @@ service cloud.firestore {
         && request.resource.data.tenantId == "default";
       allow delete: if request.auth != null;
     }
+    match /config/{id} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
 ```

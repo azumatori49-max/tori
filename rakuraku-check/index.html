@@ -637,6 +637,7 @@ const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOI
 const SHARED_APPCHECK_SITE_KEY=null;
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
+const APP_VERSION="v7.20.2";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -697,10 +698,10 @@ async function aiGenerate(input){
       const msg=String(err&&err.message||err);
       lastAIError=`[${model}] ${msg}`.slice(0,300);
       tried.push(model);
+      const quotaLike=/429|quota|rate.?limit|resource.?exhausted|no longer available|not found|404|limit:\s*0/i.test(msg);
       const alt=AI_MODEL_ROTATION.find(x=>!tried.includes(x));
-      if(alt&&/429|quota|rate.?limit|resource.?exhausted|no longer available|not found|404|limit:\s*0/i.test(msg)){
-        model=alt; continue;
-      }
+      if(quotaLike&&alt){ model=alt; continue; }
+      if(quotaLike&&!alt) throw new Error(`2つのモデル（${tried.join("、")}）とも無料枠の上限です。数分〜数時間おいて再試行してください（枠は毎日リセットされます）。`);
       throw err;
     }
   }
@@ -1095,6 +1096,7 @@ function viewHome(){
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
     </div>
     <button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>
+    <p class="hw-meta" style="text-align:center;margin-top:10px">らくらく臨店チェック ${APP_VERSION}</p>
   </div>`;
 }
 
@@ -1102,14 +1104,15 @@ function viewHome(){
 function viewAdmin(){
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px">
-    <h1>管理画面</h1><span class="meta">AI判定の設定</span>
+    <h1>管理画面</h1><span class="meta">AI判定の設定・${APP_VERSION}</span>
   </div></header>
   <div class="wrap">
     ${AI_ENABLED&&SHARED_FB_CONFIG?`
     <div class="card">
       <h3>写真AI自動判定 <span class="badge done">利用可能（設定不要）</span></h3>
       <p class="desc">AI判定の設定はアプリに組み込み済みです。個人での設定は不要で、写真を追加するとそのままAI判定（補助）が使えます。使用モデル：${esc(SHARED_FB_CONFIG.model||DEFAULT_AI_MODEL)}（上限時は自動で別モデルに切替）</p>
-      ${lastAIError?`<p class="note" style="color:var(--bad)">直近のAIエラー詳細（診断用）：${esc(lastAIError)}</p>`:""}
+      <div style="margin-top:10px"><button class="btn ghost" id="fb-test-shared">AI接続テスト（診断）</button></div>
+      <p class="note" id="fb-shared-status">${lastAIError?`直近のAIエラー詳細：${esc(lastAIError)}`:"問題があるときはこのテストを実行して、表示された内容を報告してください。"}</p>
     </div>`:""}
     ${AI_ENABLED&&!SHARED_FB_CONFIG?`
     <div class="card">
@@ -1164,6 +1167,16 @@ function viewAdmin(){
   </div>`;
 }
 function bindAdmin(){
+  $("#fb-test-shared")?.addEventListener("click",async()=>{
+    const st=$("#fb-shared-status");
+    st.textContent="接続テスト中…（最大30秒）";
+    try{
+      const t=await withTimeout(aiGenerate("接続テストです。「OK」とだけ返してください。"),30000);
+      st.textContent="接続成功："+String(t).trim().slice(0,40);
+    }catch(err){
+      st.textContent="接続失敗："+friendlyAIError(err).slice(0,120)+(lastAIError?`　詳細：${lastAIError.slice(0,160)}`:"");
+    }
+  });
   $("#gen-go")?.addEventListener("click",async()=>{
     const msg=$("#gen-msg"); const out=[];
     const fbText=$("#gen-fb").value.trim();

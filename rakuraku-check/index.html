@@ -17,25 +17,11 @@
   --good:#1E7F4C; --good-bg:#E3F2E9; --warn:#B26A00; --warn-bg:#FBF0DC; --bad:#BE3E36; --bad-bg:#F9E7E5;
   --shadow:0 1px 3px rgba(30,35,43,.08);
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#14171C; --card:#1D2129; --ink:#E8EAEE; --sub:#99A1AD; --line:#2C323C;
-    --accent:#4EC8B6; --accent-ink:#06231F; --accent-soft:#1C3B36;
-    --good:#5BC489; --good-bg:#1C3227; --warn:#E0A44E; --warn-bg:#38301D; --bad:#E37F76; --bad-bg:#3A2320;
-    --shadow:0 1px 3px rgba(0,0,0,.4);
-  }
-}
 :root[data-theme="light"]{
   --bg:#F7F6F2; --card:#FFFFFF; --ink:#1E232B; --sub:#5C6470; --line:#E3E1DA;
   --accent:#0E8577; --accent-ink:#FFFFFF; --accent-soft:#DFF2EF;
   --good:#1E7F4C; --good-bg:#E3F2E9; --warn:#B26A00; --warn-bg:#FBF0DC; --bad:#BE3E36; --bad-bg:#F9E7E5;
   --shadow:0 1px 3px rgba(30,35,43,.08);
-}
-:root[data-theme="dark"]{
-  --bg:#14171C; --card:#1D2129; --ink:#E8EAEE; --sub:#99A1AD; --line:#2C323C;
-  --accent:#4EC8B6; --accent-ink:#06231F; --accent-soft:#1C3B36;
-  --good:#5BC489; --good-bg:#1C3227; --warn:#E0A44E; --warn-bg:#38301D; --bad:#E37F76; --bad-bg:#3A2320;
-  --shadow:0 1px 3px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg)}
@@ -642,7 +628,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.5";
+const APP_VERSION="v7.20.6";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;

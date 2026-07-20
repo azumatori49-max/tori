@@ -631,7 +631,7 @@ const FEATURE_AI=true;
 const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
 // 共通のFirebase設定。ここに設定を書き込むと全ユーザー共通になり、個人での設定が不要になる。
 // 例: const SHARED_FB_CONFIG={config:{apiKey:"AIza...",authDomain:"xxx.firebaseapp.com",projectId:"xxx",appId:"1:..."},model:"gemini-3.5-flash",auto:true};
-const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.5-flash","auto":true};
+const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.1-flash-lite","auto":true};
 // Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
@@ -643,7 +643,8 @@ const ACCESS_CODE_HASH=null;
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[
-  ["gemini-3.5-flash","gemini-3.5-flash（推奨・無料枠あり）"],
+  ["gemini-3.1-flash-lite","gemini-3.1-flash-lite（推奨・無料枠が大きい）"],
+  ["gemini-3.5-flash","gemini-3.5-flash（無料枠あり）"],
   ["gemini-3.1-pro","gemini-3.1-pro（高精度・有料プラン向け）"],
 ];
 let aiModel=null;
@@ -678,6 +679,21 @@ async function getAIModel(){
   const ai=aiMod.getAI(app,{backend:new aiMod.GoogleAIBackend()});
   aiModel=aiMod.getGenerativeModel(ai,{model:state.fb.model||DEFAULT_AI_MODEL});
   return aiModel;
+}
+// モデル呼び出しの共通処理。指定モデルが提供終了していたら標準モデルで1回だけ再試行する
+async function aiGenerate(input){
+  try{
+    const m=await getAIModel(); await aiThrottle();
+    const r=await m.generateContent(input); return r.response.text();
+  }catch(err){
+    const msg=String(err&&err.message||err);
+    if(/no longer available|not found|404/i.test(msg)&&state.fb&&state.fb.model!==DEFAULT_AI_MODEL){
+      state.fb={...state.fb,model:DEFAULT_AI_MODEL}; aiModel=null;
+      const m=await getAIModel(); await aiThrottle();
+      const r=await m.generateContent(input); return r.response.text();
+    }
+    throw err;
+  }
 }
 function buildJudgePrompt(item){
   const groups=item.groups.map(g=>`- ${g.key}（${g.label}）：${g.options.map(o=>o.v+(o.desc?`（${o.desc}）`:"")).join(" ／ ")}`).join("\n");
@@ -742,15 +758,27 @@ function scheduleAutoJudge(id){
 let batchBusy=false, batchErr="";
 async function judgeAllItems(){
   const d=state.draft; if(!d) return;
-  aiGen++;
-  for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
   const targets=ALL_ITEMS.filter(it=>{const a=d.answers[it.id];return a&&(a.photos||[]).length&&it.groups.length;});
   if(!targets.length){alert("写真のある項目がありません。写真を追加してから実行してください。");return;}
   if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
-  if(batchBusy) return;
-  batchBusy=true; batchErr=""; render();
+  await judgeBatch(targets,false);
+}
+// タブ移動時：そのカテゴリの「写真あり・未判定」の項目だけを1回でまとめて判定
+async function autoJudgeCategory(ci){
+  if(!AI_ENABLED||!aiConfigured()||!state.fb||!state.fb.auto||!state.draft) return;
+  if(ci==null||ci<0||ci>=PDCA_CAT) return;
+  const targets=CHECK_CATS[ci].items.filter(it=>{
+    const a=state.draft.answers[it.id];
+    return a&&(a.photos||[]).length&&it.groups.length&&!(a.ai&&a.ai.suggest);
+  });
+  if(targets.length) judgeBatch(targets,true);
+}
+async function judgeBatch(targets,silent){
+  const d=state.draft; if(!d||batchBusy) return;
+  aiGen++;
+  for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
+  batchBusy=true; batchErr=""; if(!silent) render();
   try{
-    const model=await getAIModel();
     const parts=["あなたは飲食店の店舗巡回チェックの検査員です。以下の各チェック項目について、直後に添付された写真を確認して判定してください。"];
     for(const it of targets){
       const a=d.answers[it.id];
@@ -759,9 +787,7 @@ async function judgeAllItems(){
       for(const p of a.photos.slice(0,2)){ parts.push({inlineData:{mimeType:"image/jpeg",data:await shrinkForAI(p)}}); }
     }
     parts.push(`\n\nすべての項目について、次のJSONのみを出力してください（コードブロックや説明文は不要。選択肢は文言そのまま）：\n{"items":{${targets.map(it=>`"${it.id}":{"judgments":{${it.groups.map(g=>`"${g.key}":"選択肢の文言"`).join(",")}},"reason":"判定理由を40字以内","confidence":"高か中か低"}`).join(",")}}}`);
-    await aiThrottle();
-    const res=await model.generateContent(parts);
-    const out=parseAIJson(res.response.text());
+    const out=parseAIJson(await aiGenerate(parts));
     if(!out||!out.items) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
     let n=0;
     for(const it of targets){
@@ -769,9 +795,13 @@ async function judgeAllItems(){
       if(r&&r.judgments){ d.answers[it.id].ai={suggest:r.judgments,reason:String(r.reason||""),conf:String(r.confidence||""),at:todayStr()}; n++; }
     }
     persistDraft();
-    showToast(`まとめてAI判定が完了しました（${n}項目・API呼び出し1回）`);
-  }catch(err){ batchErr=friendlyAIError(err); }
-  finally{ batchBusy=false; render(); }
+    showToast(`AI判定が完了しました（${n}項目・API呼び出し1回）`);
+    if(silent&&state.view==="check"){ for(const it of targets) refreshCard(it.id); }
+  }catch(err){
+    batchErr=friendlyAIError(err);
+    if(silent) showToast("AI判定を保留しました："+batchErr.slice(0,40));
+  }
+  finally{ batchBusy=false; if(!silent) render(); }
 }
 async function judgeItem(itemId){
   if(!state.draft) return;
@@ -783,12 +813,9 @@ async function judgeItem(itemId){
   aiBusy.add(itemId); aiErr.delete(itemId); refreshCard(itemId);
   const gen=aiGen;
   try{
-    const model=await getAIModel();
     const parts=[];
     for(const p of a.photos){ parts.push({inlineData:{mimeType:"image/jpeg",data:await shrinkForAI(p)}}); }
-    await aiThrottle();
-    const res=await model.generateContent([...parts,buildJudgePrompt(item)]);
-    const out=parseAIJson(res.response.text());
+    const out=parseAIJson(await aiGenerate([...parts,buildJudgePrompt(item)]));
     if(!out||!out.judgments) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
     if(gen!==aiGen) return; // まとめて判定が後から実行された場合は、こちらの結果は破棄
     a.ai={suggest:out.judgments,reason:out.reason||"",conf:out.confidence||"",at:todayStr()};
@@ -808,7 +835,6 @@ async function judgeInterview(){
   if(ivBusy) return;
   ivBusy=true; ivErr=""; render();
   try{
-    const model=await getAIModel();
     const prompt=`あなたは飲食チェーンのスーパーバイザーを補佐するAIです。以下は店舗「${state.draft.store}」の社員との面談記録です。
 ${qs.map(x=>`${x.q.label}
 ${x.t||"（未回答）"}`).join("\n")}
@@ -816,9 +842,7 @@ ${x.t||"（未回答）"}`).join("\n")}
 この面談内容を分析し、次のJSONのみを出力してください（コードブロックや説明文は不要）：
 {"summary":"面談内容の要約（100字以内）","risk":0,"level":"高か中か低","concerns":["懸念点を最大4つ"],"reason":"リスク判定の理由（60字以内）"}
 riskは0〜100の整数で、人間関係の悪化・人手不足・退職リスク・設備の故障放置・衛生問題・業務過多などが深刻なほど高くしてください。`;
-    await aiThrottle();
-    const res=await model.generateContent(prompt);
-    const out=parseAIJson(res.response.text());
+    const out=parseAIJson(await aiGenerate(prompt));
     if(!out||out.summary==null) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
     iv.ai={
       summary:String(out.summary||""),
@@ -1092,7 +1116,7 @@ function viewAdmin(){
         <div class="field"><label>モデル名を直接入力（任意・上級者向け）</label>
           <input id="fb-model-custom" placeholder="空欄なら上の選択を使用" value="${(()=>{const cur=state.fb&&state.fb.model;return cur&&!KNOWN_MODELS.some(([v])=>v===cur)?esc(cur):"";})()}">
         </div>
-        <div class="field"><label>写真追加時に自動判定</label>
+        <div class="field"><label>自動判定（カテゴリ移動時にまとめて実行）</label>
           <select id="fb-auto"><option value="1"${state.fb&&state.fb.auto?" selected":""}>する</option><option value=""${state.fb&&!state.fb.auto?" selected":""}>しない</option></select>
         </div>
       </div>
@@ -1719,8 +1743,8 @@ document.addEventListener("click",async e=>{
     showToast("保存しました。「続きから再開」でいつでも再開できます。");
     return;
   }
-  if(t.dataset.cat!=null){state.catIndex=+t.dataset.cat;render();scrollTo(0,0);return;}
-  if(t.dataset.nav){state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);return;}
+  if(t.dataset.cat!=null){const prev=state.catIndex;state.catIndex=+t.dataset.cat;render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
+  if(t.dataset.nav){const prev=state.catIndex;state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
   if(t.dataset.eval){
     const [id,gk,...v]=t.dataset.eval.split(":");
     const a=ans(id); const val=v.join(":");
@@ -1821,7 +1845,6 @@ document.addEventListener("change",async e=>{
     }
     persistDraft(); refreshCard(id);
     if(failed) alert("一部の写真の読み込みに失敗しました。もう一度お試しください。");
-    if(AI_ENABLED&&state.fb&&state.fb.auto&&a.photos.length) scheduleAutoJudge(id);
     return;
   }
   if(t.dataset.field){

@@ -1,0 +1,183 @@
+/*
+ * display/style.css — 店内モニター
+ * 要件（§9）:
+ *  - 球はCSSのみ。画像ファイルなし
+ *  - 離れた厨房から、音が聞こえなくても色と動きで状態が分かる
+ *  - 暗色背景・高コントラスト・クリーンミニマル
+ *  - prefers-reduced-motion を尊重
+ * ブランドカラー: 赤 #d01f00 / 黄 #f5c800
+ */
+
+:root {
+  --brand-red: #d01f00;
+  --brand-yellow: #f5c800;
+  --bg: #101014;
+  --fg: #f2f2f0;
+  --fg-dim: #9a9aa0;
+  --panel: #1a1a20;
+  --orb-blue: #2f7fd4;
+  --orb-blue-dim: #3a5670;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Noto Sans JP', sans-serif;
+  overflow: hidden;
+}
+
+.stage {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 2.5vh 3vw;
+  transition: transform 2s ease; /* 焼き付き対策の微小シフト用 */
+}
+
+/* ---------- ヘッダー ---------- */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clock {
+  font-size: 4.5vh;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  font-size: 2vh;
+  padding: 0.6vh 1.6vh;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.status--ok   { color: #7fd48a; border-color: #2c4a30; }
+.status--warn { color: var(--brand-yellow); border-color: #5c4d00; }
+.status--stop { color: var(--brand-red); border-color: #521204; }
+
+/* ---------- 球（orb） ---------- */
+
+.orb-area {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5vh;
+  min-height: 0;
+}
+
+.orb {
+  position: relative;
+  width: 28vh;
+  height: 28vh;
+}
+
+.orb__core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%,
+    color-mix(in srgb, var(--orb-color, var(--orb-blue)) 60%, white) 0%,
+    var(--orb-color, var(--orb-blue)) 45%,
+    color-mix(in srgb, var(--orb-color, var(--orb-blue)) 55%, black) 100%);
+  box-shadow: 0 0 12vh 0 color-mix(in srgb, var(--orb-color, var(--orb-blue)) 45%, transparent);
+  animation: breathe 5s ease-in-out infinite; /* ゆっくり呼吸 */
+}
+
+/* 状態 → 色。厨房の遠目でも判別できるよう彩度高めに（§9 の表） */
+.orb--info  { --orb-color: var(--orb-blue); }
+.orb--alert { --orb-color: var(--brand-red); }
+.orb--brief { --orb-color: var(--brand-yellow); }
+.orb--idle  { --orb-color: var(--orb-blue-dim); }
+
+/* 発話中: 波紋 + 鼓動が速くなる */
+.orb--speaking .orb__core { animation: breathe 1.4s ease-in-out infinite; }
+
+.orb__ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--orb-color, var(--orb-blue));
+  opacity: 0;
+}
+.orb--speaking .orb__ripple { animation: ripple 2s ease-out infinite; }
+.orb--speaking .orb__ripple--2 { animation-delay: 1s; }
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.05); }
+}
+
+@keyframes ripple {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.label {
+  font-size: 2.4vh;
+  color: var(--fg-dim);
+  letter-spacing: 0.15em;
+}
+
+/* ---------- メッセージ ---------- */
+
+.message-area {
+  text-align: center;
+  padding: 0 4vw 3vh;
+}
+
+.message {
+  font-size: 3.4vh;
+  font-weight: 500;
+  line-height: 1.6;
+  /* 長文でも枠を壊さない */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.message-time {
+  margin-top: 1vh;
+  font-size: 1.8vh;
+  color: var(--fg-dim);
+}
+
+/* ---------- KPI ---------- */
+
+.kpi-area {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.2vh;
+}
+
+.kpi {
+  background: var(--panel);
+  border-radius: 1.2vh;
+  padding: 1.6vh;
+  text-align: center;
+}
+
+.kpi__name  { font-size: 1.7vh; color: var(--fg-dim); margin-bottom: 0.8vh; }
+.kpi__value {
+  font-size: 2.8vh;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kpi__value--bad  { color: var(--brand-red); }
+.kpi__value--good { color: var(--brand-yellow); }
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .orb__core, .orb--speaking .orb__core { animation: none; }
+  .orb__ripple { animation: none !important; }
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>店長サポートAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 焼き付き対策のため全体を数ピクセル単位で周期シフトする -->
+  <main id="stage" class="stage">
+    <header class="topbar">
+      <div id="clock" class="clock">--:--</div>
+      <div id="status" class="status status--ok">接続中</div>
+    </header>
+
+    <!-- AI店長の姿 = CSSのみの球。離れた厨房から色と動きで状態が分かること -->
+    <section class="orb-area">
+      <div id="orb" class="orb orb--idle">
+        <div class="orb__core"></div>
+        <div class="orb__ripple"></div>
+        <div class="orb__ripple orb__ripple--2"></div>
+      </div>
+      <div id="label" class="label">待機中</div>
+    </section>
+
+    <section class="message-area">
+      <p id="message" class="message">起動しています…</p>
+      <div id="message-time" class="message-time"></div>
+    </section>
+
+    <section class="kpi-area" id="kpi-area">
+      <div class="kpi"><div class="kpi__name">昨日の売上</div><div class="kpi__value" id="kpi-sales">—</div></div>
+      <div class="kpi"><div class="kpi__name">昨日の客数</div><div class="kpi__value" id="kpi-guests">—</div></div>
+      <div class="kpi"><div class="kpi__name">昨日の客単価</div><div class="kpi__value" id="kpi-avg">—</div></div>
+      <div class="kpi"><div class="kpi__name">基準比</div><div class="kpi__value" id="kpi-gap">—</div></div>
+      <div class="kpi"><div class="kpi__name">本日の基準</div><div class="kpi__value" id="kpi-baseline">—</div></div>
+      <div class="kpi"><div class="kpi__name">タスク実施率</div><div class="kpi__value" id="kpi-task">—</div></div>
+    </section>
+  </main>
+
+  <audio id="player"></audio>
+
+  <!-- Firebase compat SDK（kiosk 用。CDN 読み込み） -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

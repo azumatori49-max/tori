@@ -1,0 +1,8 @@
+{
+  "name": "ai-tencho",
+  "private": true,
+  "description": "AI店長（店長サポートAI）— GAS + Firebase + LINE + 店内モニター",
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  }
+}

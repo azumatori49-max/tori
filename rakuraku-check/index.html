@@ -213,11 +213,33 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
+.print-only{display:none}
 @media print{
-  body{background:#fff;color:#000}
-  .hd,.navbar,.no-print{display:none !important}
-  .card{box-shadow:none;border-color:#ccc;break-inside:avoid}
+  @page{ size:A4; margin:12mm; }
+  body{background:#fff;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:10.5pt}
+  .hd,.navbar,.no-print,.sync-bar,#toast{display:none !important}
+  .print-only{display:block}
   #app{padding-bottom:0;max-width:none}
+  .wrap{padding:0}
+  .card{box-shadow:none;border:none;border-radius:0;padding:4mm 0;margin:0;break-inside:auto;background:#fff}
+  .card::before{display:none}
+  .card h3{font-size:12.5pt;border-left:1.2mm solid #189B8B;padding-left:3mm;margin-bottom:2mm}
+  .rep-h{text-align:left;border-bottom:2px solid #189B8B;padding-bottom:4mm;margin-bottom:2mm}
+  .rep-h h2{font-size:16pt;letter-spacing:.02em}
+  .rep-h .meta{color:#444;font-size:10pt}
+  .score-ring{width:30mm;height:30mm;border-width:1.6mm;border-color:#189B8B;margin:3mm 0 0}
+  .score-ring b{font-size:16pt}
+  .rep-item{break-inside:avoid;border-top:.3mm solid #bbb;padding:3mm 0}
+  .rep-item .nm{font-size:11pt}
+  .rep-item .photos{display:flex;flex-wrap:wrap;gap:3mm;margin-top:2mm}
+  .rep-item .photos .ph{width:44mm;height:33mm;border:.3mm solid #ccc;border-radius:1.5mm}
+  .rep-item .photos .ph img{width:100%;height:100%;object-fit:cover}
+  .badge{border:.3mm solid currentColor;background:#fff !important}
+  .badge.done{color:#1E7F4C}.badge.issue{color:#BE3E36}.badge.todo{color:#555}
+  .txt-block .v{font-size:10pt}
+  .hw-item{border-top:.3mm solid #ddd}
+  .ai-box{border:.3mm solid #189B8B;background:#fff}
+  a{color:inherit;text-decoration:none}
 }
 </style>
 <div id="app" aria-live="polite"></div>
@@ -628,7 +650,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.7";
+const APP_VERSION="v7.20.8";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1793,6 +1815,7 @@ function reportBody(insp,isPreview){
   return `
   <section class="card">
     <div class="rep-h">
+      <div class="print-only" style="font-size:9pt;color:#666;margin-bottom:2mm">らくらく臨店チェック｜臨店チェック報告書　発行日：${fmtDate(todayStr())}</div>
       <h2>${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}</h2>
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
@@ -1927,6 +1950,9 @@ document.addEventListener("click",async e=>{
       }
       // クラウド保存の写真をまだ読み込んでいない場合は読み込んでから印刷
       if(await hydratePhotos(insp)) render();
+      const orig=document.title;
+      document.title=`臨店チェック報告書_${insp.store}_${insp.date}`;
+      setTimeout(()=>{document.title=orig;},3000);
     }
     window.print();
     return;

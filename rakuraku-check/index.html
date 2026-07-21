@@ -628,7 +628,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.6";
+const APP_VERSION="v7.20.7";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -864,34 +864,60 @@ async function judgeItem(itemId){
   }
 }
 let ivBusy=false, ivErr="";
-async function judgeInterview(){
-  const iv=state.draft.pdca.interview||(state.draft.pdca.interview={});
+async function analyzeInterview(store,iv){
   const qs=INTERVIEW_QS.map(q=>({q,t:String(iv[q.key]||"").trim()}));
-  if(!qs.some(x=>x.t)){alert("面談内容が未入力です。5つの質問のいずれかに入力してから実行してください。");return;}
-  if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
-  if(ivBusy) return;
-  ivBusy=true; ivErr=""; render();
-  try{
-    const prompt=`あなたは飲食チェーンのスーパーバイザーを補佐するAIです。以下は店舗「${state.draft.store}」の社員との面談記録です。
+  const prompt=`あなたは飲食チェーンのスーパーバイザーを補佐するAIです。以下は店舗「${store}」の社員との面談記録です。
 ${qs.map(x=>`${x.q.label}
 ${x.t||"（未回答）"}`).join("\n")}
 
 この面談内容を分析し、次のJSONのみを出力してください（コードブロックや説明文は不要）：
 {"summary":"面談内容の要約（100字以内）","risk":0,"level":"高か中か低","concerns":["懸念点を最大4つ"],"reason":"リスク判定の理由（60字以内）"}
 riskは0〜100の整数で、人間関係の悪化・人手不足・退職リスク・設備の故障放置・衛生問題・業務過多などが深刻なほど高くしてください。`;
-    const out=parseAIJson(await aiGenerate(prompt));
-    if(!out||out.summary==null) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
-    iv.ai={
-      summary:String(out.summary||""),
-      risk:Math.max(0,Math.min(100,Math.round(+out.risk||0))),
-      level:["高","中","低"].includes(out.level)?out.level:"中",
-      concerns:Array.isArray(out.concerns)?out.concerns.slice(0,4).map(String):[],
-      reason:String(out.reason||""),
-      at:todayStr(),
-    };
+  const out=parseAIJson(await aiGenerate(prompt));
+  if(!out||out.summary==null) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
+  return {
+    summary:String(out.summary||""),
+    risk:Math.max(0,Math.min(100,Math.round(+out.risk||0))),
+    level:["高","中","低"].includes(out.level)?out.level:"中",
+    concerns:Array.isArray(out.concerns)?out.concerns.slice(0,4).map(String):[],
+    reason:String(out.reason||""),
+    at:todayStr(),
+  };
+}
+async function judgeInterview(){
+  const iv=state.draft.pdca.interview||(state.draft.pdca.interview={});
+  if(!INTERVIEW_QS.some(q=>String(iv[q.key]||"").trim())){alert("面談内容が未入力です。5つの質問のいずれかに入力してから実行してください。");return;}
+  if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
+  if(ivBusy) return;
+  ivBusy=true; ivErr=""; render();
+  try{
+    iv.ai=await analyzeInterview(state.draft.store,iv);
     persistDraft();
   }catch(err){ ivErr=friendlyAIError(err); }
   finally{ ivBusy=false; render(); }
+}
+// 保存済み報告書の面談を後からAI分析し、記録（端末・クラウド）に保存する
+let repIvBusy=false;
+async function repInterviewAI(id){
+  const insp=state.inspections.find(i=>i.id===id); if(!insp) return;
+  const iv=insp.pdca&&insp.pdca.interview;
+  if(!iv||!INTERVIEW_QS.some(q=>String(iv[q.key]||"").trim())){alert("この報告書には面談内容が入力されていません。");return;}
+  if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
+  if(repIvBusy) return;
+  repIvBusy=true; render();
+  try{
+    const ai=await analyzeInterview(insp.store,iv);
+    iv.ai=ai;
+    try{
+      const local=await getInspection(id);
+      if(local){ local.pdca=local.pdca||{}; local.pdca.interview=local.pdca.interview||{}; local.pdca.interview.ai=ai; await putInspection(local); }
+    }catch(e){}
+    if(fsDb){
+      try{ await fsMods.setDoc(fsMods.doc(fsDb,"inspections",id),{pdca:{interview:{ai}}},{merge:true}); }catch(e){}
+    }
+    showToast("面談のAI分析を報告書に保存しました");
+  }catch(err){ alert("AI分析に失敗しました："+friendlyAIError(err)); }
+  finally{ repIvBusy=false; render(); }
 }
 function riskBadge(ai){
   const cls=ai.level==="高"?"issue":ai.level==="中"?"todo":"done";
@@ -1811,6 +1837,9 @@ function reportBody(insp,isPreview){
 ${esc(iv.ai.summary)}${iv.ai.reason?`
 理由：${esc(iv.ai.reason)}`:""}</div></div>`:""}
       ${INTERVIEW_QS.filter(q=>filled(iv[q.key])).map(q=>`<div class="txt-block"><div class="k">${esc(q.label)}</div><div class="v">${esc(iv[q.key])}</div></div>`).join("")}
+      ${!isPreview&&AI_ENABLED?`<div class="no-print" style="margin-top:10px">
+        <button class="chip" data-repivai="${esc(insp.id)}" ${repIvBusy?"disabled":""}>${repIvBusy?"AIが分析中…":(iv.ai?"AIで再分析":"AIで面談を要約・リスク判定（補助）")}</button>
+      </div>`:""}
     </section>`;})()}
   <section class="card">
     <h3>次回までの宿題・タスク（${insp.homework.length+insp.autoTasks.length}件）</h3>
@@ -1885,6 +1914,7 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="to-admin"){state.view="admin";render();scrollTo(0,0);return;}
   if(t.id==="iv-ai"){judgeInterview();return;}
+  if(t.dataset.repivai){repInterviewAI(t.dataset.repivai);return;}
   if(t.id==="ai-batch"){judgeAllItems();return;}
   if(t.id==="sync-now"){syncOutbox();return;}
   if(t.id==="rep-print"){

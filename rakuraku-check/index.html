@@ -549,7 +549,8 @@ function computeAutoTasks(draft){
 const ALERT_LOW=3;      // 3点以下を「低評価」とする
 const ALERT_COUNT=5;    // 低評価が5回以上でアラート
 function completedFor(store){
-  return state.inspections.filter(i=>i.store===store&&i.completedAt)
+  // 一時保存（入力途中）の記録は点数が揃っていないため集計から除外
+  return state.inspections.filter(i=>i.store===store&&i.completedAt&&!i.provisional)
     .sort((a,b)=>(a.date+a.completedAt).localeCompare(b.date+b.completedAt));
 }
 function score5Of(item,insp){
@@ -583,7 +584,7 @@ function aiTotalScore(insp){
   return ss.length?Math.round(ss.reduce((a,b)=>a+b,0)/ss.length):null;
 }
 function storeRanking(){
-  const stores=[...new Set(state.inspections.filter(i=>i.completedAt).map(i=>i.store))];
+  const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
   return stores.map(s=>{
     const list=completedFor(s); const last=list[list.length-1];
     return {store:s,score:last.totalScore,date:last.date,alerts:storeAlerts(s).length};
@@ -650,7 +651,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.20.8";
+const APP_VERSION="v7.21.0";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1163,7 +1164,7 @@ function viewHome(){
       ${past.length?past.map(i=>`
         <div class="hw-item" data-sname="${esc(i.store)}">
           <button class="list-card" data-open="${esc(i.id)}">
-            <span><b>${esc(i.store)}</b>${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
+            <span><b>${esc(i.store)}</b>${i.provisional?` <span class="badge todo">一時保存</span>`:""}${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc">${i.totalScore}<small>点</small></span>
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
@@ -1455,6 +1456,20 @@ async function initCloud(){
       for(const l of local){ if(l&&l.id&&!cloudIds.has(l.id)) merged.push(l); }
       state.inspections=merged;
       cloudReady=true; cloudErr="";
+      // タイムアウト後などに実はクラウドへ届いていた記録は「送信済み」に直す（未送信バッジが残る問題の解消）
+      try{
+        const cloudBy=new Map(snap.docs.map(d=>[d.id,d.data()]));
+        const obs=(await outboxAll())||[]; let fixed=false;
+        for(const o of obs){
+          if(o.status==="synced"||o.status==="syncing") continue;
+          const c=cloudBy.get(o.id); if(!c) continue;
+          const li=local.find(l=>l&&l.id===o.id);
+          if(li&&li.savedAt&&c.savedAt!==li.savedAt) continue; // 端末側に新しい版がある＝まだ未送信
+          o.status="synced"; o.syncedAt=new Date().toISOString(); o.lastError="";
+          await outboxPut(o); fixed=true;
+        }
+        if(fixed) await updateSyncBar();
+      }catch(e){}
       if(!cloudMigrated){
         cloudMigrated=true;
         // この端末にだけ残っている過去の記録は送信キューに載せて自動送信
@@ -1482,18 +1497,22 @@ function stripPhotos(insp){
   }
   return {slim,photos};
 }
-async function cloudSave(insp){
+async function cloudSave(insp,ob){
   if(!fsDb) throw new Error("クラウド未接続");
   const m=fsMods;
   const {slim,photos}=stripPhotos(insp);
   // 写真を先にすべて保存し、最後に記録本体を確定する（途中失敗しても同じIDで再送＝上書きされる）
+  // 送信済みの写真は outbox に記録し、再送時はスキップ（写真が多い記録も再送のたびに前進する）
+  const sent=new Set((ob&&ob.sentPhotos)||[]);
   for(const ph of photos){
-    await m.setDoc(m.doc(fsDb,"photos",ph.id),{...ph,tenantId:insp.tenantId||SHARED_TENANT_ID});
+    if(sent.has(ph.id)) continue;
+    await withTimeout(m.setDoc(m.doc(fsDb,"photos",ph.id),{...ph,tenantId:insp.tenantId||SHARED_TENANT_ID}),25000,"写真の送信がタイムアウトしました");
+    if(ob){ sent.add(ph.id); ob.sentPhotos=[...sent]; await outboxPut(ob).catch(()=>{}); }
   }
   slim.tenantId=insp.tenantId||SHARED_TENANT_ID;
   slim.storeId=insp.storeId||String(insp.store||"").trim();
   if(m.serverTimestamp) slim.receivedAt=m.serverTimestamp();
-  await m.setDoc(m.doc(fsDb,"inspections",insp.id),slim);
+  await withTimeout(m.setDoc(m.doc(fsDb,"inspections",insp.id),slim),25000,"記録の送信がタイムアウトしました");
 }
 async function cloudDelete(id){
   if(!fsDb) return;
@@ -1575,7 +1594,7 @@ async function syncOutbox(){
         try{
           const insp=await getInspection(o.id);
           if(!insp){ o.status="synced"; o.syncedAt=new Date().toISOString(); await outboxPut(o); continue; }
-          await withTimeout(cloudSave(insp),30000);
+          await cloudSave(insp,o); // タイムアウトは写真1枚ごと（大きな記録も再送で前進する）
           o.status="synced"; o.syncedAt=new Date().toISOString(); o.lastError="";
           await outboxPut(o); ok++;
         }catch(err){
@@ -1747,7 +1766,7 @@ function finishView(){
   const aiBar=AI_ENABLED?`
   <div class="card no-print">
     <h3>まとめてAI判定（補助）</h3>
-    <p class="desc">写真のある全項目を、API呼び出し<b>1回</b>でまとめてAI判定します。1項目ずつ判定するより利用制限にかかりにくくなります。</p>
+    <p class="desc">写真のある全項目を、API呼び出し<b>1回</b>でまとめてAI判定します。1項目ずつ判定するより利用制限にかかりにくくなります。<b>AI判定はあくまで補助なので、判定していなくても提出できます。</b></p>
     <button class="btn sub" id="ai-batch" ${batchBusy?"disabled":""}>${batchBusy?"AIが判定中…":"写真のある項目をまとめてAI判定"}</button>
     ${batchErr?`<p class="note" style="color:var(--bad)">${esc(batchErr)}</p>`:""}
   </div>`:"";
@@ -1757,6 +1776,11 @@ function finishView(){
     <div class="miss no-print">
       <div class="ttl">点数の未選択・写真の未添付があるため完了できません（${missing.length}件）</div>
       ${missing.map(m=>`<button data-jump="${m.ci}:${m.id}"><b>${esc(m.label)}</b>：${esc(m.what)}</button>`).join("")}
+    </div>
+    <div class="card no-print">
+      <h3>一時保存して提出</h3>
+      <p class="desc">未入力の項目があっても、いったん提出してクラウドに保存できます（AI判定は不要）。続きは報告書画面の「続きを入力する」からいつでも再開でき、完了するまでランキング・推移には集計されません。</p>
+      <button class="btn sub" id="finalize-partial">入力途中のまま一時保存して提出</button>
     </div>
     ${reportBody(previewInspection(),true)}`;
   }
@@ -1773,9 +1797,10 @@ function previewInspection(){
   const d=state.draft;
   return buildInspection(d,true);
 }
-function buildInspection(d,preview){
+function buildInspection(d,preview,provisional){
   const autoTasks=computeAutoTasks(d);
   return {
+    provisional:!!provisional,
     id:d.id, store:d.store, inspector:d.inspector, date:d.date,
     tenantId:SHARED_TENANT_ID, storeId:String(d.store||"").trim(),
     enteredAt:d.startedAt, savedAt:preview?"":new Date().toISOString(),
@@ -1794,6 +1819,10 @@ function viewReport(){
     <h1>報告書</h1><span class="meta">${esc(insp.store)}／${fmtDate(insp.date)}</span>
   </div></header>
   <div class="wrap">
+    ${insp.provisional?`<div class="miss no-print" style="margin-top:0">
+      <div class="ttl">一時保存（入力途中）の報告書です。完了するまでランキング・推移には集計されません。</div>
+      <button class="btn sub no-print" id="rep-resume" style="margin-top:8px">続きを入力する</button>
+    </div>`:""}
     ${reportBody(insp,false)}
     ${(()=>{const pm=photoMissingItems(insp);
       return pm.length?`<div class="miss no-print" style="margin-top:4px">
@@ -1816,7 +1845,7 @@ function reportBody(insp,isPreview){
   <section class="card">
     <div class="rep-h">
       <div class="print-only" style="font-size:9pt;color:#666;margin-bottom:2mm">らくらく臨店チェック｜臨店チェック報告書　発行日：${fmtDate(todayStr())}</div>
-      <h2>${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}</h2>
+      <h2>${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}${insp.provisional?"（一時保存・入力途中）":""}</h2>
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
       ${(()=>{const ai=aiTotalScore(insp);return ai!=null?`<div class="meta" style="margin-top:8px">AI判定の平均：${ai}点／100（補助）</div>`:"";})()}
@@ -1824,7 +1853,7 @@ function reportBody(insp,isPreview){
   </section>
   ${(()=>{
     const alerts=ALL_ITEMS.map(it=>{
-      const prior=state.inspections.filter(i=>i.store===insp.store&&i.completedAt&&i.id!==insp.id);
+      const prior=state.inspections.filter(i=>i.store===insp.store&&i.completedAt&&!i.provisional&&i.id!==insp.id);
       let c=prior.reduce((n,i)=>{const s=score5Of(it,i);return n+(s!=null&&s<=ALERT_LOW?1:0);},0);
       const cur=score5Of(it,insp); if(cur!=null&&cur<=ALERT_LOW)c++;
       return {it,c};
@@ -1989,19 +2018,41 @@ document.addEventListener("click",async e=>{
     requestAnimationFrame(()=>document.getElementById("card-"+id)?.scrollIntoView({behavior:"smooth",block:"start"}));
     return;
   }
-  if(t.id==="finalize"){
+  if(t.id==="finalize"||t.id==="finalize-partial"){
+    const partial=t.id==="finalize-partial";
     const missing=collectMissing();
-    if(missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
+    if(!partial&&missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
+    if(partial&&!confirm("入力途中のまま「一時保存」として提出します。続きは報告書画面の「続きを入力する」から再開できます。よろしいですか？")) return;
     for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
-    const insp=buildInspection(state.draft,false);
+    const insp=buildInspection(state.draft,false,partial);
     await putInspection(insp).catch(()=>{});
     await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});
     await kvDel("draft");
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
     render(); scrollTo(0,0);
-    showToast("記録を受け付けました。端末に保存し、通信回復後に送信します");
+    showToast(partial?"一時保存として提出しました。続きは報告書から再開できます":"記録を受け付けました。端末に保存し、通信回復後に送信します");
     syncOutbox();
+    return;
+  }
+  if(t.id==="rep-resume"){
+    const insp=state.inspections.find(i=>i.id===state.reportId);
+    if(!insp) return;
+    if(state.draft&&state.draft.id!==insp.id&&!confirm("進行中の別の下書きがあります。破棄してこの報告書の続きを入力しますか？")) return;
+    await hydratePhotos(insp).catch(()=>{});
+    const lost=Object.values(insp.answers||{}).some(a=>(a.photoCount||0)>0&&!(a.photos||[]).filter(Boolean).length);
+    if(lost&&!confirm("一部の写真をクラウドから読み込めませんでした。このまま続きを入力して提出すると、その写真が消える可能性があります。通信のよい場所でやり直すのがおすすめです。続けますか？")) return;
+    state.draft={
+      id:insp.id, store:insp.store, inspector:insp.inspector, date:insp.date,
+      startedAt:insp.startedAt||insp.enteredAt||new Date().toISOString(),
+      answers:JSON.parse(JSON.stringify(insp.answers||{})),
+      pdca:JSON.parse(JSON.stringify(insp.pdca||{homework:[],interview:{}})),
+      prevDate:insp.prevDate||"",
+    };
+    if(!Array.isArray(state.draft.pdca.homework)) state.draft.pdca.homework=[];
+    if(!state.draft.pdca.interview) state.draft.pdca.interview={};
+    persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+    showToast("一時保存した内容を読み込みました。続きを入力してください");
     return;
   }
 });

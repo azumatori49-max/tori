@@ -183,10 +183,15 @@ function LaborBudgetBanner({ m }: { m: DailyMetrics }) {
 					</span>
 				)}
 			</div>
-			<div className="budget-sub">
-				目標 {m.laborRateTarget !== null ? `${fmt1(m.laborRateTarget)}%` : "-"} ・ 人件費予算{" "}
-				{fmtYen(lb.budget)} ・ 現在の人件費 {fmtYen(lb.laborCost)} ・ 売上実績 {fmtYen(lb.sales)}
-			</div>
+			{(() => {
+				const parts = [
+					m.laborRateTarget !== null ? `目標 ${fmt1(m.laborRateTarget)}%` : null,
+					lb.budget !== null ? `人件費予算 ${fmtYen(lb.budget)}` : null,
+					lb.laborCost !== null ? `現在の人件費 ${fmtYen(lb.laborCost)}` : null,
+					lb.sales !== null ? `売上実績 ${fmtYen(lb.sales)}` : null,
+				].filter(Boolean);
+				return parts.length > 0 ? <div className="budget-sub">{parts.join(" ・ ")}</div> : null;
+			})()}
 		</Link>
 	);
 }

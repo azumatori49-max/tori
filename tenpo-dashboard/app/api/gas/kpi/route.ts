@@ -54,21 +54,19 @@ export async function POST(req: NextRequest) {
 		}
 	}
 
-	// 人件費予算のサニタイズ(任意項目)
+	// 人件費予算のサニタイズ(任意項目。diff のみ必須)
 	for (const row of payload.stores) {
 		if (row.labor_budget !== undefined) {
 			const lb = row.labor_budget;
-			if (
-				!lb ||
-				typeof lb.sales !== "number" ||
-				typeof lb.labor_cost !== "number" ||
-				typeof lb.budget !== "number" ||
-				typeof lb.diff !== "number"
-			) {
+			if (!lb || typeof lb.diff !== "number") {
 				delete row.labor_budget;
-			} else if (lb.diff_hours !== undefined && typeof lb.diff_hours !== "number") {
-				lb.diff_hours = null;
+				continue;
 			}
+			const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+			lb.diff_hours = num(lb.diff_hours);
+			lb.budget = num(lb.budget);
+			lb.labor_cost = num(lb.labor_cost);
+			lb.sales = num(lb.sales);
 		}
 	}
 

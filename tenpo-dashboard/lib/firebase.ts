@@ -304,11 +304,11 @@ export const firebaseProvider: DataProvider = {
 					qscQuestions: row.qsc_questions ?? null,
 					laborBudget: row.labor_budget
 						? {
-								sales: row.labor_budget.sales,
-								laborCost: row.labor_budget.labor_cost,
-								budget: row.labor_budget.budget,
 								diff: row.labor_budget.diff,
 								diffHours: row.labor_budget.diff_hours ?? null,
+								budget: row.labor_budget.budget ?? null,
+								laborCost: row.labor_budget.labor_cost ?? null,
+								sales: row.labor_budget.sales ?? null,
 							}
 						: null,
 					updatedAt: new Date().toISOString(),

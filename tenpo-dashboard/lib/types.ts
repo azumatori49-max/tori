@@ -29,13 +29,13 @@ export type DailyMetrics = {
 	qscPrevRank: number | null;
 	qscAnswers: number | null;
 	qscQuestions: { label: string; score: number | null }[] | null;
-	/** 今月の人件費予算(目標率 × 売上実績に対する過不足) */
+	/** 今月の人件費予算の過不足(「人件費予算」シートで計算された表示用の値) */
 	laborBudget: {
-		sales: number; // 売上実績(円)
-		laborCost: number; // 人件費実績(円)
-		budget: number; // 人件費予算額(円)
-		diff: number; // 実績 − 予算(プラス = オーバー)
-		diffHours: number | null; // 差額の時間換算(平均時給ベース)
+		diff: number; // 過不足額(円)。プラス = オーバー
+		diffHours: number | null; // 過不足の時間換算
+		budget: number | null; // 人件費予算額(円・任意)
+		laborCost: number | null; // 現在の人件費(円・任意)
+		sales: number | null; // 売上実績(円・任意)
 	} | null;
 	updatedAt: string;
 };
@@ -150,11 +150,11 @@ export type GasStoreRow = {
 	qsc_answers?: number;
 	qsc_questions?: { label: string; score: number | null }[];
 	labor_budget?: {
-		sales: number;
-		labor_cost: number;
-		budget: number;
-		diff: number;
+		diff: number; // 必須: 過不足額(円)。プラス = オーバー
 		diff_hours?: number | null;
+		budget?: number | null;
+		labor_cost?: number | null;
+		sales?: number | null;
 	};
 	hygiene?: {
 		daily_submitted: number;

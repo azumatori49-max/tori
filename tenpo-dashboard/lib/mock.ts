@@ -59,11 +59,11 @@ function heroMetrics(daysAgo: number): DailyMetrics {
 		qscRank: 4,
 		qscPrevRank: 5,
 		laborBudget: {
-			sales: 8600000,
-			laborCost: 2243000,
-			budget: 2150000,
 			diff: 93000,
 			diffHours: 77.5,
+			budget: 2150000,
+			laborCost: 2243000,
+			sales: 8600000,
 		},
 		qscAnswers: 12,
 		qscQuestions: [
@@ -313,11 +313,11 @@ export const mockProvider: DataProvider = {
 				qscQuestions: row.qsc_questions ?? null,
 				laborBudget: row.labor_budget
 					? {
-							sales: row.labor_budget.sales,
-							laborCost: row.labor_budget.labor_cost,
-							budget: row.labor_budget.budget,
 							diff: row.labor_budget.diff,
 							diffHours: row.labor_budget.diff_hours ?? null,
+							budget: row.labor_budget.budget ?? null,
+							laborCost: row.labor_budget.labor_cost ?? null,
+							sales: row.labor_budget.sales ?? null,
 						}
 					: null,
 				updatedAt: new Date().toISOString(),

@@ -155,12 +155,7 @@ a.budget-banner {
 	display: block;
 	color: inherit;
 	margin-bottom: 16px;
-	border-left: 4px solid var(--good-ink);
 	transition: box-shadow 0.15s ease;
-}
-
-a.budget-banner.over {
-	border-left-color: var(--bad-ink);
 }
 
 a.budget-banner:hover {

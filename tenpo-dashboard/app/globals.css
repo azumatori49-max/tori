@@ -307,7 +307,7 @@ a.budget-banner:hover {
 	display: inline-block;
 	font-size: 12px;
 	font-weight: 500;
-	border-radius: 999px;
+	border-radius: 6px;
 	padding: 2px 12px;
 }
 

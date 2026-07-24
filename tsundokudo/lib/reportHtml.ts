@@ -47,6 +47,9 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
 
 export function buildReportHtml(report: ReportLike): string {
   const b = calcBilling(report);
+  const isOrder = report.reportType === 'order';
+  const docTitle = isOrder ? 'オーダー工事報告書' : 'メンテナンス報告書';
+  const diyLabel = isOrder ? 'オーダー工事' : 'プチDIY';
 
   // 請求ボックスに追加施工費（トッピング+DIY+年間）をまとめて表示
   const extra = b.toppings + b.diy + b.annual;
@@ -135,6 +138,14 @@ export function buildReportHtml(report: ReportLike): string {
 
   const annual = report.annualSchedule;
 
+  // 前回からの課題 / 次回の課題（メンテナンスのみ）
+  const prevIssueRows = (report.prevIssues ?? [])
+    .map((i) => `<div class="issue-row">${cb(i.done)} <span${i.done ? ' class="done"' : ''}>${esc(i.text)}</span>${i.done ? '<span class="done-tag">達成</span>' : ''}</div>`)
+    .join('');
+  const nextIssueRows = (report.nextIssues ?? [])
+    .map((t) => `<div class="issue-row">・${esc(t)}</div>`)
+    .join('');
+
   return `<!DOCTYPE html>
 <html lang="ja" translate="no" class="notranslate">
 <head>
@@ -217,6 +228,11 @@ export function buildReportHtml(report: ReportLike): string {
   .annual-body { border:1px solid var(--bd); border-top:none; padding:6px 8px; white-space:pre-wrap; min-height:30px; }
   .cmt { border:1px solid var(--bd); border-top:none; padding:6px 8px; white-space:pre-wrap; min-height:34px; }
 
+  /* 課題 */
+  .issue-row { display:flex; align-items:center; gap:6px; padding:2px 0; }
+  .issue-row .done { text-decoration:line-through; color:#666; }
+  .done-tag { font-size:9px; font-weight:800; color:#0F7A57; border:1px solid #0F7A57; border-radius:3px; padding:0 4px; }
+
   /* 写真ページ */
   .photo-page { page-break-before:always; }
   .ps-title { font-size:14px; font-weight:800; border-left:4px solid #333; padding-left:8px; margin-bottom:8px; }
@@ -229,7 +245,7 @@ export function buildReportHtml(report: ReportLike): string {
 <body>
   <div class="title">
     <img src="${LOGO_DATA_URI}" alt="" />
-    <span>メンテナンス報告書</span>
+    <span>${docTitle}</span>
   </div>
 
   <div class="head">
@@ -252,8 +268,10 @@ export function buildReportHtml(report: ReportLike): string {
           <tr class="inv-total"><td>合計</td><td>¥${yen(b.taxIncluded)}</td></tr>
         </table>
         <div class="inv-break">
-          <div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
-          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}
+          ${isOrder
+            ? `<div class="ibr"><span>オーダー工事</span><span>¥${yen(b.diy)}</span></div>`
+            : `<div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
+          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}`}
           <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
         </div>
       </div>
@@ -261,7 +279,7 @@ export function buildReportHtml(report: ReportLike): string {
     ${headerPhoto ? `<div class="col-photo"><img src="${headerPhoto.uri}" /></div>` : ''}
   </div>
 
-  <table class="grid mt">
+  ${isOrder ? '' : `<table class="grid mt">
     <tr>
       <th style="width:26%">項目</th>
       <th style="width:9%">施工<br/>チェック</th>
@@ -283,9 +301,9 @@ export function buildReportHtml(report: ReportLike): string {
   <table class="grid">
     <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
     ${toppingRows}
-  </table>
+  </table>`}
 
-  <div class="band cream">プチDIY</div>
+  <div class="band cream${isOrder ? ' mt' : ''}">${diyLabel}</div>
   <table class="grid">
     <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
     ${diyRows}
@@ -300,8 +318,14 @@ export function buildReportHtml(report: ReportLike): string {
   <div class="band cream small mt">コメント・提案</div>
   <div class="cmt">${esc(report.comment)}</div>
 
-  <div class="band green mt">年間スケジュール</div>
+  ${isOrder ? '' : `<div class="band green mt">年間スケジュール</div>
   <div class="annual-body">${esc(annual.comment)}</div>
+
+  ${prevIssueRows ? `<div class="band cream small mt">前回からの課題（達成チェック）</div>
+  <div class="cmt">${prevIssueRows}</div>` : ''}
+
+  ${nextIssueRows ? `<div class="band cream small mt">次回の課題</div>
+  <div class="cmt">${nextIssueRows}</div>` : ''}`}
 
   ${photoSheet(allPhotos)}
 </body>
@@ -312,5 +336,6 @@ export function buildReportHtml(report: ReportLike): string {
 export function reportFileName(report: ReportLike): string {
   const date = formatWorkDate(report.workDate).replace(/\//g, '-');
   const store = report.storeName || '店舗未設定';
-  return `メンテナンス報告書_${store}${date ? '_' + date : ''}`;
+  const kind = report.reportType === 'order' ? 'オーダー工事報告書' : 'メンテナンス報告書';
+  return `${kind}_${store}${date ? '_' + date : ''}`;
 }

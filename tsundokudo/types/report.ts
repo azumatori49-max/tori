@@ -101,9 +101,20 @@ export interface SupplyLine {
   qty: number;
 }
 
+/** レポートの種類（メンテナンス報告 / オーダー工事報告） */
+export type ReportType = 'maintenance' | 'order';
+
+/** 前回からの課題（達成チェック付き） */
+export interface IssueItem {
+  text: string;
+  done: boolean;
+}
+
 /** メンテナンスレポート本体 */
 export interface MaintenanceReport {
   id: string;
+  /** 種類（既定: maintenance）。order はオーダー工事報告 */
+  reportType: ReportType;
   /** 作業店舗 */
   storeName: string;
   /** 会社名（例: 株式会社鶏ヤロー）。一覧のフォルダ分けに使用 */
@@ -136,6 +147,10 @@ export interface MaintenanceReport {
   photos: ReportPhoto[];
   /** 年間スケジュール */
   annualSchedule: AnnualSchedule;
+  /** 前回からの課題（前回レポートの「次回の課題」を引き継ぎ、達成をチェック） */
+  prevIssues: IssueItem[];
+  /** 次回の課題（文章のみ・任意） */
+  nextIssues: string[];
   /** コメント・提案 */
   comment: string;
 

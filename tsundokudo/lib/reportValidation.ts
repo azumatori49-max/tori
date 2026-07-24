@@ -12,6 +12,8 @@ import type { MaintenanceReportInsert } from '@/types/report';
  * トッピングを除く各セクションの写真と、害虫の状況の選択が必須。
  */
 export function pdfBlockReason(r: MaintenanceReportInsert): string | null {
+  // オーダー工事報告は写真・状況とも任意
+  if (r.reportType === 'order') return null;
   if (!r.pestControl.presence) {
     return '害虫駆除の「多い・少ない・見ない」を選択してください。';
   }

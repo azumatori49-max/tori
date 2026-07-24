@@ -66,7 +66,7 @@ function toNum(v: string): number {
 
 export default function ReportFormScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id: string; store?: string }>();
+  const params = useLocalSearchParams<{ id: string; store?: string; type?: string }>();
   const id = params.id;
   const isNew = id === 'new';
   const isViewer = useIsViewer();
@@ -86,8 +86,36 @@ export default function ReportFormScreen() {
     }
     const draft = store.draftReport();
     if (params.store) draft.storeName = params.store;
+    if (params.type === 'order') {
+      // オーダー工事報告: メンテ固有の既定値は使わない
+      draft.reportType = 'order';
+      draft.contractPlan = 'オーダー工事';
+      draft.maintenanceFee = 0;
+    }
     return draft;
   });
+
+  const isOrder = form.reportType === 'order';
+
+  // 次回の課題の入力欄
+  const [issueDraft, setIssueDraft] = useState('');
+
+  /** 店舗の前回レポートの「次回の課題」を引き継ぐ（達成チェック用） */
+  function issuesForStore(name: string) {
+    const prev = useReportStore
+      .getState()
+      .reportsByStore(name.trim())
+      .find((r) => r.reportType !== 'order' && r.nextIssues.length > 0);
+    return prev ? prev.nextIssues.map((t) => ({ text: t, done: false })) : [];
+  }
+
+  /** 施工店舗の変更。新規メンテ作成時は前回の課題も引き継ぐ */
+  function applyStoreName(v: string) {
+    setForm((f) => {
+      if (!isNew || f.reportType === 'order') return { ...f, storeName: v };
+      return { ...f, storeName: v, prevIssues: issuesForStore(v) };
+    });
+  }
 
   const billing = useMemo(() => calcBilling(form), [form]);
 
@@ -226,7 +254,11 @@ export default function ReportFormScreen() {
         <Pressable onPress={goBack} hitSlop={10}>
           <Text style={styles.topbarBtn}>‹ 戻る</Text>
         </Pressable>
-        <Text style={styles.topbarTitle}>{isNew ? '新規レポート' : 'レポート編集'}</Text>
+        <Text style={styles.topbarTitle}>
+          {isOrder
+            ? isNew ? '新規オーダー工事' : 'オーダー工事編集'
+            : isNew ? '新規レポート' : 'レポート編集'}
+        </Text>
         <Pressable onPress={() => void onSave()} hitSlop={10}>
           <Text style={[styles.topbarBtn, styles.topbarSave]}>保存</Text>
         </Pressable>
@@ -246,14 +278,14 @@ export default function ReportFormScreen() {
             <Field label="施工店舗">
               <Input
                 value={form.storeName}
-                onChangeText={(v) => patch({ storeName: v })}
+                onChangeText={applyStoreName}
                 placeholder="例: まる助東松山駅前店"
               />
               <View style={{ height: 8 }} />
               <ChipSelect
                 options={store.settings.stores}
                 value={form.storeName}
-                onChange={(v) => patch({ storeName: v })}
+                onChange={applyStoreName}
               />
             </Field>
             <Field label="会社名">
@@ -316,15 +348,47 @@ export default function ReportFormScreen() {
             </Field>
           </Card>
 
+          {/* ── 前回からの課題（前回レポートから自動表示） ── */}
+          {!isOrder && form.prevIssues.length > 0 && (
+            <>
+              <SectionTitle>
+                前回からの課題 <Text style={styles.issueBadge}>要確認</Text>
+              </SectionTitle>
+              <Card style={styles.issueCard}>
+                <Text style={styles.hintText}>
+                  前回のレポートで挙がった課題です。達成したらチェックを入れてください。
+                </Text>
+                {form.prevIssues.map((it, idx) => (
+                  <View key={`pi-${idx}`} style={styles.issueRow}>
+                    <CheckBox
+                      checked={it.done}
+                      label={it.text}
+                      onToggle={() =>
+                        patch({
+                          prevIssues: form.prevIssues.map((x, i) =>
+                            i === idx ? { ...x, done: !x.done } : x,
+                          ),
+                        })
+                      }
+                    />
+                    {it.done && <Text style={styles.issueDone}>達成</Text>}
+                  </View>
+                ))}
+              </Card>
+            </>
+          )}
+
           {/* ── 写真 ── */}
           <SectionTitle>
-            写真 <Text style={styles.required}>PDF出力に必須</Text>
+            写真{!isOrder && <Text style={styles.required}> PDF出力に必須</Text>}
           </SectionTitle>
           <Card>
-            <Text style={styles.hintText}>
-              写真がなくても「保存」で一時保存できます。
-              PDF出力（提出）には各項目の写真が必要です（「任意」表示の項目を除く）。
-            </Text>
+            {!isOrder && (
+              <Text style={styles.hintText}>
+                写真がなくても「保存」で一時保存できます。
+                PDF出力（提出）には各項目の写真が必要です（「任意」表示の項目を除く）。
+              </Text>
+            )}
             <PhotoSection
               photos={form.photos}
               onChange={(photos) => patch({ photos })}
@@ -334,29 +398,37 @@ export default function ReportFormScreen() {
           {/* ── 請求サマリ（自動計算） ── */}
           <SectionTitle>請求額（自動計算）</SectionTitle>
           <Card>
-            <Field label="メンテナンス料金（税抜・円）">
-              <Input
-                value={String(form.maintenanceFee)}
-                onChangeText={(v) => patch({ maintenanceFee: toNum(v) })}
-                keyboardType="number-pad"
-              />
-            </Field>
+            {!isOrder && (
+              <Field label="メンテナンス料金（税抜・円）">
+                <Input
+                  value={String(form.maintenanceFee)}
+                  onChangeText={(v) => patch({ maintenanceFee: toNum(v) })}
+                  keyboardType="number-pad"
+                />
+              </Field>
+            )}
+            {!isOrder && (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>メンテナンス</Text>
+                <Text style={styles.billVal}>¥{yen(billing.maintenance)}</Text>
+              </View>
+            )}
+            {!isOrder && (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>トッピング</Text>
+                <Text style={styles.billVal}>¥{yen(billing.toppings)}</Text>
+              </View>
+            )}
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>メンテナンス</Text>
-              <Text style={styles.billVal}>¥{yen(billing.maintenance)}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>トッピング</Text>
-              <Text style={styles.billVal}>¥{yen(billing.toppings)}</Text>
-            </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>プチDIY</Text>
+              <Text style={styles.billLabel}>{isOrder ? 'オーダー工事' : 'プチDIY'}</Text>
               <Text style={styles.billVal}>¥{yen(billing.diy)}</Text>
             </View>
-            <View style={styles.billRow}>
-              <Text style={styles.billLabel}>年間スケジュール</Text>
-              <Text style={styles.billVal}>¥{yen(billing.annual)}</Text>
-            </View>
+            {!isOrder && (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>年間スケジュール</Text>
+                <Text style={styles.billVal}>¥{yen(billing.annual)}</Text>
+              </View>
+            )}
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>備品 資材 廃棄</Text>
               <Text style={styles.billVal}>¥{yen(billing.supplies)}</Text>
@@ -375,7 +447,9 @@ export default function ReportFormScreen() {
             </View>
           </Card>
 
-          {/* ── 定期点検 ── */}
+          {/* ── 定期点検〜トッピング（メンテナンスのみ） ── */}
+          {!isOrder && (
+            <>
           <SectionTitle>
             定期点検 <Text style={styles.required}>写真はPDF出力に必須</Text>
             <Text style={styles.optionalTag}>（「任意」表示の項目を除く）</Text>
@@ -556,8 +630,11 @@ export default function ReportFormScreen() {
             <Button title="＋ トッピングを追加" variant="ghost" onPress={addTopping} />
           </View>
 
-          {/* ── プチDIY（自分で追加） ── */}
-          <SectionTitle>プチDIY</SectionTitle>
+            </>
+          )}
+
+          {/* ── プチDIY / オーダー工事（自分で追加） ── */}
+          <SectionTitle>{isOrder ? 'オーダー工事' : 'プチDIY'}</SectionTitle>
           {form.diy.length === 0 && (
             <Card>
               <Text style={styles.emptyLine}>下のボタンから施工内容を登録できます</Text>
@@ -602,10 +679,16 @@ export default function ReportFormScreen() {
             </Card>
           ))}
           <View style={styles.addInline}>
-            <Button title="＋ プチDIYを追加" variant="ghost" onPress={addDiy} />
+            <Button
+              title={isOrder ? '＋ オーダー工事を追加' : '＋ プチDIYを追加'}
+              variant="ghost"
+              onPress={addDiy}
+            />
           </View>
 
-          {/* ── 年間スケジュール ── */}
+          {/* ── 年間スケジュール（メンテナンスのみ） ── */}
+          {!isOrder && (
+            <>
           <SectionTitle>年間スケジュール</SectionTitle>
           <Card>
             <Field label="コメント">
@@ -631,6 +714,8 @@ export default function ReportFormScreen() {
               defaultCategory="その他"
             />
           </Card>
+            </>
+          )}
 
           {/* ── 備品資材 ── */}
           <SectionTitle>使用備品資材</SectionTitle>
@@ -682,6 +767,57 @@ export default function ReportFormScreen() {
               <Text style={styles.billVal}>¥{yen(billing.supplies)}</Text>
             </View>
           </Card>
+
+          {/* ── 次回の課題（メンテナンスのみ・任意） ── */}
+          {!isOrder && (
+            <>
+              <SectionTitle>
+                次回の課題 <Text style={styles.optionalTag}>任意</Text>
+              </SectionTitle>
+              <Card>
+                <Text style={styles.hintText}>
+                  次回の施工時に確認したい課題をメモできます。
+                  次回この店舗のレポートを作成すると、冒頭に表示されます。
+                </Text>
+                {form.nextIssues.map((t, idx) => (
+                  <View key={`ni-${idx}`} style={styles.issueRow}>
+                    <Text style={styles.issueDot}>・</Text>
+                    <Text style={styles.issueText}>{t}</Text>
+                    <Pressable
+                      onPress={() =>
+                        patch({ nextIssues: form.nextIssues.filter((_, i) => i !== idx) })
+                      }
+                      hitSlop={8}
+                      style={styles.issueRemove}
+                    >
+                      <Text style={styles.issueRemoveText}>✕</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <View style={styles.issueAddRow}>
+                  <View style={{ flex: 1 }}>
+                    <Input
+                      value={issueDraft}
+                      onChangeText={setIssueDraft}
+                      placeholder="例: 換気扇の異音を次回確認"
+                      multiline
+                    />
+                  </View>
+                  <Pressable
+                    style={styles.issueAddBtn}
+                    onPress={() => {
+                      const v = issueDraft.trim();
+                      if (!v) return;
+                      patch({ nextIssues: [...form.nextIssues, v] });
+                      setIssueDraft('');
+                    }}
+                  >
+                    <Text style={styles.issueAddText}>追加</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            </>
+          )}
 
           {/* ── コメント ── */}
           <SectionTitle>コメント・提案</SectionTitle>
@@ -757,6 +893,37 @@ const styles = StyleSheet.create({
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
   required: { fontSize: 10, fontWeight: '800', color: C.danger },
   optionalTag: { fontSize: 10, fontWeight: '700', color: C.textFaint },
+  issueBadge: { fontSize: 10, fontWeight: '800', color: '#9A6B00' },
+  issueCard: { borderColor: '#F0C36D', borderWidth: 1.5, backgroundColor: '#FFFBF2' },
+  issueRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 },
+  issueDone: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1E7B34',
+    backgroundColor: '#E5F5E9',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  issueDot: { color: C.primary, fontSize: 15 },
+  issueText: { flex: 1, fontSize: 14, color: C.text, lineHeight: 20 },
+  issueRemove: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDECEC',
+  },
+  issueRemoveText: { color: C.danger, fontSize: 12, fontWeight: '700' },
+  issueAddRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 8 },
+  issueAddBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  issueAddText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   hintText: { fontSize: 11, color: C.textFaint, marginBottom: 8, lineHeight: 17 },
   techWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   techChip: {

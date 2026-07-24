@@ -105,6 +105,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 /** 新規レポートの初期値を設定（マスタ）から組み立てる */
 export function makeDefaultReport(settings: AppSettings): MaintenanceReportInsert {
   return {
+    reportType: 'maintenance',
     storeName: '',
     company: '',
     workDate: '',
@@ -126,6 +127,8 @@ export function makeDefaultReport(settings: AppSettings): MaintenanceReportInser
     supplies: [],
     photos: [],
     annualSchedule: { comment: '', fee: 0, photos: [] },
+    prevIssues: [],
+    nextIssues: [],
     comment: '',
   };
 }

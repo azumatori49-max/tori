@@ -4,7 +4,7 @@
  * - 「＋新規作成」で入力フォームへ
  */
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,6 +54,7 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
     >
       <View style={styles.itemTop}>
         <Text style={styles.itemStore} numberOfLines={1}>
+          {r.reportType === 'order' && <Text style={styles.orderBadge}>オーダー工事　</Text>}
           {r.storeName || '（店舗未設定）'}
           {r.company ? <Text style={styles.itemCompany}>　{r.company}</Text> : null}
         </Text>
@@ -61,9 +62,11 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
       </View>
       <View style={styles.itemRow}>
         <Text style={styles.itemMeta}>担当: {r.technician || '—'}</Text>
-        <Text style={styles.itemMeta}>
-          点検 {doneCount}/{r.checklist.length}
-        </Text>
+        {r.reportType !== 'order' && (
+          <Text style={styles.itemMeta}>
+            点検 {doneCount}/{r.checklist.length}
+          </Text>
+        )}
         {allPhotos.length > 0 && <Text style={styles.itemMeta}>写真 {allPhotos.length}枚</Text>}
       </View>
       {allPhotos.length > 0 && (
@@ -96,6 +99,7 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
 
 export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
+  const [showTypeChooser, setShowTypeChooser] = useState(false);
   const reports = useReportStore((s) => s.reports);
   const isViewer = useIsViewer();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -169,18 +173,78 @@ export default function ReportsScreen() {
       {!isViewer && (
         <Pressable
           style={[styles.fab, { bottom: insets.bottom + 20 }]}
-          onPress={() => router.push('/report/new')}
+          onPress={() => setShowTypeChooser(true)}
         >
           <Text style={styles.fabPlus}>＋</Text>
           <Text style={styles.fabText}>新規作成</Text>
         </Pressable>
       )}
+
+      {/* 新規作成: 報告書の種類を選択 */}
+      <Modal
+        visible={showTypeChooser}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTypeChooser(false)}
+      >
+        <Pressable style={styles.chooserBackdrop} onPress={() => setShowTypeChooser(false)}>
+          <View style={styles.chooserSheet}>
+            <Text style={styles.chooserTitle}>作成する報告書</Text>
+            <Pressable
+              style={styles.chooserBtn}
+              onPress={() => {
+                setShowTypeChooser(false);
+                router.push('/report/new');
+              }}
+            >
+              <Text style={styles.chooserBtnTitle}>メンテナンス報告</Text>
+              <Text style={styles.chooserBtnSub}>定期点検・害虫駆除・トッピングなど</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.chooserBtn, styles.chooserBtnOrder]}
+              onPress={() => {
+                setShowTypeChooser(false);
+                router.push('/report/new?type=order');
+              }}
+            >
+              <Text style={styles.chooserBtnTitle}>オーダー工事報告</Text>
+              <Text style={styles.chooserBtnSub}>工事内容・使用備品資材（写真は任意）</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  orderBadge: { color: '#B25E09', fontSize: 12, fontWeight: '800' },
+  chooserBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  chooserSheet: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 18,
+    gap: 10,
+    marginBottom: 24,
+  },
+  chooserTitle: { fontSize: 15, fontWeight: '800', color: C.text, marginBottom: 4 },
+  chooserBtn: {
+    borderWidth: 1.5,
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  chooserBtnOrder: { borderColor: '#E8590C', backgroundColor: '#FFF1E6' },
+  chooserBtnTitle: { fontSize: 16, fontWeight: '800', color: C.text },
+  chooserBtnSub: { fontSize: 12, color: C.textSub, marginTop: 3 },
   header: {
     backgroundColor: C.headerBg,
     paddingHorizontal: 18,

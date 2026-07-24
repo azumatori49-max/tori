@@ -18,6 +18,9 @@ function normPhotos(photos: ReportPhoto[] | undefined): ReportPhoto[] {
 export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
   return {
     ...r,
+    reportType: r.reportType === 'order' ? 'order' : 'maintenance',
+    prevIssues: r.prevIssues ?? [],
+    nextIssues: r.nextIssues ?? [],
     company: r.company ?? '',
     photos: normPhotos(r.photos),
     checklist: (r.checklist ?? []).map((c) => ({ ...c, photos: normPhotos(c.photos) })),

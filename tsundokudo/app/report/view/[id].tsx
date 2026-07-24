@@ -60,6 +60,7 @@ export default function ReportViewScreen() {
   }
 
   const billing = calcBilling(report);
+  const isOrder = report.reportType === 'order';
   const checkedItems = report.checklist.filter((c) => c.checked);
   const pest = report.pestControl;
   const pestLabels = [
@@ -113,10 +114,10 @@ export default function ReportViewScreen() {
         {/* 請求 */}
         <SectionTitle>ご請求金額</SectionTitle>
         <Card>
-          <Row label="メンテナンス" value={`¥${yen(billing.maintenance)}`} />
-          <Row label="トッピング" value={`¥${yen(billing.toppings)}`} />
-          <Row label="プチDIY" value={`¥${yen(billing.diy)}`} />
-          <Row label="年間スケジュール" value={`¥${yen(billing.annual)}`} />
+          {!isOrder && <Row label="メンテナンス" value={`¥${yen(billing.maintenance)}`} />}
+          {!isOrder && <Row label="トッピング" value={`¥${yen(billing.toppings)}`} />}
+          <Row label={isOrder ? 'オーダー工事' : 'プチDIY'} value={`¥${yen(billing.diy)}`} />
+          {!isOrder && <Row label="年間スケジュール" value={`¥${yen(billing.annual)}`} />}
           <Row label="備品 資材 廃棄" value={`¥${yen(billing.supplies)}`} />
           <Row label="小計（税抜）" value={`¥${yen(billing.taxExcluded)}`} />
           <Row label="消費税" value={`¥${yen(billing.tax)}`} />
@@ -126,7 +127,9 @@ export default function ReportViewScreen() {
           </View>
         </Card>
 
-        {/* 定期点検 */}
+        {/* 定期点検〜トッピング（メンテナンスのみ） */}
+        {!isOrder && (
+          <>
         <SectionTitle>
           定期点検（実施 {checkedItems.length}/{report.checklist.length}）
         </SectionTitle>
@@ -183,9 +186,11 @@ export default function ReportViewScreen() {
             ))
           )}
         </Card>
+          </>
+        )}
 
-        {/* プチDIY */}
-        <SectionTitle>プチDIY</SectionTitle>
+        {/* プチDIY / オーダー工事 */}
+        <SectionTitle>{isOrder ? 'オーダー工事' : 'プチDIY'}</SectionTitle>
         <Card>
           {report.diy.length === 0 ? (
             <Text style={styles.empty}>なし</Text>
@@ -226,17 +231,52 @@ export default function ReportViewScreen() {
           )}
         </Card>
 
-        {/* 年間スケジュール */}
-        <SectionTitle>年間スケジュール</SectionTitle>
-        <Card>
-          <Text style={report.annualSchedule.comment ? styles.note : styles.empty}>
-            {report.annualSchedule.comment || 'なし'}
-          </Text>
-          {report.annualSchedule.fee ? (
-            <Row label="追加費用" value={`¥${yen(report.annualSchedule.fee)}`} />
-          ) : null}
-          <PhotoStrip photos={report.annualSchedule.photos} />
-        </Card>
+        {/* 年間スケジュール（メンテナンスのみ） */}
+        {!isOrder && (
+          <>
+            <SectionTitle>年間スケジュール</SectionTitle>
+            <Card>
+              <Text style={report.annualSchedule.comment ? styles.note : styles.empty}>
+                {report.annualSchedule.comment || 'なし'}
+              </Text>
+              {report.annualSchedule.fee ? (
+                <Row label="追加費用" value={`¥${yen(report.annualSchedule.fee)}`} />
+              ) : null}
+              <PhotoStrip photos={report.annualSchedule.photos} />
+            </Card>
+
+            {report.prevIssues.length > 0 && (
+              <>
+                <SectionTitle>前回からの課題</SectionTitle>
+                <Card>
+                  {report.prevIssues.map((it, i) => (
+                    <View key={`pi-${i}`} style={styles.issueRow}>
+                      <Text style={[styles.checkMark, !it.done && styles.checkMarkOff]}>
+                        {it.done ? '✓' : '－'}
+                      </Text>
+                      <Text style={styles.issueText}>{it.text}</Text>
+                      {it.done && <Text style={styles.issueDone}>達成</Text>}
+                    </View>
+                  ))}
+                </Card>
+              </>
+            )}
+
+            {report.nextIssues.length > 0 && (
+              <>
+                <SectionTitle>次回の課題</SectionTitle>
+                <Card>
+                  {report.nextIssues.map((t, i) => (
+                    <View key={`ni-${i}`} style={styles.issueRow}>
+                      <Text style={styles.issueDot}>・</Text>
+                      <Text style={styles.issueText}>{t}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </>
+            )}
+          </>
+        )}
 
         {/* コメント */}
         <SectionTitle>コメント・提案</SectionTitle>
@@ -335,6 +375,18 @@ const styles = StyleSheet.create({
   condPillAlert: { backgroundColor: C.danger, color: '#FFF' },
   note: { fontSize: 13, color: '#475569', marginTop: 8, lineHeight: 19 },
   subChecksLine: { fontSize: 12, color: '#475569', marginTop: 6 },
+  issueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
+  issueDot: { color: '#1565D8', fontSize: 15 },
+  issueText: { flex: 1, fontSize: 14, color: '#0F172A', lineHeight: 20 },
+  issueDone: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1E7B34',
+    backgroundColor: '#E5F5E9',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
   empty: { fontSize: 13, color: C.textFaint },
   subBlock: {
     paddingVertical: 8,

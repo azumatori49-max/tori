@@ -12,6 +12,12 @@ export function fmt2(n: number | null | undefined): string {
 	return n.toFixed(2);
 }
 
+/** 金額表示(1,234,567円) */
+export function fmtYen(n: number | null | undefined): string {
+	if (n === null || n === undefined) return "-";
+	return `${Math.round(n).toLocaleString("ja-JP")}円`;
+}
+
 /** ISO → 2026/06/20 22:26 (JST) */
 export function fmtDateTime(iso: string | null | undefined): string {
 	if (!iso) return "-";

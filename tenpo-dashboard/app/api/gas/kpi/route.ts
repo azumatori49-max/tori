@@ -54,6 +54,24 @@ export async function POST(req: NextRequest) {
 		}
 	}
 
+	// 人件費予算のサニタイズ(任意項目)
+	for (const row of payload.stores) {
+		if (row.labor_budget !== undefined) {
+			const lb = row.labor_budget;
+			if (
+				!lb ||
+				typeof lb.sales !== "number" ||
+				typeof lb.labor_cost !== "number" ||
+				typeof lb.budget !== "number" ||
+				typeof lb.diff !== "number"
+			) {
+				delete row.labor_budget;
+			} else if (lb.diff_hours !== undefined && typeof lb.diff_hours !== "number") {
+				lb.diff_hours = null;
+			}
+		}
+	}
+
 	// QSC 設問詳細のサニタイズ(任意項目)
 	for (const row of payload.stores) {
 		if (row.qsc_questions !== undefined) {

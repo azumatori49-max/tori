@@ -10,6 +10,7 @@ import {
 	fmt2,
 	fmtDateTime,
 	fmtMDFromIso,
+	fmtYen,
 	isNew,
 	submitState,
 } from "@/lib/format";
@@ -159,6 +160,37 @@ function HygienePanel({
 	);
 }
 
+function LaborBudgetBanner({ m }: { m: DailyMetrics }) {
+	const lb = m.laborBudget;
+	if (!lb) return null;
+	const over = lb.diff > 0;
+	const hours = lb.diffHours !== null ? Math.abs(lb.diffHours) : null;
+	return (
+		<Link href="/metric/labor" className={`card budget-banner ${over ? "over" : "under"}`}>
+			<div className="budget-head">
+				<span className="budget-title">今月の人件費予算</span>
+				<span className={`badge ${over ? "bad" : "good"}`}>
+					{over ? "予算オーバー" : "予算内"}
+				</span>
+			</div>
+			<div className="budget-main">
+				<span className={`budget-amount ${over ? "diff-down" : "diff-up"}`}>
+					{over ? `${fmtYen(lb.diff)} オーバー` : `あと ${fmtYen(-lb.diff)} 使えます`}
+				</span>
+				{hours !== null && (
+					<span className="budget-hours">
+						{over ? `約${hours}時間分の超過` : `約${hours}時間分の余裕`}
+					</span>
+				)}
+			</div>
+			<div className="budget-sub">
+				目標 {m.laborRateTarget !== null ? `${fmt1(m.laborRateTarget)}%` : "-"} ・ 人件費予算{" "}
+				{fmtYen(lb.budget)} ・ 現在の人件費 {fmtYen(lb.laborCost)} ・ 売上実績 {fmtYen(lb.sales)}
+			</div>
+		</Link>
+	);
+}
+
 function avatarClass(role: string): string {
 	if (role === "am" || role === "sv" || role === "hq") return role;
 	let hash = 0;
@@ -232,6 +264,8 @@ export default async function DashboardPage() {
 					</p>
 				)}
 				<p className="updated-at">最終更新:{m ? fmtDateTime(m.updatedAt) : "-"}</p>
+
+				{m && <LaborBudgetBanner m={m} />}
 
 				{m ? (
 					<div className="kpi-grid">

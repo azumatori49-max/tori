@@ -58,6 +58,13 @@ function heroMetrics(daysAgo: number): DailyMetrics {
 		qscScore: 89.2,
 		qscRank: 4,
 		qscPrevRank: 5,
+		laborBudget: {
+			sales: 8600000,
+			laborCost: 2243000,
+			budget: 2150000,
+			diff: 93000,
+			diffHours: 77.5,
+		},
 		qscAnswers: 12,
 		qscQuestions: [
 			{ label: "Q1. お食事の満足度", score: 93 },
@@ -101,6 +108,7 @@ function genMetrics(store: Store, index: number, daysAgo: number): DailyMetrics 
 		qscPrevRank: ((index * 6 + 2) % TOTAL_STORES) + 1,
 		qscAnswers: null,
 		qscQuestions: null,
+		laborBudget: null,
 		updatedAt: new Date().toISOString(),
 	};
 }
@@ -303,6 +311,15 @@ export const mockProvider: DataProvider = {
 				qscPrevRank: row.qsc_prev_rank ?? null,
 				qscAnswers: row.qsc_answers ?? null,
 				qscQuestions: row.qsc_questions ?? null,
+				laborBudget: row.labor_budget
+					? {
+							sales: row.labor_budget.sales,
+							laborCost: row.labor_budget.labor_cost,
+							budget: row.labor_budget.budget,
+							diff: row.labor_budget.diff,
+							diffHours: row.labor_budget.diff_hours ?? null,
+						}
+					: null,
 				updatedAt: new Date().toISOString(),
 			};
 			const idx = history.findIndex((m) => m.date === date);

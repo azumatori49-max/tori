@@ -150,6 +150,65 @@ textarea {
 	padding: 22px;
 }
 
+/* ===== 人件費予算バナー ===== */
+a.budget-banner {
+	display: block;
+	color: inherit;
+	margin-bottom: 16px;
+	border-left: 4px solid var(--good-ink);
+	transition: box-shadow 0.15s ease;
+}
+
+a.budget-banner.over {
+	border-left-color: var(--bad-ink);
+}
+
+a.budget-banner:hover {
+	text-decoration: none;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 32px rgba(0, 0, 0, 0.09);
+}
+
+.budget-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 6px;
+}
+
+.budget-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink-2);
+}
+
+.budget-main {
+	display: flex;
+	align-items: baseline;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+
+.budget-amount {
+	font-size: 30px;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.3;
+}
+
+.budget-hours {
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--ink-2);
+}
+
+.budget-sub {
+	margin-top: 8px;
+	font-size: 12.5px;
+	color: var(--ink-3);
+	font-variant-numeric: tabular-nums;
+}
+
 .kpi-grid {
 	display: grid;
 	grid-template-columns: repeat(5, 1fr);

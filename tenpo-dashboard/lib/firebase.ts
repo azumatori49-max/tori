@@ -81,6 +81,7 @@ function mapMetrics(storeId: string, data: any): DailyMetrics {
 		qscPrevRank: data.qscPrevRank ?? null,
 		qscAnswers: data.qscAnswers ?? null,
 		qscQuestions: data.qscQuestions ?? null,
+		laborBudget: data.laborBudget ?? null,
 		updatedAt: data.updatedAt,
 	};
 }
@@ -301,6 +302,15 @@ export const firebaseProvider: DataProvider = {
 					qscPrevRank: row.qsc_prev_rank ?? null,
 					qscAnswers: row.qsc_answers ?? null,
 					qscQuestions: row.qsc_questions ?? null,
+					laborBudget: row.labor_budget
+						? {
+								sales: row.labor_budget.sales,
+								laborCost: row.labor_budget.labor_cost,
+								budget: row.labor_budget.budget,
+								diff: row.labor_budget.diff,
+								diffHours: row.labor_budget.diff_hours ?? null,
+							}
+						: null,
 					updatedAt: new Date().toISOString(),
 				};
 				batch.set(storeRef.collection("metrics").doc(date), metrics);

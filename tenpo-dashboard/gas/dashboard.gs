@@ -101,6 +101,7 @@ function initSpreadsheet() {
 			.setNote("デプロイしたらくらく店舗ダッシュボードの URL + /api/gas/kpi を入力してください");
 	}
 	// 元シート取り込み用の設定行(無ければ追記)
+	ensureSettingRow(settings, "平均時給(円)", 1200, "人件費予算の過不足を時間換算するときの平均時給");
 	ensureSettingRow(settings, "PLシートのURL", "", "KPI点数・材料費率・人件費率を管理しているスプレッドシートの URL");
 	ensureSettingRow(settings, "PLシートのタブ名", "", "上記スプレッドシートの中の、対象シート(タブ)の名前");
 	ensureSettingRow(settings, "QSCシートのURL", "", "QSC アンケート集計スプレッドシートの URL");
@@ -337,6 +338,8 @@ function importFromSources() {
 		var kpiCol = findHeaderColumn(values, "KPI点数");
 		var costCol = findHeaderColumn(values, "材料費率");
 		var laborCol = findHeaderColumn(values, "人件費率");
+		var salesCol = findHeaderColumn(values, "売上実績");
+		var laborAmtCol = findHeaderColumn(values, "人件費");
 		if (kpiCol < 0 || costCol < 0 || laborCol < 0) {
 			throw new Error(
 				"PLシートで列見出しが見つかりません(KPI点数: " +
@@ -351,12 +354,19 @@ function importFromSources() {
 			var cost = toPercent(row[costCol]);
 			var labor = toPercent(row[laborCol]);
 			if (kpi === null && cost === null && labor === null) return; // 見出し行・空行
-			plRows[name] = { kpi: kpi, cost: cost, labor: labor };
+			plRows[name] = {
+				kpi: kpi,
+				cost: cost,
+				labor: labor,
+				sales: salesCol >= 0 ? toNumber(row[salesCol]) : null,
+				laborAmt: laborAmtCol >= 0 ? toNumber(row[laborAmtCol]) : null,
+			};
 		});
 		var plMatch = matchSourceNames(masterNames, Object.keys(plRows));
 		writeMetricColumn(ss, "KPI", masterNames, plMatch, plRows, "kpi");
 		writeMetricColumn(ss, "原価率", masterNames, plMatch, plRows, "cost");
 		writeMetricColumn(ss, "人件費率", masterNames, plMatch, plRows, "labor");
+		writeLaborDetailColumns(ss, masterNames, plMatch, plRows);
 		var plMatched = masterNames.filter(function (n) {
 			return plMatch[n];
 		}).length;
@@ -491,6 +501,48 @@ function writeQscDetailColumns(ss, masterNames, match, rows, qCols) {
 	if (data.length > 0) {
 		sheet.getRange(2, 4, data.length, headers.length).setValues(data);
 	}
+}
+
+/** 人件費率シートの D・E 列に売上実績・人件費(円)を書き込む(人件費予算の計算用) */
+function writeLaborDetailColumns(ss, masterNames, match, rows) {
+	var sheet = ss.getSheetByName("人件費率");
+	if (!sheet) return;
+	sheet
+		.getRange(1, 4, 1, 2)
+		.setValues([["売上実績(円)", "人件費(円)"]])
+		.setFontWeight("bold")
+		.setBackground("#f6e4dc");
+	var data = masterNames.map(function (m) {
+		var src = match[m];
+		var r = src ? rows[src] : null;
+		if (!r) return ["", ""];
+		return [r.sales === null ? "" : r.sales, r.laborAmt === null ? "" : r.laborAmt];
+	});
+	if (data.length > 0) {
+		sheet.getRange(2, 4, data.length, 2).setValues(data);
+	}
+}
+
+/** 人件費率シートの D・E 列から、店舗コード → 売上実績・人件費 を読む */
+function readLaborDetail(ss) {
+	var sheet = ss.getSheetByName("人件費率");
+	var map = {};
+	if (!sheet || sheet.getLastRow() < 2 || sheet.getLastColumn() < 5) return map;
+	var header = sheet.getRange(1, 4, 1, 2).getValues()[0].map(String);
+	if (header[0].indexOf("売上実績") < 0) return map;
+	sheet
+		.getRange(2, 1, sheet.getLastRow() - 1, 5)
+		.getValues()
+		.forEach(function (row) {
+			var code = String(row[0]).trim();
+			if (!code) return;
+			var sales = toNumber(row[3]);
+			var laborAmt = toNumber(row[4]);
+			if (sales !== null && laborAmt !== null) {
+				map[code] = { sales: sales, laborAmt: laborAmt };
+			}
+		});
+	return map;
 }
 
 /** QSCアンケートシートの D 列以降から、店舗コード → 回答数・設問別点数 を読む */
@@ -643,6 +695,21 @@ function syncToDashboard() {
 				labor_rate_target: settings.laborTarget,
 				labor_rate_avg: s.laborAvg,
 			};
+			// 人件費予算(目標率 × 売上実績に対する過不足)
+			if (s.laborDetail && settings.laborTarget !== null && settings.laborTarget > 0) {
+				var budget = Math.round((s.laborDetail.sales * settings.laborTarget) / 100);
+				var diff = Math.round(s.laborDetail.laborAmt - budget);
+				row.labor_budget = {
+					sales: s.laborDetail.sales,
+					labor_cost: s.laborDetail.laborAmt,
+					budget: budget,
+					diff: diff,
+					diff_hours:
+						settings.avgWage !== null && settings.avgWage > 0
+							? Math.round((diff / settings.avgWage) * 10) / 10
+							: null,
+				};
+			}
 			if (s.qsc !== null) {
 				row.qsc_score = s.qsc;
 				row.qsc_rank = s.qscRank;
@@ -700,6 +767,7 @@ function readSettings(ss) {
 		costTarget: toNumber(map["原価率目標(%)"]),
 		laborTarget: toNumber(map["人件費率目標(%)"]),
 		syncHour: toNumber(map["同期時刻(0〜23時)"]),
+		avgWage: toNumber(map["平均時給(円)"]),
 	};
 }
 
@@ -729,6 +797,7 @@ function computeStores(ss, settings) {
 	var laborMap = readMetricSheet(ss, "人件費率");
 	var qscMap = readMetricSheet(ss, "QSCアンケート");
 	var qscDetailMap = readQscDetail(ss);
+	var laborDetailMap = readLaborDetail(ss);
 
 	// 前回の QSC 順位(出力シートから引き継ぎ)
 	var qscPrevByCode = readPreviousQscRanks(ss);
@@ -765,6 +834,7 @@ function computeStores(ss, settings) {
 				qsc: qsc,
 				qscPrevRank: qscPrevByCode[code] !== undefined ? qscPrevByCode[code] : null,
 				qscDetail: qscDetailMap[code] || null,
+				laborDetail: laborDetailMap[code] || null,
 			});
 		});
 	if (stores.length === 0) return { stores: stores, incomplete: incomplete };

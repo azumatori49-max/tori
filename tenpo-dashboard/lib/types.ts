@@ -29,6 +29,14 @@ export type DailyMetrics = {
 	qscPrevRank: number | null;
 	qscAnswers: number | null;
 	qscQuestions: { label: string; score: number | null }[] | null;
+	/** 今月の人件費予算(目標率 × 売上実績に対する過不足) */
+	laborBudget: {
+		sales: number; // 売上実績(円)
+		laborCost: number; // 人件費実績(円)
+		budget: number; // 人件費予算額(円)
+		diff: number; // 実績 − 予算(プラス = オーバー)
+		diffHours: number | null; // 差額の時間換算(平均時給ベース)
+	} | null;
 	updatedAt: string;
 };
 
@@ -141,6 +149,13 @@ export type GasStoreRow = {
 	qsc_prev_rank?: number;
 	qsc_answers?: number;
 	qsc_questions?: { label: string; score: number | null }[];
+	labor_budget?: {
+		sales: number;
+		labor_cost: number;
+		budget: number;
+		diff: number;
+		diff_hours?: number | null;
+	};
 	hygiene?: {
 		daily_submitted: number;
 		daily_required?: number;

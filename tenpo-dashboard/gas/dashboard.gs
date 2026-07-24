@@ -93,7 +93,7 @@ function initSpreadsheet() {
 				["人件費率目標(%)", 25],
 				["同期時刻(0〜23時)", 22],
 			]);
-		settings.getRange("A1:B1").setFontWeight("bold").setBackground("#f6e4dc");
+		settings.getRange("A1:B1").setFontWeight("bold").setBackground("#e5ebf3");
 		settings.setColumnWidth(1, 180);
 		settings.setColumnWidth(2, 360);
 		settings
@@ -119,17 +119,17 @@ function initSpreadsheet() {
 				["104", "川越クレアモール店", "イザカラ", "", ""],
 				["105", "上野御徒町店", "すし鳥酒場", "", ""],
 			]);
-		master.getRange("A1:E1").setFontWeight("bold").setBackground("#f6e4dc");
+		master.getRange("A1:E1").setFontWeight("bold").setBackground("#e5ebf3");
 		master.getRange("A:A").setNumberFormat("@"); // 店舗コードは文字列扱い
 		master.setColumnWidth(2, 160);
 		master.setFrozenRows(1);
 	}
 	// 旧バージョンで作成したシートに不足列を追加
 	if (String(master.getRange("D1").getValue()).trim() === "") {
-		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#f6e4dc");
+		master.getRange("D1").setValue("初期パスワード").setFontWeight("bold").setBackground("#e5ebf3");
 	}
 	if (String(master.getRange("E1").getValue()).trim() === "") {
-		master.getRange("E1").setValue("QSC詳細URL").setFontWeight("bold").setBackground("#f6e4dc");
+		master.getRange("E1").setValue("QSC詳細URL").setFontWeight("bold").setBackground("#e5ebf3");
 		master
 			.getRange("E1")
 			.setNote(
@@ -156,7 +156,7 @@ function initSpreadsheet() {
 		}
 		if (sheet.getLastRow() === 0) {
 			sheet.getRange(1, 1, 1, 3).setValues([["店舗コード", "店舗名", m.header]]);
-			sheet.getRange("A1:C1").setFontWeight("bold").setBackground("#f6e4dc");
+			sheet.getRange("A1:C1").setFontWeight("bold").setBackground("#e5ebf3");
 			// 店舗コード・店舗名は店舗マスタから自動反映
 			sheet
 				.getRange("A2")
@@ -195,7 +195,7 @@ function initSpreadsheet() {
 					"売上実績(円)",
 				],
 			]);
-		laborBudget.getRange("A1:G1").setFontWeight("bold").setBackground("#f6e4dc");
+		laborBudget.getRange("A1:G1").setFontWeight("bold").setBackground("#e5ebf3");
 		laborBudget.getRange("A:A").setNumberFormat("@");
 		laborBudget
 			.getRange("A2")
@@ -513,7 +513,7 @@ function writeQscDetailColumns(ss, masterNames, match, rows, qCols) {
 		.getRange(1, 4, 1, headers.length)
 		.setValues([headers])
 		.setFontWeight("bold")
-		.setBackground("#f6e4dc");
+		.setBackground("#e5ebf3");
 	var data = masterNames.map(function (m) {
 		var src = match[m];
 		var r = src ? rows[src] : null;

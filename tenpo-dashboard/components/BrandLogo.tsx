@@ -21,7 +21,7 @@ const BRANDS: BrandDef[] = [
 const DEFAULT: BrandDef = {
 	match: "らくらく店舗ダッシュボード",
 	initial: "店",
-	bg: "#c25534",
+	bg: "#16436d",
 	image: "/brand/app-logo.png",
 };
 

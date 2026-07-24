@@ -119,7 +119,7 @@ export default function TrendChart({
 					</g>
 				)}
 
-				<path d={path} fill="none" stroke="#c25534" strokeWidth={2.5} strokeLinejoin="round" />
+				<path d={path} fill="none" stroke="#16436d" strokeWidth={2.5} strokeLinejoin="round" />
 				{points.map(
 					(p, i) =>
 						p.value !== null && (
@@ -128,7 +128,7 @@ export default function TrendChart({
 								cx={x(i)}
 								cy={y(p.value)}
 								r={active === i ? 6 : 4.5}
-								fill="#c25534"
+								fill="#16436d"
 								stroke="#fff"
 								strokeWidth={2}
 							/>

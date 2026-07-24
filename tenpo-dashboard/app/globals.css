@@ -1,8 +1,8 @@
 :root {
-	/* ブランドカラー: ディープネイビー */
-	--brand: #16436d;
-	--brand-deep: #0e3153;
-	--brand-light: #3e6f9e;
+	/* ブランドカラー: テラコッタ */
+	--brand: #c25534;
+	--brand-deep: #9c4023;
+	--brand-light: #d4714e;
 	--bg: #f4f2f0;
 	--surface: #ffffff;
 	--surface-soft: #f5f3f1;
@@ -10,8 +10,8 @@
 	--ink: #221d1a;
 	--ink-2: #6f6862;
 	--ink-3: #a39b94;
-	--accent: #16436d;
-	--accent-soft: #e8eff6;
+	--accent: #c25534;
+	--accent-soft: #f9eae3;
 	--good-bg: #e9f6ee;
 	--good-ink: #1a7f37;
 	--warn-bg: #fdf3dc;

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 
 import { useAuthStore } from '@/store/authStore';
 import { isCloudEnabled } from '@/lib/firebase';
@@ -14,12 +14,14 @@ export default function ViewerEntryScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
   const enterGuestByToken = useAuthStore((s) => s.enterGuestByToken);
   const ready = useAuthStore((s) => s.ready);
+  const user = useAuthStore((s) => s.user);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     // クラウド無効時は ready を待たない（authInit が呼ばれないため）
     if (isCloudEnabled && !ready) return;
     let cancelled = false;
+    if (isCloudEnabled && user) return; // ログイン中はRedirectで処理
     void (async () => {
       const ok =
         isCloudEnabled && token ? await enterGuestByToken(String(token)) : false;
@@ -33,7 +35,13 @@ export default function ViewerEntryScreen() {
     return () => {
       cancelled = true;
     };
-  }, [ready, token, enterGuestByToken]);
+  }, [ready, user, token, enterGuestByToken]);
+
+  // すでにログイン中の端末では、ゲスト化せずそのままアプリ本体を表示する
+  // （自分の共有リンクを自分で開いたケース。以前は「リンクが無効です」になっていた）
+  if (isCloudEnabled && ready && user) {
+    return <Redirect href="/(tabs)/reports" />;
+  }
 
   return (
     <View style={styles.root}>

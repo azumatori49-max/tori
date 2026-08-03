@@ -26,6 +26,28 @@ function viewerLinkFor(token: string): string {
   return `${window.location.origin}${sub}/v/${token}`;
 }
 
+/** スマホの共有シートで閲覧用リンクを送る（LINE・メール等）。非対応環境はコピー */
+async function shareViewerLink(url: string, orgName: string): Promise<void> {
+  type ShareNav = Navigator & {
+    share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+  };
+  const nav = typeof navigator !== 'undefined' ? (navigator as ShareNav) : null;
+  if (nav?.share) {
+    try {
+      await nav.share({
+        title: `${orgName} メンテナンスレポート`,
+        text: `${orgName}のメンテナンスレポートはこちらから確認できます（ログイン不要）`,
+        url,
+      });
+      return;
+    } catch {
+      // キャンセル時は何もしない
+      return;
+    }
+  }
+  await copyText(url, '閲覧用リンク');
+}
+
 async function copyText(text: string, label: string): Promise<void> {
   try {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -305,29 +327,41 @@ export default function SettingsScreen() {
                       <Pressable style={styles.rotateBtn} onPress={() => void onRotate('invite')}>
                         <Text style={styles.rotateText}>招待コードを再発行する</Text>
                       </Pressable>
-
-                      <View style={styles.divider} />
-                      <Text style={styles.shareTitle}>閲覧用リンク（店長など）</Text>
-                      <Text style={styles.accountNote}>
-                        このリンクを開くと、ログイン不要でレポートの閲覧・PDF出力ができます。
-                      </Text>
-                      <View style={styles.codeRow}>
-                        <Text style={styles.codeText} numberOfLines={1}>
-                          {viewerLinkFor(org.viewerToken)}
-                        </Text>
-                        <Pressable
-                          style={styles.codeBtn}
-                          onPress={() =>
-                            void copyText(viewerLinkFor(org.viewerToken), '閲覧用リンク')
-                          }
-                        >
-                          <Text style={styles.codeBtnText}>コピー</Text>
-                        </Pressable>
-                      </View>
-                      <Pressable style={styles.rotateBtn} onPress={() => void onRotate('viewer')}>
-                        <Text style={styles.rotateText}>閲覧用リンクを再発行する</Text>
-                      </Pressable>
                     </>
+                  )}
+
+                  {/* 閲覧用リンクはメンバー全員が共有できる（エリアマネージャー等） */}
+                  <View style={styles.divider} />
+                  <Text style={styles.shareTitle}>閲覧用リンク（店長など）</Text>
+                  <Text style={styles.accountNote}>
+                    このリンクを開くと、ログイン不要でレポートの閲覧・PDF出力ができます。
+                    「共有」からLINEやメールでそのまま送れます。
+                  </Text>
+                  <View style={styles.codeRow}>
+                    <Text style={styles.codeText} numberOfLines={1}>
+                      {viewerLinkFor(org.viewerToken)}
+                    </Text>
+                    <Pressable
+                      style={styles.codeBtn}
+                      onPress={() =>
+                        void copyText(viewerLinkFor(org.viewerToken), '閲覧用リンク')
+                      }
+                    >
+                      <Text style={styles.codeBtnText}>コピー</Text>
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    style={styles.shareBtn}
+                    onPress={() =>
+                      void shareViewerLink(viewerLinkFor(org.viewerToken), org.name)
+                    }
+                  >
+                    <Text style={styles.shareBtnText}>共有（LINE・メールなど）</Text>
+                  </Pressable>
+                  {org.role === 'admin' && (
+                    <Pressable style={styles.rotateBtn} onPress={() => void onRotate('viewer')}>
+                      <Text style={styles.rotateText}>閲覧用リンクを再発行する</Text>
+                    </Pressable>
                   )}
                 </Card>
 
@@ -521,6 +555,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   codeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  shareBtn: {
+    marginTop: 10,
+    backgroundColor: C.primary,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  shareBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   rotateBtn: { marginTop: 8, alignSelf: 'flex-start' },
   rotateText: { fontSize: 12, color: C.textSub, textDecorationLine: 'underline' },
 });

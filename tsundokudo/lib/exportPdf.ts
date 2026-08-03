@@ -48,6 +48,18 @@ function printOnWeb(html: string, fileName: string): ExportResult {
       w.print();
     }, 500);
   });
+  // スマホは「PDFに保存→共有」の手順が分かりにくいため案内を返す
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  if (/iPhone|iPad|Android/i.test(ua)) {
+    return {
+      ok: true,
+      message:
+        'PDFの共有方法\n\n' +
+        '【iPhone】開いた印刷画面でプレビュー（小さいページ画像）をタップ → 右上の共有ボタンから LINE・メールなどに送れます。\n\n' +
+        '【Android】印刷画面で「PDF形式で保存」を選んで保存 → ファイルから共有できます。\n\n' +
+        '※ 相手に見せるだけなら、設定タブの「閲覧用リンクを共有」が一番かんたんです。',
+    };
+  }
   return { ok: true };
 }
 

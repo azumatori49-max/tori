@@ -114,6 +114,22 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .desc li{margin-left:1.2em}
 .note{font-size:11px;color:var(--sub);margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
 .sec-label{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin:14px 0 6px}
+/* 推移の一覧表示（一画面でまとめて見る） */
+.back-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;flex:0 0 auto}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
+.trow:last-child{border-bottom:none}
+.trow.alert .tname{color:var(--bad);font-weight:700}
+.tname{font-size:13px;min-width:0;flex:1}
+.tsc{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.tsc.empty-sc{color:var(--sub);font-size:12px}
+.ts{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;font-size:12px;font-weight:600;background:var(--line);color:var(--ink)}
+.ts.lv5,.ts.lv4{background:#DFF2E4;color:#1E7F4C}
+.ts.lv3{background:#FBF0D8;color:#8A6D1D}
+.ts.lv2,.ts.lv1{background:#F9E3E1;color:#BE3E36}
+.ts.cur{outline:2px solid var(--accent);font-weight:800}
+.tt{font-size:11px;color:var(--sub);margin-left:2px}
+.tt.good{color:var(--good);font-weight:700}
+.tt.bad{color:var(--bad);font-weight:700}
 .photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .photos .ph{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
 .photos .ph img{width:100%;height:100%;object-fit:cover;display:block}
@@ -365,7 +381,7 @@ const CHECK_CATS = [
   ]},
   { id:"sales", name:"営業・商品品質", short:"営業・品質", items:[
     { id:"peak", name:"ピーク帯・オペレーション力",
-      desc:["ピーク帯でもスムーズに営業できているか","「0秒スピード」が実践できているか"], photoLabel:"現場写真",
+      desc:["ピーク帯でもスムーズに営業できているか","「0秒スピード」が実践できているか"], noPhoto:true,
       groups:[s5([
         ["非常にスムーズ","ピーク帯でも「0秒スピード」が実践され、提供・連携が非常にスムーズ"],
         ["スムーズ","おおむねスムーズで、大きな遅れはない"],
@@ -517,7 +533,7 @@ function hasIssueEval(a,itemId){
 function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
-  if(!item.photoOptional&&!a.photos.length) return false;
+  if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) return false;
   for(const g of item.groups){ if(!a.evals[g.key]) return false; }
   return true;
 }
@@ -564,7 +580,7 @@ function lowCount(store,item){return itemHistory(store,item).filter(h=>h.s5<=ALE
 // PDF変換に必要な写真が未添付の項目（写真任意の項目は除く）
 function photoMissingItems(insp){
   return ALL_ITEMS.filter(it=>{
-    if(it.photoOptional) return false;
+    if(it.photoOptional||it.noPhoto) return false;
     const a=insp.answers&&insp.answers[it.id];
     const n=a?(((a.photos||[]).filter(Boolean).length)||a.photoCount||0):0;
     return n===0;
@@ -591,6 +607,89 @@ function storeRanking(){
   }).sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
 }
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
+/* ---------- CSV書き出し・ChatGPT分析用プロンプト ---------- */
+function csvEsc(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function buildCsv(){
+  const head=["日付","店舗","確認者","総合点(100点満点)","状態",
+    ...ALL_ITEMS.map(i=>i.name+"(5点満点)"),
+    ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,""))];
+  const list=[...state.inspections].filter(i=>i.completedAt)
+    .sort((a,b)=>(a.date+(a.completedAt||"")).localeCompare(b.date+(b.completedAt||"")));
+  const rows=[head];
+  for(const i of list){
+    const iv=(i.pdca&&i.pdca.interview)||{};
+    rows.push([i.date,i.store,i.inspector,i.totalScore,i.provisional?"一時保存(入力途中)":"完了",
+      ...ALL_ITEMS.map(it=>{const s=score5Of(it,i);return s==null?"":s;}),
+      ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim())]);
+  }
+  return rows.map(r=>r.map(csvEsc).join(",")).join("\n");
+}
+function chatGptPrompt(){
+  return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
+以下は全店舗の臨店チェック結果のCSVデータです。各行が1回の臨店チェックで、各項目は5段階評価（5=優秀、3以下=要改善）、総合点は100点満点です。「面談：」の列には店舗スタッフとの面談で聞き取った内容が入っています。
+
+このデータを分析して、エリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
+
+出力の条件：
+- 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
+- 店舗ごとに、優先度の高い順に行動を最大3つの箇条書きで
+- 各行動は「どの店舗で・何を・いつまでに・どうやって」が分かる具体的な一文にする
+- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
+- 最後に「全店舗共通で今週から実行すること」を3つ以内でまとめる
+
+データ（CSV）：
+`;
+}
+function interviewsFor(store){
+  return state.inspections.filter(i=>i.store===store&&i.completedAt)
+    .sort((a,b)=>(b.date+(b.completedAt||"")).localeCompare(a.date+(a.completedAt||"")))
+    .map(i=>{const iv=(i.pdca&&i.pdca.interview)||{};
+      const qa=INTERVIEW_QS.map(q=>({label:q.label,text:String(iv[q.key]||"").trim()})).filter(z=>z.text);
+      return qa.length?{date:i.date,who:iv.interviewee||"",qa}:null;}).filter(Boolean);
+}
+function storePrompt(store){
+  const lines=[];
+  ALL_ITEMS.forEach(it=>{
+    const h=itemHistory(store,it);
+    if(h.length) lines.push(`${it.name}：${h.slice(-8).map(p=>`${fmtDate(p.date)} ${p.s5}点`).join("、")}`);
+  });
+  const ivs=interviewsFor(store).slice(0,3).map(x=>`【面談 ${fmtDate(x.date)}${x.who?`／被面談者：${x.who}`:""}】\n`+x.qa.map(z=>`${z.label}\n${z.text}`).join("\n"));
+  return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
+以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容です。
+
+このデータを分析して、この店舗についてエリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
+
+出力の条件：
+- 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
+- 優先度の高い順に最大5つの箇条書きで
+- 各行動は「何を・いつまでに・どうやって」が分かる具体的な一文にする
+- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
+
+■ 項目別の点数推移
+${lines.join("\n")||"（データなし）"}
+
+■ 面談内容（直近）
+${ivs.join("\n\n")||"（記録なし）"}
+`;
+}
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); return true; }
+  catch(e){
+    try{
+      const ta=document.createElement("textarea"); ta.value=txt;
+      ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok=document.execCommand("copy"); ta.remove(); return ok;
+    }catch(e2){ return false; }
+  }
+}
+function downloadCsv(){
+  const blob=new Blob(["\uFEFF"+buildCsv()],{type:"text/csv;charset=utf-8"}); // BOM付き（Excelの文字化け防止）
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=`臨店チェック_全店データ_${todayStr()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
 function monthlyAvg(hist){
   const m={};
   hist.forEach(h=>{const k=h.date.slice(0,7);(m[k]||(m[k]=[])).push(h.s5);});
@@ -616,7 +715,7 @@ function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
     const a=ans(item.id);
-    if(!item.photoOptional&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
+    if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
   }));
   return m;
@@ -651,7 +750,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.21.0";
+const APP_VERSION="v7.22.0";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1169,6 +1268,15 @@ function viewHome(){
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
     </div>
+    <div class="card">
+      <h3>ChatGPTでデータ分析</h3>
+      <p class="desc">全店舗のチェック結果をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けるだけで、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn sub" id="gpt-copy">プロンプト＋データをコピー</button>
+        <button class="btn ghost" id="csv-dl">CSVをダウンロード</button>
+      </div>
+      <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信</p>
+    </div>
     <button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>
     <p class="hw-meta" style="text-align:center;margin-top:10px">らくらく臨店チェック ${APP_VERSION}</p>
   </div>`;
@@ -1392,40 +1500,57 @@ function viewTrends(){
   const store=state.trendStore;
   const hist=completedFor(store);
   const alerts=storeAlerts(store);
+  const ivs=interviewsFor(store).slice(0,3);
   return `
-  <header class="hd"><div class="bar" style="padding-bottom:10px">
-    <h1>${esc(store)}｜項目別の推移</h1><span class="meta">チェック${hist.length}回分</span>
+  <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
+    <button class="back-btn" id="to-home" aria-label="戻る">← 戻る</button>
+    <h1 style="flex:1">${esc(store)}｜推移</h1><span class="meta">チェック${hist.length}回分</span>
   </div></header>
   <div class="wrap">
     ${alerts.length?`<div class="card" style="border-color:var(--bad)">
       <h3 style="color:var(--bad)">⚠ アラート（3点以下が${ALERT_COUNT}回以上）</h3>
       ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
-    </div>`:`<div class="card"><h3>アラートはありません</h3><p class="desc">3点以下が${ALERT_COUNT}回以上になった項目はありません。</p></div>`}
-    <p class="desc" style="margin:0 2px 12px">縦棒は各チェックの点数（1〜5点・直近12回）、下の欄は月ごとの平均点です。</p>
-    ${CHECK_CATS.map(cat=>`
-    <div class="card"><h3>${esc(cat.name)}</h3>
-      ${cat.items.map(it=>{
-        const h=itemHistory(store,it);
-        if(!h.length) return `<div class="rep-item"><div class="nm"><span>${esc(it.name)}</span></div><p class="empty">データがまだありません</p></div>`;
-        const ma=monthlyAvg(h);
-        const diff=ma.length<2?null:ma[ma.length-1].avg-ma[0].avg;
-        const trend=diff==null?`<span style="color:var(--sub);font-size:12px">データ1ヶ月分</span>`
-          :diff>0.2?`<span style="color:var(--good);font-size:12px;font-weight:700">改善 +${diff.toFixed(1)}</span>`
-          :diff<-0.2?`<span style="color:var(--bad);font-size:12px;font-weight:700">悪化 ${diff.toFixed(1)}</span>`
-          :`<span style="color:var(--sub);font-size:12px">横ばい</span>`;
-        const lc=lowCount(store,it);
-        return `<div class="rep-item">
-          <div class="nm"><span>${esc(it.name)}${lc>=ALERT_COUNT?` <span class="badge issue">⚠ 3点以下${lc}回</span>`:""}</span>${trend}</div>
-          <div class="trend-bars">${h.slice(-12).map(p=>`<div class="tb lv${p.s5}" style="height:${p.s5*20}%" title="${fmtDate(p.date)}：${p.s5}点"></div>`).join("")}</div>
-          <div class="month-row">${ma.slice(-6).map(m=>`<div class="mcell"><div class="mk">${m.month.slice(2,4)}/${+m.month.slice(5)}</div><div class="mv">${m.avg.toFixed(1)}</div><div class="mb lv${Math.round(m.avg)}"></div></div>`).join("")}</div>
-        </div>`;}).join("")}
-    </div>`).join("")}
-    <button class="btn" id="to-home">ホームへ戻る</button>
+    </div>`:""}
+    <div class="card">
+      <h3>全項目の推移（一覧）</h3>
+      <p class="desc" style="margin-bottom:6px">左から古い順に直近${TREND_N}回分の点数。<b>太字</b>が最新です。</p>
+      ${CHECK_CATS.map(cat=>{
+        const rows=cat.items.map(it=>{
+          const h=itemHistory(store,it);
+          const lc=lowCount(store,it);
+          if(!h.length) return `<div class="trow"><span class="tname">${esc(it.name)}</span><span class="tsc empty-sc">—</span></div>`;
+          const last=h.slice(-TREND_N);
+          const ma=monthlyAvg(h);
+          const diff=ma.length<2?null:ma[ma.length-1].avg-ma[0].avg;
+          const trend=diff==null?"":diff>0.2?`<span class="tt good">↗改善</span>`:diff<-0.2?`<span class="tt bad">↘悪化</span>`:`<span class="tt">→</span>`;
+          return `<div class="trow${lc>=ALERT_COUNT?" alert":""}">
+            <span class="tname">${lc>=ALERT_COUNT?"⚠ ":""}${esc(it.name)}</span>
+            <span class="tsc">${last.map((p,i)=>`<span class="ts lv${p.s5}${i===last.length-1?" cur":""}" title="${fmtDate(p.date)}">${p.s5}</span>`).join("")}${trend}</span>
+          </div>`;
+        }).join("");
+        return `<div class="sec-label" style="margin-top:10px">${esc(cat.name)}</div>${rows}`;
+      }).join("")}
+    </div>
+    <div class="card">
+      <h3>面談内容（直近${ivs.length||0}回分）</h3>
+      ${ivs.length?ivs.map(x=>`
+        <div class="txt-block" style="margin-top:8px">
+          <div class="k">面談 ${fmtDate(x.date)}${x.who?`／被面談者：${esc(x.who)}`:""}</div>
+          ${x.qa.map(z=>`<div class="v" style="margin-top:4px"><b>${esc(z.label)}</b><br>${esc(z.text)}</div>`).join("")}
+        </div>`).join(""):`<p class="empty">面談の記録がまだありません。</p>`}
+    </div>
+    <div class="card">
+      <h3>ChatGPTでこの店舗を分析</h3>
+      <p class="desc">この店舗の点数推移と面談内容をまとめた分析用プロンプトをコピーします。ChatGPTに貼り付けると、この店舗で実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
+      <button class="btn sub" id="gpt-store">この店舗のプロンプトをコピー</button>
+    </div>
+    <button class="btn" id="to-home2">ホームへ戻る</button>
     <div style="margin-top:10px">
       <button class="btn ghost" id="store-del" style="color:var(--bad);border-color:var(--bad)">この店舗の記録をすべて削除（${hist.length}件）</button>
     </div>
   </div>`;
 }
+const TREND_N=8; // 推移一覧に表示する直近のチェック回数
 
 /* ---------- 共通保存（Cloud Firestore） ----------
    完了したチェックを全端末・全ユーザーで共有する。写真はドキュメント上限を
@@ -1690,13 +1815,14 @@ function itemCard(item){
     <ul class="desc">${item.desc.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
     ${(()=>{const lc=state.draft?lowCount(state.draft.store,item):0;
       return lc>=ALERT_COUNT?`<div class="item-alert">⚠ アラート：この項目は3点以下が${lc}回になっています。重点的に確認・改善してください。</div>`:"";})()}
+    ${item.noPhoto?"":`
     <div class="sec-label">${esc(item.photoLabel||"写真")} ${item.photoOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
     <div class="photos">
       ${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(item.name)}の写真${i+1}"><button class="del" data-delph="${item.id}:${i}" aria-label="写真を削除">×</button></div>`).join("")}
       ${a.photos.length<4?`
       <label class="photo-add"><span>＋</span><span>撮影</span><input type="file" accept="image/*" capture="environment" hidden data-photo="${item.id}"></label>
       <label class="photo-add"><span>＋</span><span>フォルダから</span><input type="file" accept="image/*" multiple hidden data-photo="${item.id}"></label>`:""}
-    </div>
+    </div>`}
     ${item.groups.map(g=>`
       <div class="sec-label">${esc(g.label)} <span class="req">必須</span></div>
       ${g.scale?`
@@ -1932,7 +2058,22 @@ function refreshHeader(){
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
-  if(t.id==="to-home"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="gpt-copy"){
+    if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
+    const ok=await copyText(chatGptPrompt()+buildCsv());
+    showToast(ok?"コピーしました。ChatGPTに貼り付けて送信してください":"コピーできませんでした。CSVダウンロードをお使いください");
+    return;
+  }
+  if(t.id==="csv-dl"){
+    if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
+    downloadCsv(); return;
+  }
+  if(t.id==="gpt-store"){
+    const ok=await copyText(storePrompt(state.trendStore));
+    showToast(ok?"コピーしました。ChatGPTに貼り付けて送信してください":"コピーできませんでした");
+    return;
+  }
   if(t.id==="save-now"){
     clearTimeout(saveTimer);
     try{ await kvSet("draft",state.draft); }catch(e){}

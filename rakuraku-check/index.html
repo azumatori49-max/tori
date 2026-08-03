@@ -122,11 +122,16 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tname{font-size:13px;min-width:0;flex:1}
 .tsc{display:flex;align-items:center;gap:3px;flex:0 0 auto}
 .tsc.empty-sc{color:var(--sub);font-size:12px}
-.ts{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;font-size:12px;font-weight:600;background:var(--line);color:var(--ink)}
-.ts.lv5,.ts.lv4{background:#DFF2E4;color:#1E7F4C}
-.ts.lv3{background:#FBF0D8;color:#8A6D1D}
-.ts.lv2,.ts.lv1{background:#F9E3E1;color:#BE3E36}
-.ts.cur{outline:2px solid var(--accent);font-weight:800}
+.tbars{display:inline-flex;align-items:flex-end;gap:2px;height:30px}
+.tbars .b{width:9px;border-radius:2px 2px 0 0;background:var(--line);min-height:3px;opacity:.5}
+.tbars .b.lv5,.tbars .b.lv4{background:var(--good)}
+.tbars .b.lv3{background:#D9A21B}
+.tbars .b.lv2,.tbars .b.lv1{background:var(--bad)}
+.tbars .b.cur{opacity:1;width:11px}
+.cur-num{font-size:14px;min-width:18px;text-align:center}
+.cur-num.nlv5,.cur-num.nlv4{color:var(--good)}
+.cur-num.nlv3{color:#8A6D1D}
+.cur-num.nlv2,.cur-num.nlv1{color:var(--bad)}
 .tt{font-size:11px;color:var(--sub);margin-left:2px}
 .tt.good{color:var(--good);font-weight:700}
 .tt.bad{color:var(--bad);font-weight:700}
@@ -647,31 +652,6 @@ function interviewsFor(store){
       const qa=INTERVIEW_QS.map(q=>({label:q.label,text:String(iv[q.key]||"").trim()})).filter(z=>z.text);
       return qa.length?{date:i.date,who:iv.interviewee||"",qa}:null;}).filter(Boolean);
 }
-function storePrompt(store){
-  const lines=[];
-  ALL_ITEMS.forEach(it=>{
-    const h=itemHistory(store,it);
-    if(h.length) lines.push(`${it.name}：${h.slice(-8).map(p=>`${fmtDate(p.date)} ${p.s5}点`).join("、")}`);
-  });
-  const ivs=interviewsFor(store).slice(0,3).map(x=>`【面談 ${fmtDate(x.date)}${x.who?`／被面談者：${x.who}`:""}】\n`+x.qa.map(z=>`${z.label}\n${z.text}`).join("\n"));
-  return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
-以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容です。
-
-このデータを分析して、この店舗についてエリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
-
-出力の条件：
-- 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
-- 優先度の高い順に最大5つの箇条書きで
-- 各行動は「何を・いつまでに・どうやって」が分かる具体的な一文にする
-- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
-
-■ 項目別の点数推移
-${lines.join("\n")||"（データなし）"}
-
-■ 面談内容（直近）
-${ivs.join("\n\n")||"（記録なし）"}
-`;
-}
 async function copyText(txt){
   try{ await navigator.clipboard.writeText(txt); return true; }
   catch(e){
@@ -750,7 +730,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.22.0";
+const APP_VERSION="v7.23.0";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1512,20 +1492,21 @@ function viewTrends(){
       ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
     </div>`:""}
     <div class="card">
-      <h3>全項目の推移（一覧）</h3>
-      <p class="desc" style="margin-bottom:6px">左から古い順に直近${TREND_N}回分の点数。<b>太字</b>が最新です。</p>
+      <h3>全項目の推移（グラフ）</h3>
+      <p class="desc" style="margin-bottom:6px">各項目の直近${TREND_N}回分の点数（1〜5点）。左から古い順で、右端の濃い棒と数字が最新です。</p>
       ${CHECK_CATS.map(cat=>{
         const rows=cat.items.map(it=>{
           const h=itemHistory(store,it);
           const lc=lowCount(store,it);
           if(!h.length) return `<div class="trow"><span class="tname">${esc(it.name)}</span><span class="tsc empty-sc">—</span></div>`;
           const last=h.slice(-TREND_N);
+          const cur=last[last.length-1];
           const ma=monthlyAvg(h);
           const diff=ma.length<2?null:ma[ma.length-1].avg-ma[0].avg;
           const trend=diff==null?"":diff>0.2?`<span class="tt good">↗改善</span>`:diff<-0.2?`<span class="tt bad">↘悪化</span>`:`<span class="tt">→</span>`;
           return `<div class="trow${lc>=ALERT_COUNT?" alert":""}">
             <span class="tname">${lc>=ALERT_COUNT?"⚠ ":""}${esc(it.name)}</span>
-            <span class="tsc">${last.map((p,i)=>`<span class="ts lv${p.s5}${i===last.length-1?" cur":""}" title="${fmtDate(p.date)}">${p.s5}</span>`).join("")}${trend}</span>
+            <span class="tsc"><span class="tbars">${last.map((p,i)=>`<span class="b lv${p.s5}${i===last.length-1?" cur":""}" style="height:${p.s5*20}%" title="${fmtDate(p.date)}：${p.s5}点"></span>`).join("")}</span><b class="cur-num nlv${cur.s5}">${cur.s5}</b>${trend}</span>
           </div>`;
         }).join("");
         return `<div class="sec-label" style="margin-top:10px">${esc(cat.name)}</div>${rows}`;
@@ -1540,9 +1521,9 @@ function viewTrends(){
         </div>`).join(""):`<p class="empty">面談の記録がまだありません。</p>`}
     </div>
     <div class="card">
-      <h3>ChatGPTでこの店舗を分析</h3>
-      <p class="desc">この店舗の点数推移と面談内容をまとめた分析用プロンプトをコピーします。ChatGPTに貼り付けると、この店舗で実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
-      <button class="btn sub" id="gpt-store">この店舗のプロンプトをコピー</button>
+      <h3>ChatGPTで全店分析</h3>
+      <p class="desc">全店舗のチェック結果と面談内容をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けると、エリアマネージャーが実行すべき行動（PDCAのDo）だけを店舗ごとに提案してくれます。</p>
+      <button class="btn sub" id="gpt-copy">プロンプト＋全店データをコピー</button>
     </div>
     <button class="btn" id="to-home2">ホームへ戻る</button>
     <div style="margin-top:10px">
@@ -2068,11 +2049,6 @@ document.addEventListener("click",async e=>{
   if(t.id==="csv-dl"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
     downloadCsv(); return;
-  }
-  if(t.id==="gpt-store"){
-    const ok=await copyText(storePrompt(state.trendStore));
-    showToast(ok?"コピーしました。ChatGPTに貼り付けて送信してください":"コピーできませんでした");
-    return;
   }
   if(t.id==="save-now"){
     clearTimeout(saveTimer);

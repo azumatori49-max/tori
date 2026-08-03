@@ -652,6 +652,31 @@ function interviewsFor(store){
       const qa=INTERVIEW_QS.map(q=>({label:q.label,text:String(iv[q.key]||"").trim()})).filter(z=>z.text);
       return qa.length?{date:i.date,who:iv.interviewee||"",qa}:null;}).filter(Boolean);
 }
+function storePrompt(store){
+  const lines=[];
+  ALL_ITEMS.forEach(it=>{
+    const h=itemHistory(store,it);
+    if(h.length) lines.push(`${it.name}：${h.slice(-8).map(p=>`${fmtDate(p.date)} ${p.s5}点`).join("、")}`);
+  });
+  const ivs=interviewsFor(store).slice(0,3).map(x=>`【面談 ${fmtDate(x.date)}${x.who?`／被面談者：${x.who}`:""}】\n`+x.qa.map(z=>`${z.label}\n${z.text}`).join("\n"));
+  return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
+以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容です。
+
+このデータを分析して、この店舗についてエリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
+
+出力の条件：
+- 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
+- 優先度の高い順に最大5つの箇条書きで
+- 各行動は「何を・いつまでに・どうやって」が分かる具体的な一文にする
+- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
+
+■ 項目別の点数推移
+${lines.join("\n")||"（データなし）"}
+
+■ 面談内容（直近）
+${ivs.join("\n\n")||"（記録なし）"}
+`;
+}
 async function copyText(txt){
   try{ await navigator.clipboard.writeText(txt); return true; }
   catch(e){
@@ -730,7 +755,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.23.0";
+const APP_VERSION="v7.24.0";
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1521,9 +1546,13 @@ function viewTrends(){
         </div>`).join(""):`<p class="empty">面談の記録がまだありません。</p>`}
     </div>
     <div class="card">
-      <h3>ChatGPTで全店分析</h3>
-      <p class="desc">全店舗のチェック結果と面談内容をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けると、エリアマネージャーが実行すべき行動（PDCAのDo）だけを店舗ごとに提案してくれます。</p>
-      <button class="btn sub" id="gpt-copy">プロンプト＋全店データをコピー</button>
+      <h3>ChatGPTで分析</h3>
+      <p class="desc">分析用の指示文（プロンプト）つきでデータをコピーします。ChatGPTに貼り付けると、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn sub" id="gpt-store">この店舗の分析をコピー</button>
+        <button class="btn ghost" id="gpt-copy">全店分析をコピー</button>
+      </div>
+      <p class="hw-meta" style="margin-top:8px">この店舗＝${esc(store)}の点数推移＋面談内容／全店＝全店舗のCSVデータ</p>
     </div>
     <button class="btn" id="to-home2">ホームへ戻る</button>
     <div style="margin-top:10px">
@@ -2049,6 +2078,11 @@ document.addEventListener("click",async e=>{
   if(t.id==="csv-dl"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
     downloadCsv(); return;
+  }
+  if(t.id==="gpt-store"){
+    const ok=await copyText(storePrompt(state.trendStore));
+    showToast(ok?"コピーしました。ChatGPTに貼り付けて送信してください":"コピーできませんでした");
+    return;
   }
   if(t.id==="save-now"){
     clearTimeout(saveTimer);

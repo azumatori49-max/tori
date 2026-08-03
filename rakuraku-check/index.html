@@ -755,7 +755,9 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.24.0";
+const APP_VERSION="v7.24.1";
+// 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
+const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
@@ -1282,7 +1284,7 @@ function viewHome(){
       </div>
       <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信</p>
     </div>
-    <button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>
+    ${ADMIN_VISIBLE?`<button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>`:""}
     <p class="hw-meta" style="text-align:center;margin-top:10px">らくらく臨店チェック ${APP_VERSION}</p>
   </div>`;
 }

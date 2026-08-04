@@ -116,22 +116,24 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .sec-label{font-size:12px;font-weight:700;color:var(--sub);letter-spacing:.06em;margin:14px 0 6px}
 /* 推移の一覧表示（一画面でまとめて見る） */
 .back-btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;flex:0 0 auto}
-.trow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:1px 0;border-bottom:1px solid var(--line)}
 .trow:last-child{border-bottom:none}
 .trow.alert .tname{color:var(--bad);font-weight:700}
-.tname{font-size:13px;min-width:0;flex:1}
+.tname{font-size:11.5px;min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tsc{display:flex;align-items:center;gap:3px;flex:0 0 auto}
-.tsc.empty-sc{color:var(--sub);font-size:12px}
-.tbars{display:inline-flex;align-items:flex-end;gap:2px;height:30px}
-.tbars .b{width:9px;border-radius:2px 2px 0 0;background:var(--line);min-height:3px;opacity:.5}
+.tsc.empty-sc{color:var(--sub);font-size:11px}
+.tbars{display:inline-flex;align-items:flex-end;gap:1.5px;height:20px}
+.tbars .b{width:6px;border-radius:1.5px 1.5px 0 0;background:var(--line);min-height:2px;opacity:.5}
 .tbars .b.lv5,.tbars .b.lv4{background:var(--good)}
 .tbars .b.lv3{background:#D9A21B}
 .tbars .b.lv2,.tbars .b.lv1{background:var(--bad)}
-.tbars .b.cur{opacity:1;width:11px}
-.cur-num{font-size:14px;min-width:18px;text-align:center}
+.tbars .b.cur{opacity:1;width:8px}
+.cur-num{font-size:12px;min-width:14px;text-align:center}
 .cur-num.nlv5,.cur-num.nlv4{color:var(--good)}
 .cur-num.nlv3{color:#8A6D1D}
 .cur-num.nlv2,.cur-num.nlv1{color:var(--bad)}
+.tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
+.tt{font-size:10px}
 .tt{font-size:11px;color:var(--sub);margin-left:2px}
 .tt.good{color:var(--good);font-weight:700}
 .tt.bad{color:var(--bad);font-weight:700}
@@ -755,7 +757,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.24.1";
+const APP_VERSION="v7.24.2";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1518,9 +1520,9 @@ function viewTrends(){
       <h3 style="color:var(--bad)">⚠ アラート（3点以下が${ALERT_COUNT}回以上）</h3>
       ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
     </div>`:""}
-    <div class="card">
-      <h3>全項目の推移（グラフ）</h3>
-      <p class="desc" style="margin-bottom:6px">各項目の直近${TREND_N}回分の点数（1〜5点）。左から古い順で、右端の濃い棒と数字が最新です。</p>
+    <div class="card" style="padding:12px 14px">
+      <h3 style="margin-bottom:2px">全項目の推移（グラフ）</h3>
+      <p class="desc" style="margin-bottom:2px;font-size:11px">直近${TREND_N}回分（左が古い・右端の濃い棒と数字が最新）</p>
       ${CHECK_CATS.map(cat=>{
         const rows=cat.items.map(it=>{
           const h=itemHistory(store,it);
@@ -1536,7 +1538,7 @@ function viewTrends(){
             <span class="tsc"><span class="tbars">${last.map((p,i)=>`<span class="b lv${p.s5}${i===last.length-1?" cur":""}" style="height:${p.s5*20}%" title="${fmtDate(p.date)}：${p.s5}点"></span>`).join("")}</span><b class="cur-num nlv${cur.s5}">${cur.s5}</b>${trend}</span>
           </div>`;
         }).join("");
-        return `<div class="sec-label" style="margin-top:10px">${esc(cat.name)}</div>${rows}`;
+        return `<div class="tcat">${esc(cat.name)}</div>${rows}`;
       }).join("")}
     </div>
     <div class="card">

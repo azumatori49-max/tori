@@ -30,8 +30,8 @@ body{
   color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased;
 }
 #app{max-width:640px;margin:0 auto;padding-bottom:96px}
-/* PC でもスマホと同じ1カラム幅で表示する */
-@media (min-width:700px){
+/* タブレットはスマホと同じ1カラム幅で表示する */
+@media (min-width:700px) and (max-width:999px){
   #app{max-width:430px}
   .navbar .in{max-width:430px}
 }
@@ -241,6 +241,31 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .ai-box .sug{margin-top:4px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* PC（1000px以上）専用のワイドレイアウト。スマホ・タブレットには影響しない */
+@media (min-width:1000px){
+  #app{max-width:1120px;padding-bottom:110px}
+  .hd{padding:12px 28px 0}
+  .hd .bar{max-width:1064px;margin:0 auto}
+  .wrap{max-width:800px;margin:0 auto;padding:22px 16px}
+  .navbar .in{max-width:800px}
+  .card{padding:20px 22px}
+  /* ホームはヒーローをカード風にし、下のカードを2カラムに並べる */
+  .home-hero{max-width:1064px;margin:20px auto 0;border-radius:16px;border:1px solid var(--line);background:var(--card)}
+  .home-hero+.wrap{max-width:1096px;columns:2;column-gap:18px}
+  .home-hero+.wrap>*{break-inside:avoid;-webkit-column-break-inside:avoid}
+  .home-hero+.wrap>#to-admin{column-span:all}
+  .home-hero+.wrap>p{column-span:all}
+  /* チェック画面：評価ボタンを読みやすく */
+  .scale button{padding:12px 14px}
+  /* 推移：グラフの棒を少し大きく */
+  .tbars{height:24px}
+  .tbars .b{width:8px}
+  .tbars .b.cur{width:10px}
+  .tname{font-size:12.5px}
+  /* 写真サムネイルを大きめに（報告書内の小サムネイルは除く） */
+  .photos .ph,.photo-add{width:120px;height:120px}
+  .rep-item .photos .ph{width:64px;height:64px}
+}
 @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 .print-only{display:none}
 @media print{
@@ -770,7 +795,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.26.0";
+const APP_VERSION="v7.27.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。

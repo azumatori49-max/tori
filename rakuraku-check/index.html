@@ -135,6 +135,11 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
 .rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
 .back-btn:disabled{opacity:.35;cursor:default}
+/* 写真の拡大表示 */
+.ph img{cursor:zoom-in}
+.lightbox{position:fixed;inset:0;z-index:100;background:rgba(10,12,14,.88);display:flex;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.lightbox .lb-close{position:absolute;top:10px;right:12px;color:#fff;font-size:30px;line-height:1;padding:8px 12px;opacity:.9}
 /* 更新バナー */
 .upd-bar{position:fixed;left:0;right:0;top:0;z-index:80;display:flex;align-items:center;justify-content:center;gap:12px;background:var(--accent);color:#fff;padding:11px 14px;font-size:13.5px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .upd-bar .upd-go{border:none;border-radius:8px;background:#fff;color:var(--accent);font-weight:800;font-size:13px;padding:7px 16px;cursor:pointer}
@@ -804,7 +809,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.28.1";
+const APP_VERSION="v7.29.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -2127,6 +2132,10 @@ function refreshHeader(){
 
 /* ================= イベント ================= */
 document.addEventListener("click",async e=>{
+  // 写真タップで拡大表示（削除ボタンなどのボタン操作は除く）
+  if(e.target.tagName==="IMG"&&e.target.closest(".ph")&&!e.target.closest("button")){
+    openLightbox(e.target.src); return;
+  }
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
@@ -2356,6 +2365,20 @@ async function checkForUpdate(){
     const m=(await res.text()).match(/APP_VERSION="([^"]+)"/);
     if(m&&m[1]!==APP_VERSION){ updateFound=true; showUpdateBanner(m[1]); }
   }catch(e){}
+}
+/* 写真の拡大表示（タップで開く・どこをタップしても閉じる） */
+function openLightbox(src){
+  if(document.getElementById("lightbox")) return;
+  const d=document.createElement("div");
+  d.id="lightbox"; d.className="lightbox no-print";
+  const img=document.createElement("img"); img.src=src; img.alt="拡大写真";
+  const x=document.createElement("button"); x.className="lb-close"; x.textContent="×"; x.setAttribute("aria-label","閉じる");
+  d.append(img,x);
+  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);};
+  const onKey=ev=>{if(ev.key==="Escape")close();};
+  d.addEventListener("click",close);
+  document.addEventListener("keydown",onKey);
+  document.body.appendChild(d);
 }
 function showUpdateBanner(v){
   if(document.getElementById("upd-bar")) return;

@@ -810,7 +810,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.29.2";
+const APP_VERSION="v7.29.3";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1885,7 +1885,10 @@ function catDoneMark(i){
 function itemCard(item){
   const a=ans(item.id);
   const complete=itemComplete(item,a);
-  const badge=complete?`<span class="badge done">完了</span>`:`<span class="badge todo">未完了</span>`;
+  // 任意項目は、何も入力していない間は「完了」ではなく「任意」と表示する
+  const touched=a.photos.length>0||item.groups.some(g=>a.evals[g.key]);
+  const badge=item.evalOptional&&!touched?`<span class="badge todo">任意（未入力でもOK）</span>`
+    :complete?`<span class="badge done">完了</span>`:`<span class="badge todo">未完了</span>`;
   return `
   <section class="card ${complete?"done":""}" id="card-${item.id}">
     <h3>${esc(item.name)} ${badge}</h3>

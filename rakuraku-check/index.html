@@ -458,7 +458,7 @@ const CHECK_CATS = [
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
-    { id:"tequila", name:"テキーラタイム", photoOptional:true, noScore:true,
+    { id:"tequila", name:"テキーラタイム", photoOptional:true, noScore:true, evalOptional:true,
       desc:["テキーラタイムを実施できているか（この項目は総合点には含まれません）"],
       groups:[s5([
         ["最高","毎回しっかり実施され、店内が大きく盛り上がっている"],
@@ -585,6 +585,7 @@ function shown(f,a){return f.show?f.show(a):true;}
 function filled(v){return String(v??"").trim()!=="";}
 function itemComplete(item,a){
   if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) return false;
+  if(item.evalOptional) return true; // 評価が任意の項目（テキーラタイムなど）は未選択でも完了扱い
   for(const g of item.groups){ if(!a.evals[g.key]) return false; }
   return true;
 }
@@ -775,7 +776,7 @@ function collectMissing(){
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
     const a=ans(item.id);
     if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
-    for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
+    if(!item.evalOptional) for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
   }));
   return m;
 }
@@ -809,7 +810,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.29.1";
+const APP_VERSION="v7.29.2";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1900,7 +1901,7 @@ function itemCard(item){
       <label class="photo-add"><span>＋</span><span>フォルダから</span><input type="file" accept="image/*" multiple hidden data-photo="${item.id}"></label>`:""}
     </div>`}
     ${item.groups.map(g=>`
-      <div class="sec-label">${esc(g.label)} <span class="req">必須</span></div>
+      <div class="sec-label">${esc(g.label)} ${item.evalOptional?`<span style="color:var(--sub);font-weight:600">任意</span>`:`<span class="req">必須</span>`}</div>
       ${g.scale?`
       <div class="scale" role="group" aria-label="${esc(g.label)}">
         ${g.options.map(o=>`<button class="${a.evals[g.key]===o.v?"on-"+o.lv:""}" data-eval="${item.id}:${g.key}:${esc(o.v)}" aria-pressed="${a.evals[g.key]===o.v}">

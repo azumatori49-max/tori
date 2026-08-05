@@ -135,6 +135,10 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
 .rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
 .back-btn:disabled{opacity:.35;cursor:default}
+/* 更新バナー */
+.upd-bar{position:fixed;left:0;right:0;top:0;z-index:80;display:flex;align-items:center;justify-content:center;gap:12px;background:var(--accent);color:#fff;padding:11px 14px;font-size:13.5px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.upd-bar .upd-go{border:none;border-radius:8px;background:#fff;color:var(--accent);font-weight:800;font-size:13px;padding:7px 16px;cursor:pointer}
+.upd-bar .upd-x{border:none;background:transparent;color:#fff;font-size:16px;padding:4px 8px;cursor:pointer;opacity:.85}
 .tt{font-size:10px}
 .tt{font-size:11px;color:var(--sub);margin-left:2px}
 .tt.good{color:var(--good);font-weight:700}
@@ -766,7 +770,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.25.0";
+const APP_VERSION="v7.26.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -2092,6 +2096,8 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="upd-go"){location.reload();return;}
+  if(t.id==="upd-close"){document.getElementById("upd-bar")?.remove();return;}
   if(t.id==="rank-prev"||t.id==="rank-next"){
     const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
     let m=ymAdd(state.rankMonth||cur,t.id==="rank-prev"?-1:1);
@@ -2297,9 +2303,35 @@ document.addEventListener("input",e=>{
   // 通信復帰・画面再表示のたびに自動再送
   window.addEventListener("online",()=>{updateSyncBar("オンラインに戻りました");syncOutbox();});
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
-  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") syncOutbox(); });
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); } });
   syncOutbox(); // アプリ起動時の自動再送
+  // 更新の見張り：60秒ごと＋画面再表示時に新バージョンを確認
+  setInterval(checkForUpdate,60000);
+  setTimeout(checkForUpdate,5000);
 })();
+
+/* ---------- 更新検知（UpdateNotifier） ----------
+   サーバー上の index.html をキャッシュ無しで取得し、中の APP_VERSION と
+   いま動いている版を比較する。新しければ「更新」バナーを出す（強制リロードはしない）。 */
+var updateFound=false;
+async function checkForUpdate(){
+  if(updateFound||!navigator.onLine||location.protocol==="file:") return;
+  try{
+    const res=await fetch(location.pathname+"?uc="+Date.now(),{cache:"no-store"});
+    if(!res.ok) return;
+    const m=(await res.text()).match(/APP_VERSION="([^"]+)"/);
+    if(m&&m[1]!==APP_VERSION){ updateFound=true; showUpdateBanner(m[1]); }
+  }catch(e){}
+}
+function showUpdateBanner(v){
+  if(document.getElementById("upd-bar")) return;
+  const div=document.createElement("div");
+  div.id="upd-bar"; div.className="upd-bar no-print";
+  div.innerHTML=`<span>新しいバージョン（${esc(v)}）があります</span>
+    <button class="upd-go" id="upd-go">更新</button>
+    <button class="upd-x" id="upd-close" aria-label="閉じる">×</button>`;
+  document.body.appendChild(div);
+}
 </script>
 </body>
 </html>

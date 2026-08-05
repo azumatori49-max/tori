@@ -133,6 +133,8 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .cur-num.nlv3{color:#8A6D1D}
 .cur-num.nlv2,.cur-num.nlv1{color:var(--bad)}
 .tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
+.rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
+.back-btn:disabled{opacity:.35;cursor:default}
 .tt{font-size:10px}
 .tt{font-size:11px;color:var(--sub);margin-left:2px}
 .tt.good{color:var(--good);font-weight:700}
@@ -606,12 +608,19 @@ function aiTotalScore(insp){
   const ss=ALL_ITEMS.map(it=>aiScoreOf(it,insp.answers&&insp.answers[it.id])).filter(s=>s!=null);
   return ss.length?Math.round(ss.reduce((a,b)=>a+b,0)/ss.length):null;
 }
-function storeRanking(){
-  const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
-  return stores.map(s=>{
-    const list=completedFor(s); const last=list[list.length-1];
-    return {store:s,score:last.totalScore,date:last.date,alerts:storeAlerts(s).length};
-  }).sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
+/* 月別ランキング：指定した月（YYYY-MM）のチェックだけで順位を出す。過去12ヶ月分まで遡れる */
+function ymOf(d){return String(d||"").slice(0,7);}
+function ymAdd(ym,delta){const [y,m]=ym.split("-").map(Number);const t=y*12+(m-1)+delta;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,"0")}`;}
+function ymLabel(ym){const [y,m]=ym.split("-");return `${y}年${+m}月`;}
+function storeRanking(month){
+  const list=state.inspections.filter(i=>i.completedAt&&!i.provisional&&(!month||ymOf(i.date)===month));
+  const by={};
+  for(const i of list){
+    const k=i.store;
+    if(!by[k]||((i.date+(i.completedAt||""))>(by[k].date+(by[k].completedAt||"")))) by[k]=i;
+  }
+  return Object.values(by).map(i=>({store:i.store,score:i.totalScore,date:i.date,alerts:storeAlerts(i.store).length}))
+    .sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
 }
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
 /* ---------- CSV書き出し・ChatGPT分析用プロンプト ---------- */
@@ -757,7 +766,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.24.2";
+const APP_VERSION="v7.25.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1237,17 +1246,27 @@ function viewHome(){
       </div>
       <p class="note" id="search-hit" style="border:none;padding-top:4px;margin-top:2px"></p>
     </div>`:""}
-    ${(()=>{const rank=storeRanking();
-      if(!rank.length) return "";
+    ${(()=>{
+      if(!state.inspections.some(i=>i.completedAt&&!i.provisional)) return "";
+      const cur=ymOf(todayStr());
+      const oldest=ymAdd(cur,-11);
+      let month=state.rankMonth||cur;
+      if(month<oldest) month=oldest; if(month>cur) month=cur;
+      const rank=storeRanking(month);
       return `<div class="card">
       <h3>全店舗ランキング（総合点が低い順）</h3>
-      <p class="desc">各店舗の最新チェックの総合点を低い順に並べています。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
-      ${rank.map((r,i)=>`
+      <div class="rank-nav">
+        <button class="back-btn" id="rank-prev" ${month<=oldest?"disabled":""}>◀ 前の月</button>
+        <b style="font-size:15px">${ymLabel(month)}</b>
+        <button class="back-btn" id="rank-next" ${month>=cur?"disabled":""}>次の月 ▶</button>
+      </div>
+      <p class="desc">${ymLabel(month)}に行ったチェックの総合点を低い順に並べています（同じ月に複数回ある店舗は最新分）。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
+      ${rank.length?rank.map((r,i)=>`
         <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
           <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
-            <span class="hw-meta">　最終：${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
+            <span class="hw-meta">　${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
-        </button></div>`).join("")}
+        </button></div>`).join(""):`<p class="empty">${ymLabel(month)}の完了チェックはありません。「◀ 前の月」で過去のランキングを見られます。</p>`}
       </div>`;})()}
     ${(()=>{const ds=dangerStores(); if(!ds.length) return ""; return `<div class="card" style="border-color:var(--bad)">
       <h3 style="color:var(--bad)">⚠ 面談リスクの高い店舗</h3>
@@ -2073,6 +2092,12 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="rank-prev"||t.id==="rank-next"){
+    const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
+    let m=ymAdd(state.rankMonth||cur,t.id==="rank-prev"?-1:1);
+    if(m<oldest) m=oldest; if(m>cur) m=cur;
+    state.rankMonth=m; render(); return;
+  }
   if(t.id==="gpt-copy"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
     const ok=await copyText(chatGptPrompt()+buildCsv());

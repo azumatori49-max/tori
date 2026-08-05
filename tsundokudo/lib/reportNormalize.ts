@@ -19,6 +19,7 @@ export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
   return {
     ...r,
     reportType: r.reportType === 'order' ? 'order' : 'maintenance',
+    billingDone: r.billingDone ?? false,
     prevIssues: r.prevIssues ?? [],
     nextIssues: r.nextIssues ?? [],
     company: r.company ?? '',

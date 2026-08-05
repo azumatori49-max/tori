@@ -106,6 +106,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export function makeDefaultReport(settings: AppSettings): MaintenanceReportInsert {
   return {
     reportType: 'maintenance',
+    billingDone: false,
     storeName: '',
     company: '',
     workDate: '',

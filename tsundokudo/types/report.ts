@@ -115,6 +115,8 @@ export interface MaintenanceReport {
   id: string;
   /** 種類（既定: maintenance）。order はオーダー工事報告 */
   reportType: ReportType;
+  /** 請求対応済み（チェックすると一覧で月別グループへ移動） */
+  billingDone: boolean;
   /** 作業店舗 */
   storeName: string;
   /** 会社名（例: 株式会社鶏ヤロー）。一覧のフォルダ分けに使用 */

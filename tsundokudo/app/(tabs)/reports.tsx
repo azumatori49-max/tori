@@ -20,10 +20,40 @@ import type { MaintenanceReport } from '@/types/report';
 
 const NO_COMPANY = '未分類';
 
+/** 請求済みレポートの月グループキー（施工日→なければ作成日から） */
+function monthKeyOf(r: MaintenanceReport): { sort: string; label: string } {
+  const iso = r.workDate.match(/^(\d{4})-(\d{1,2})/);
+  if (iso?.[1] && iso[2]) {
+    return {
+      sort: `${iso[1]}-${iso[2].padStart(2, '0')}`,
+      label: `${iso[1]}年${Number(iso[2])}月`,
+    };
+  }
+  const md = r.workDate.match(/^(\d{1,2})\//);
+  const cy = r.createdAt.slice(0, 4);
+  if (md?.[1]) {
+    return {
+      sort: `${cy}-${md[1].padStart(2, '0')}`,
+      label: `${cy}年${Number(md[1])}月`,
+    };
+  }
+  const cm = r.createdAt.slice(5, 7);
+  return { sort: `${cy}-${cm}`, label: `${cy}年${Number(cm)}月` };
+}
+
 function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }) {
   const deleteReport = useReportStore((s) => s.deleteReport);
+  const updateReport = useReportStore((s) => s.updateReport);
   const billing = calcBilling(r);
   const doneCount = r.checklist.filter((c) => c.checked).length;
+
+  // 請求対応（鈴木さん）チェック。付けると月別グループへ移動する
+  async function onToggleBilling() {
+    const ok = await updateReport(r.id, { billingDone: !r.billingDone });
+    if (!ok) {
+      notify('更新できませんでした', useReportStore.getState().error ?? '');
+    }
+  }
 
   async function onDelete() {
     const label = `${r.storeName || '（店舗未設定）'}${
@@ -83,6 +113,23 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
             <Pressable
               onPress={(e) => {
                 e.stopPropagation?.();
+                void onToggleBilling();
+              }}
+              hitSlop={8}
+              style={[styles.billCheck, r.billingDone && styles.billCheckOn]}
+            >
+              <Text style={[styles.billCheckMark, r.billingDone && styles.billCheckMarkOn]}>
+                {r.billingDone ? '✓' : ''}
+              </Text>
+              <Text style={[styles.billCheckText, r.billingDone && styles.billCheckTextOn]}>
+                請求対応済
+              </Text>
+            </Pressable>
+          )}
+          {!readOnly && (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
                 void onDelete();
               }}
               hitSlop={10}
@@ -104,23 +151,46 @@ export default function ReportsScreen() {
   const isViewer = useIsViewer();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // 会社ごとにグループ化（各グループ内は新しい順）
-  const groups = useMemo(() => {
+  // 会社ごとにグループ化（各グループ内は新しい順）。請求対応済みは月別グループへ
+  const { groups, monthGroups } = useMemo(() => {
     const sorted = [...reports].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const map = new Map<string, MaintenanceReport[]>();
+    const months = new Map<string, { label: string; list: MaintenanceReport[] }>();
     for (const r of sorted) {
+      if (r.billingDone) {
+        const mk = monthKeyOf(r);
+        const g = months.get(mk.sort);
+        if (g) g.list.push(r);
+        else months.set(mk.sort, { label: mk.label, list: [r] });
+        continue;
+      }
       const key = r.company || NO_COMPANY;
       const list = map.get(key);
       if (list) list.push(r);
       else map.set(key, [r]);
     }
-    // 会社名順（未分類は最後）
-    return [...map.entries()].sort(([a], [b]) => {
-      if (a === NO_COMPANY) return 1;
-      if (b === NO_COMPANY) return -1;
-      return a.localeCompare(b, 'ja');
-    });
+    return {
+      groups: [...map.entries()].sort(([a], [b]) => {
+        if (a === NO_COMPANY) return 1;
+        if (b === NO_COMPANY) return -1;
+        return a.localeCompare(b, 'ja');
+      }),
+      // 新しい月が上
+      monthGroups: [...months.entries()]
+        .sort(([a], [b]) => b.localeCompare(a))
+        .map(([sort, g]) => ({ sort, ...g })),
+    };
   }, [reports]);
+
+  const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
+  function toggleMonth(key: string) {
+    setOpenMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function toggle(company: string) {
     setCollapsed((prev) => {
@@ -167,6 +237,30 @@ export default function ReportsScreen() {
               </View>
             );
           })
+        )}
+
+        {/* 請求対応済み（月別アーカイブ） */}
+        {monthGroups.length > 0 && (
+          <>
+            <View style={styles.monthDivider}>
+              <Text style={styles.monthDividerText}>請求対応済み（月別）</Text>
+            </View>
+            {monthGroups.map((g) => {
+              const isOpen = openMonths.has(g.sort);
+              return (
+                <View key={g.sort}>
+                  <Pressable style={[styles.folder, styles.monthFolder]} onPress={() => toggleMonth(g.sort)}>
+                    <Text style={styles.folderCaret}>{isOpen ? '▾' : '▸'}</Text>
+                    <Text style={styles.folderName} numberOfLines={1}>
+                      {g.label}分
+                    </Text>
+                    <Text style={styles.folderCount}>{g.list.length}件</Text>
+                  </Pressable>
+                  {isOpen && g.list.map((r) => <ReportCard key={r.id} r={r} readOnly={isViewer} />)}
+                </View>
+              );
+            })}
+          </>
         )}
       </ScrollView>
 
@@ -220,6 +314,29 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   orderBadge: { color: '#B25E09', fontSize: 12, fontWeight: '800' },
+  billCheck: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    backgroundColor: '#fff',
+  },
+  billCheckOn: { borderColor: '#1E7B34', backgroundColor: '#E5F5E9' },
+  billCheckMark: { width: 14, fontSize: 12, fontWeight: '900', color: 'transparent' },
+  billCheckMarkOn: { color: '#1E7B34' },
+  billCheckText: { fontSize: 12, fontWeight: '700', color: C.textSub },
+  billCheckTextOn: { color: '#1E7B34' },
+  monthDivider: {
+    marginTop: 18,
+    marginBottom: 4,
+    paddingHorizontal: 16,
+  },
+  monthDividerText: { fontSize: 13, fontWeight: '800', color: C.textSub },
+  monthFolder: { backgroundColor: '#EDF6EF' },
   chooserBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

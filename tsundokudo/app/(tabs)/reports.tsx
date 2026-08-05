@@ -118,9 +118,7 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
               hitSlop={8}
               style={[styles.billCheck, r.billingDone && styles.billCheckOn]}
             >
-              <Text style={[styles.billCheckMark, r.billingDone && styles.billCheckMarkOn]}>
-                {r.billingDone ? '✓' : ''}
-              </Text>
+              {r.billingDone && <Text style={styles.billCheckMark}>✓</Text>}
               <Text style={[styles.billCheckText, r.billingDone && styles.billCheckTextOn]}>
                 請求対応済
               </Text>
@@ -326,8 +324,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   billCheckOn: { borderColor: '#1E7B34', backgroundColor: '#E5F5E9' },
-  billCheckMark: { width: 14, fontSize: 12, fontWeight: '900', color: 'transparent' },
-  billCheckMarkOn: { color: '#1E7B34' },
+  billCheckMark: { fontSize: 12, fontWeight: '900', color: '#1E7B34' },
   billCheckText: { fontSize: 12, fontWeight: '700', color: C.textSub },
   billCheckTextOn: { color: '#1E7B34' },
   monthDivider: {

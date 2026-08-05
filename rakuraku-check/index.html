@@ -453,6 +453,14 @@ const CHECK_CATS = [
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
+    { id:"tequila", name:"テキーラタイム", noPhoto:true, noScore:true,
+      desc:["テキーラタイムを実施できているか（この項目は総合点には含まれません）"],
+      groups:[s5([
+        ["最高","毎回しっかり実施され、店内が大きく盛り上がっている"],
+        ["できている","実施できており、盛り上がりもある"],
+        ["実施が弱い","実施しているが、声かけ・盛り上げが弱い"],
+        ["たまにだけ","たまにしか実施できていない"],
+        ["やってない","実施していない"]])] },
   ]},
   { id:"fives", name:"5S", short:"5S", items:[
     { id:"uniform", name:"ユニフォーム",
@@ -584,7 +592,8 @@ function itemScore(item,a){
   return Math.round(sum/item.groups.length);
 }
 function totalScore(draft){
-  const ss=ALL_ITEMS.map(it=>itemScore(it,draft.answers[it.id]||{photos:[],evals:{},fields:{}})).filter(s=>s!=null);
+  // noScore の項目（テキーラタイムなど）は総合点に含めない
+  const ss=ALL_ITEMS.filter(it=>!it.noScore).map(it=>itemScore(it,draft.answers[it.id]||{photos:[],evals:{},fields:{}})).filter(s=>s!=null);
   return ss.length?Math.round(ss.reduce((a,b)=>a+b,0)/ss.length):0;
 }
 function computeAutoTasks(draft){
@@ -634,7 +643,7 @@ function aiScoreOf(item,a){
   return Math.round(sum/item.groups.length);
 }
 function aiTotalScore(insp){
-  const ss=ALL_ITEMS.map(it=>aiScoreOf(it,insp.answers&&insp.answers[it.id])).filter(s=>s!=null);
+  const ss=ALL_ITEMS.filter(it=>!it.noScore).map(it=>aiScoreOf(it,insp.answers&&insp.answers[it.id])).filter(s=>s!=null);
   return ss.length?Math.round(ss.reduce((a,b)=>a+b,0)/ss.length):null;
 }
 /* 月別ランキング：指定した月（YYYY-MM）のチェックだけで順位を出す。過去12ヶ月分まで遡れる */
@@ -795,7 +804,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.27.0";
+const APP_VERSION="v7.28.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -2058,7 +2067,7 @@ function reportBody(insp,isPreview){
       const extras=(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
         .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`).join("／");
       return `<div class="rep-item">
-        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}${aiSc!=null?`<span class="hw-meta">（AI：${aiSc}点）</span>`:""}</span></div>
+        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}${it.noScore?`<span class="hw-meta">（総合点対象外）</span>`:""}${aiSc!=null?`<span class="hw-meta">（AI：${aiSc}点）</span>`:""}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
         ${AI_ENABLED&&a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}

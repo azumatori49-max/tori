@@ -18,6 +18,7 @@ import { create } from 'zustand';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInAnonymously,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
@@ -78,6 +79,8 @@ interface AuthState {
   init: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signUp: (email: string, password: string) => Promise<boolean>;
+  /** パスワード再設定メールを送る */
+  resetPassword: (email: string) => Promise<boolean>;
   /** 組織を新規作成（作成者はadmin） */
   createOrg: (name: string) => Promise<boolean>;
   /** 招待コードで組織に参加 */
@@ -155,6 +158,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return true;
     } catch {
       set({ loading: false, error: 'メールアドレスまたはパスワードが正しくありません。' });
+      return false;
+    }
+  },
+
+  resetPassword: async (email) => {
+    if (!fbAuth) return false;
+    set({ loading: true, error: null });
+    try {
+      await sendPasswordResetEmail(fbAuth, email.trim());
+      set({ loading: false });
+      return true;
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
+      set({
+        loading: false,
+        error: code.includes('invalid-email')
+          ? 'メールアドレスの形式が正しくありません。'
+          : '送信できませんでした。メールアドレスを確認してください。',
+      });
       return false;
     }
   },

@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/store/authStore';
+import { notify } from '@/lib/dialog';
 import { Button, Field, Input } from '@/components/ui';
 import { C } from '@/constants/colors';
 import logoAsset from '@/assets/logo.png';
@@ -28,6 +29,7 @@ export function LoginScreen() {
   const signIn = useAuthStore((s) => s.signIn);
   const signUp = useAuthStore((s) => s.signUp);
   const clearError = useAuthStore((s) => s.clearError);
+  const resetPassword = useAuthStore((s) => s.resetPassword);
   const loading = useAuthStore((s) => s.loading);
   const error = useAuthStore((s) => s.error);
 
@@ -38,6 +40,20 @@ export function LoginScreen() {
   function switchMode(next: 'login' | 'signup') {
     setMode(next);
     clearError();
+  }
+
+  async function onForgotPassword() {
+    if (!email.trim()) {
+      notify('メールアドレスを入力してください', '上の欄にログイン用のメールアドレスを入力してから押してください。');
+      return;
+    }
+    const ok = await resetPassword(email);
+    if (ok) {
+      notify(
+        '再設定メールを送りました',
+        `${email.trim()} 宛にパスワード再設定メールを送りました。\nメール内のリンクから新しいパスワードを設定して、もう一度ログインしてください。\n（届かない場合は迷惑メールフォルダも確認してください）`,
+      );
+    }
   }
 
   async function onSubmit() {
@@ -106,6 +122,11 @@ export function LoginScreen() {
             />
           )}
 
+          {mode === 'login' && (
+            <Pressable style={styles.switchBtn} onPress={() => void onForgotPassword()}>
+              <Text style={styles.switchText}>パスワードを忘れた方はこちら（再設定メールを送る）</Text>
+            </Pressable>
+          )}
           <Pressable
             style={styles.switchBtn}
             onPress={() => switchMode(mode === 'login' ? 'signup' : 'login')}

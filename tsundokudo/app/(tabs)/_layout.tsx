@@ -35,6 +35,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="reports" options={{ title: 'レポート' }} />
       {/* 閲覧専用には店舗タブ（新規作成導線）を出さない */}
       <Tabs.Screen name="stores" options={{ title: '店舗', href: isViewer ? null : undefined }} />
+      {/* 請求業務（絞り込み・まとめてPDF・CSV）。閲覧専用には出さない */}
+      <Tabs.Screen name="billing" options={{ title: '請求', href: isViewer ? null : undefined }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
       {/* 運営者（サービス提供者）専用ページ */}
       <Tabs.Screen name="admin" options={{ title: '運営', href: isOperator ? undefined : null }} />

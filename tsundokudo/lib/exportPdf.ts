@@ -10,7 +10,7 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-import { buildReportHtml, reportFileName } from '@/lib/reportHtml';
+import { buildReportHtml, buildReportsHtml, reportFileName } from '@/lib/reportHtml';
 import type { MaintenanceReport, MaintenanceReportInsert } from '@/types/report';
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
@@ -61,6 +61,30 @@ function printOnWeb(html: string, fileName: string): ExportResult {
     };
   }
   return { ok: true };
+}
+
+/** 複数レポートを1つのPDFにまとめて出力（請求書作成用） */
+export async function exportReportsPdf(
+  reports: ReportLike[],
+  fileName: string,
+): Promise<ExportResult> {
+  if (reports.length === 0) return { ok: false, message: '対象のレポートがありません。' };
+  const html = buildReportsHtml(reports);
+
+  if (Platform.OS === 'web') {
+    return printOnWeb(html, fileName);
+  }
+
+  const { uri } = await Print.printToFileAsync({ html });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/pdf',
+      dialogTitle: fileName,
+      UTI: 'com.adobe.pdf',
+    });
+    return { ok: true };
+  }
+  return { ok: true, message: `PDFを作成しました: ${uri}` };
 }
 
 export async function exportReportPdf(report: ReportLike): Promise<ExportResult> {

@@ -45,7 +45,7 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
   </section>`;
 }
 
-export function buildReportHtml(report: ReportLike): string {
+function buildReportBody(report: ReportLike): string {
   const b = calcBilling(report);
   const isOrder = report.reportType === 'order';
   const docTitle = isOrder ? 'オーダー工事報告書' : 'メンテナンス報告書';
@@ -146,7 +146,96 @@ export function buildReportHtml(report: ReportLike): string {
     .map((t) => `<div class="issue-row">・${esc(t)}</div>`)
     .join('');
 
-  return `<!DOCTYPE html>
+  return `  <div class="title">
+    <img src="${LOGO_DATA_URI}" alt="" />
+    <span>${docTitle}</span>
+  </div>
+
+  <div class="head">
+    <div class="col-info">
+      <div class="kv"><div class="k">施工店舗</div><div class="v">${esc(report.storeName)}${report.company ? '　' + esc(report.company) : ''}</div></div>
+      <div class="kv"><div class="k">契約プラン</div><div class="v orange">${esc(report.contractPlan)}</div></div>
+      <div class="kv"><div class="k">施工担当者</div><div class="v">${esc(report.technician)}</div></div>
+      <div class="kv"><div class="k">御請求先</div><div class="v">${esc(report.billingTo)}</div></div>
+    </div>
+    <div class="col-bill">
+      <div class="kv"><div class="k">施工日</div><div class="v">${esc(formatWorkDate(report.workDate))}</div></div>
+      <div class="invoice">
+        <div class="inv-amt">
+          <span class="inv-amt-k">ご請求金額（税込）</span>
+          <span class="inv-amt-v">¥${yen(b.taxIncluded)}-</span>
+        </div>
+        <table class="inv-tbl">
+          <tr><td>小計（税抜）</td><td>¥${yen(b.taxExcluded)}</td></tr>
+          <tr><td>消費税（10%）</td><td>¥${yen(b.tax)}</td></tr>
+          <tr class="inv-total"><td>合計</td><td>¥${yen(b.taxIncluded)}</td></tr>
+        </table>
+        <div class="inv-break">
+          ${isOrder
+            ? `<div class="ibr"><span>オーダー工事</span><span>¥${yen(b.diy)}</span></div>`
+            : `<div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
+          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}`}
+          <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
+        </div>
+      </div>
+    </div>
+    ${headerPhoto ? `<div class="col-photo"><img src="${headerPhoto.uri}" /></div>` : ''}
+  </div>
+
+  ${isOrder ? '' : `<table class="grid mt">
+    <tr>
+      <th style="width:26%">項目</th>
+      <th style="width:9%">施工<br/>チェック</th>
+      <th style="width:22%">状況</th>
+      <th>備考</th>
+    </tr>
+    ${checklistRows}
+  </table>
+
+  <div class="pest">
+    <div class="ph">害虫駆除</div>
+    <div class="pi">基本駆除 ${cb(pest.basic)}</div>
+    <div class="pi">対抗薬剤使用 ${cb(pest.antiDrug)}</div>
+    <div class="pi">強殺虫剤 ${cb(pest.strongPesticide)}</div>
+    <div class="pi">害虫の状況：<b>${esc(pest.presence) || '—'}</b></div>
+  </div>
+
+  <div class="band cream mt">トッピング（追加施工）</div>
+  <table class="grid">
+    <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
+    ${toppingRows}
+  </table>`}
+
+  <div class="band cream${isOrder ? ' mt' : ''}">${diyLabel}</div>
+  <table class="grid">
+    <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
+    ${diyRows}
+  </table>
+
+  <table class="grid mt">
+    <tr><th>使用備品資材</th><th style="width:16%">単価</th><th style="width:12%">数量</th><th style="width:18%">金額</th></tr>
+    ${supplyRows}
+    <tr><td class="gray rt" colspan="3">合計</td><td class="gray rt">¥${yen(b.supplies)}</td></tr>
+  </table>
+
+  <div class="band cream small mt">コメント・提案</div>
+  <div class="cmt">${esc(report.comment)}</div>
+
+  ${isOrder ? '' : `<div class="band green mt">年間スケジュール</div>
+  <div class="annual-body">${esc(annual.comment)}</div>
+
+  ${prevIssueRows ? `<div class="band cream small mt">前回からの課題（達成チェック）</div>
+  <div class="cmt">${prevIssueRows}</div>` : ''}
+
+  ${nextIssueRows ? `<div class="band cream small mt">次回の課題</div>
+  <div class="cmt">${nextIssueRows}</div>` : ''}`}
+
+  ${photoSheet(allPhotos)}`;
+}
+
+
+/** PDFドキュメントの外枠（ヘッダー・スタイルは全レポート共通） */
+const DOC_OPEN = `<!DOCTYPE html>
 <html lang="ja" translate="no" class="notranslate">
 <head>
 <meta charset="utf-8" />
@@ -243,93 +332,22 @@ export function buildReportHtml(report: ReportLike): string {
 </style>
 </head>
 <body>
-  <div class="title">
-    <img src="${LOGO_DATA_URI}" alt="" />
-    <span>${docTitle}</span>
-  </div>
+`;
+const DOC_CLOSE = `</body>\n</html>`;
 
-  <div class="head">
-    <div class="col-info">
-      <div class="kv"><div class="k">施工店舗</div><div class="v">${esc(report.storeName)}${report.company ? '　' + esc(report.company) : ''}</div></div>
-      <div class="kv"><div class="k">契約プラン</div><div class="v orange">${esc(report.contractPlan)}</div></div>
-      <div class="kv"><div class="k">施工担当者</div><div class="v">${esc(report.technician)}</div></div>
-      <div class="kv"><div class="k">御請求先</div><div class="v">${esc(report.billingTo)}</div></div>
-    </div>
-    <div class="col-bill">
-      <div class="kv"><div class="k">施工日</div><div class="v">${esc(formatWorkDate(report.workDate))}</div></div>
-      <div class="invoice">
-        <div class="inv-amt">
-          <span class="inv-amt-k">ご請求金額（税込）</span>
-          <span class="inv-amt-v">¥${yen(b.taxIncluded)}-</span>
-        </div>
-        <table class="inv-tbl">
-          <tr><td>小計（税抜）</td><td>¥${yen(b.taxExcluded)}</td></tr>
-          <tr><td>消費税（10%）</td><td>¥${yen(b.tax)}</td></tr>
-          <tr class="inv-total"><td>合計</td><td>¥${yen(b.taxIncluded)}</td></tr>
-        </table>
-        <div class="inv-break">
-          ${isOrder
-            ? `<div class="ibr"><span>オーダー工事</span><span>¥${yen(b.diy)}</span></div>`
-            : `<div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
-          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}`}
-          <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
-        </div>
-      </div>
-    </div>
-    ${headerPhoto ? `<div class="col-photo"><img src="${headerPhoto.uri}" /></div>` : ''}
-  </div>
+export function buildReportHtml(report: ReportLike): string {
+  return DOC_OPEN + buildReportBody(report) + DOC_CLOSE;
+}
 
-  ${isOrder ? '' : `<table class="grid mt">
-    <tr>
-      <th style="width:26%">項目</th>
-      <th style="width:9%">施工<br/>チェック</th>
-      <th style="width:22%">状況</th>
-      <th>備考</th>
-    </tr>
-    ${checklistRows}
-  </table>
-
-  <div class="pest">
-    <div class="ph">害虫駆除</div>
-    <div class="pi">基本駆除 ${cb(pest.basic)}</div>
-    <div class="pi">対抗薬剤使用 ${cb(pest.antiDrug)}</div>
-    <div class="pi">強殺虫剤 ${cb(pest.strongPesticide)}</div>
-    <div class="pi">害虫の状況：<b>${esc(pest.presence) || '—'}</b></div>
-  </div>
-
-  <div class="band cream mt">トッピング（追加施工）</div>
-  <table class="grid">
-    <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
-    ${toppingRows}
-  </table>`}
-
-  <div class="band cream${isOrder ? ' mt' : ''}">${diyLabel}</div>
-  <table class="grid">
-    <tr><th style="width:34%">品目</th><th style="width:8%"></th><th>コメント</th><th style="width:16%">追加費用</th></tr>
-    ${diyRows}
-  </table>
-
-  <table class="grid mt">
-    <tr><th>使用備品資材</th><th style="width:16%">単価</th><th style="width:12%">数量</th><th style="width:18%">金額</th></tr>
-    ${supplyRows}
-    <tr><td class="gray rt" colspan="3">合計</td><td class="gray rt">¥${yen(b.supplies)}</td></tr>
-  </table>
-
-  <div class="band cream small mt">コメント・提案</div>
-  <div class="cmt">${esc(report.comment)}</div>
-
-  ${isOrder ? '' : `<div class="band green mt">年間スケジュール</div>
-  <div class="annual-body">${esc(annual.comment)}</div>
-
-  ${prevIssueRows ? `<div class="band cream small mt">前回からの課題（達成チェック）</div>
-  <div class="cmt">${prevIssueRows}</div>` : ''}
-
-  ${nextIssueRows ? `<div class="band cream small mt">次回の課題</div>
-  <div class="cmt">${nextIssueRows}</div>` : ''}`}
-
-  ${photoSheet(allPhotos)}
-</body>
-</html>`;
+/** 複数レポートを1つのPDF（レポートごとに改ページ）にまとめる */
+export function buildReportsHtml(reports: ReportLike[]): string {
+  return (
+    DOC_OPEN +
+    reports
+      .map(buildReportBody)
+      .join('<div style="page-break-before:always"></div>') +
+    DOC_CLOSE
+  );
 }
 
 /** 共有時のファイル名（例: メンテナンス報告書_まる助東松山駅前店_5-15） */

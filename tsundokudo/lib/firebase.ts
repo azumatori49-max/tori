@@ -62,6 +62,8 @@ let storageInstance: FirebaseStorage | null = null;
 if (config) {
   app = initializeApp(config);
   authInstance = getAuth(app);
+  // 認証まわりのメール（パスワード再設定など）を日本語で送る
+  authInstance.languageCode = 'ja';
   dbInstance = getFirestore(app);
   storageInstance = getStorage(app);
 

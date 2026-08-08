@@ -397,8 +397,8 @@ const CHECK_CATS = [
         ["要買い替え","使用に適さず、買い替えが必要"]])],
       extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",
         hint:"完了時に購入・交換タスクを自動作成します。"}] })),
-    { id:"fryer", name:"フライヤー",
-      desc:["油の色や状態が正常か"],
+    { id:"fryer", name:"フライヤー", photoOptional:true, evalOptional:true,
+      desc:["油の色や状態が正常か（写真・評価とも任意）"],
       groups:[
         {key:"oil",label:"油の状態",options:[
           {v:"正常",s:100,lv:"good"},
@@ -810,7 +810,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.29.4";
+const APP_VERSION="v7.30.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。

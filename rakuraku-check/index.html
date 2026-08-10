@@ -663,14 +663,14 @@ function storeRanking(month){
     const k=i.store;
     if(!by[k]||((i.date+(i.completedAt||""))>(by[k].date+(by[k].completedAt||"")))) by[k]=i;
   }
-  return Object.values(by).map(i=>({store:i.store,score:i.totalScore,date:i.date,alerts:storeAlerts(i.store).length}))
+  return Object.values(by).map(i=>({store:i.store,brand:i.brand||"",score:i.totalScore,date:i.date,alerts:storeAlerts(i.store).length}))
     .sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
 }
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
 /* ---------- CSV書き出し・ChatGPT分析用プロンプト ---------- */
 function csvEsc(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function buildCsv(){
-  const head=["日付","店舗","確認者","総合点(100点満点)","状態",
+  const head=["日付","屋号","店舗","確認者","総合点(100点満点)","状態",
     ...ALL_ITEMS.map(i=>i.name+"(5点満点)"),
     ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,""))];
   const list=[...state.inspections].filter(i=>i.completedAt)
@@ -678,7 +678,7 @@ function buildCsv(){
   const rows=[head];
   for(const i of list){
     const iv=(i.pdca&&i.pdca.interview)||{};
-    rows.push([i.date,i.store,i.inspector,i.totalScore,i.provisional?"一時保存(入力途中)":"完了",
+    rows.push([i.date,i.brand||"",i.store,i.inspector,i.totalScore,i.provisional?"一時保存(入力途中)":"完了",
       ...ALL_ITEMS.map(it=>{const s=score5Of(it,i);return s==null?"":s;}),
       ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim())]);
   }
@@ -767,9 +767,10 @@ function beep(){
     o.stop(ctx.currentTime+0.45);
   }catch(e){}
 }
-// storeMatch つきの項目（テキーラタイム＝鶏ヤローのみ 等）は、店舗名にその文字を含む店舗でだけ表示する
-function itemVisibleFor(item,store){return !item.storeMatch||String(store||"").includes(item.storeMatch);}
-function draftItems(d){return ALL_ITEMS.filter(it=>itemVisibleFor(it,d&&d.store));}
+// storeMatch つきの項目（テキーラタイム＝鶏ヤローのみ 等）は、屋号が一致するか
+// 店舗名にその文字を含む店舗でだけ表示する
+function itemVisibleFor(item,store,brand){return !item.storeMatch||brand===item.storeMatch||String(store||"").includes(item.storeMatch);}
+function draftItems(d){return ALL_ITEMS.filter(it=>itemVisibleFor(it,d&&d.store,d&&d.brand));}
 function progressRatio(draft){
   const list=draftItems(draft);
   const done=list.filter(it=>itemComplete(it,ans(it.id))).length;
@@ -778,7 +779,7 @@ function progressRatio(draft){
 function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
-    if(!itemVisibleFor(item,d&&d.store)) return;
+    if(!itemVisibleFor(item,d&&d.store,d&&d.brand)) return;
     const a=ans(item.id);
     if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     if(!item.evalOptional) for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
@@ -815,7 +816,9 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.31.0";
+const APP_VERSION="v7.32.0";
+// 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
+const BRANDS=["鶏ヤロー","イザカラ","すし鳥商店"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1276,6 +1279,9 @@ function viewHome(){
     </div>`:""}
     <div class="card">
       <h3>新しいチェックを開始</h3>
+      <div class="field"><label>屋号（ブランド）</label>
+        <div class="chips">${BRANDS.map(b=>`<button class="chip${state.startBrand===b?" on-good":""}" data-brandsel="${esc(b)}">${esc(b)}</button>`).join("")}</div>
+      </div>
       <div class="field"><label>店舗名 <span class="req">必須</span></label>
         <input id="f-store" list="store-list" placeholder="例：新宿本店" autocomplete="off">
         <datalist id="store-list">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
@@ -1312,7 +1318,7 @@ function viewHome(){
       <p class="desc">${ymLabel(month)}に行ったチェックの総合点を低い順に並べています（同じ月に複数回ある店舗は最新分）。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
       ${rank.length?rank.map((r,i)=>`
         <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
-          <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
+          <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　${r.brand?`<span class="hw-meta">${esc(r.brand)}</span> `:""}<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
             <span class="hw-meta">　${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
         </button></div>`).join(""):`<p class="empty">${ymLabel(month)}の完了チェックはありません。「◀ 前の月」で過去のランキングを見られます。</p>`}
@@ -1340,7 +1346,7 @@ function viewHome(){
       ${past.length?past.map(i=>`
         <div class="hw-item" data-sname="${esc(i.store)}">
           <button class="list-card" data-open="${esc(i.id)}">
-            <span><b>${esc(i.store)}</b>${i.provisional?` <span class="badge todo">一時保存</span>`:""}${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
+            <span>${i.brand?`<span class="hw-meta">${esc(i.brand)}</span> `:""}<b>${esc(i.store)}</b>${i.provisional?` <span class="badge todo">一時保存</span>`:""}${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta">　${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc">${i.totalScore}<small>点</small></span>
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
@@ -1540,7 +1546,7 @@ function bindHome(){
     if(state.draft && !confirm("進行中の下書きを破棄して新しく開始しますか？")) return;
     const last=lastInspectionFor(store);
     state.draft={
-      id:uuid(), store, inspector, date,
+      id:uuid(), store, inspector, date, brand:state.startBrand||"",
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
@@ -1578,10 +1584,11 @@ function viewTrends(){
   const hist=completedFor(store);
   const alerts=storeAlerts(store);
   const ivs=interviewsFor(store).slice(0,3);
+  const brand=(state.inspections.find(i=>i.store===store&&i.brand)||{}).brand||"";
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
     <button class="back-btn" id="to-home" aria-label="戻る">← 戻る</button>
-    <h1 style="flex:1">${esc(store)}｜推移</h1><span class="meta">チェック${hist.length}回分</span>
+    <h1 style="flex:1">${brand?esc(brand)+"　":""}${esc(store)}｜推移</h1><span class="meta">チェック${hist.length}回分</span>
   </div></header>
   <div class="wrap">
     ${alerts.length?`<div class="card" style="border-color:var(--bad)">
@@ -1592,7 +1599,7 @@ function viewTrends(){
       <h3 style="margin-bottom:2px">全項目の推移（グラフ）</h3>
       <p class="desc" style="margin-bottom:2px;font-size:11px">直近${TREND_N}回分（左が古い・右端の濃い棒と数字が最新）</p>
       ${CHECK_CATS.map(cat=>{
-        const rows=cat.items.filter(it=>itemVisibleFor(it,store)).map(it=>{
+        const rows=cat.items.filter(it=>itemVisibleFor(it,store,brand)).map(it=>{
           const h=itemHistory(store,it);
           const lc=lowCount(store,it);
           if(!h.length) return `<div class="trow"><span class="tname">${esc(it.name)}</span><span class="tsc empty-sc">—</span></div>`;
@@ -1860,13 +1867,13 @@ function viewCheck(){
   const doneItems=draftItems(d).filter(it=>itemComplete(it,ans(it.id))).length;
   const pct=Math.round(progressRatio(d)*100);
   let body="";
-  if(state.catIndex<PDCA_CAT) body=CHECK_CATS[state.catIndex].items.filter(it=>itemVisibleFor(it,d.store)).map(itemCard).join("");
+  if(state.catIndex<PDCA_CAT) body=CHECK_CATS[state.catIndex].items.filter(it=>itemVisibleFor(it,d.store,d.brand)).map(itemCard).join("");
   else if(state.catIndex===PDCA_CAT) body=pdcaView();
   else body=finishView();
   return `
   <header class="hd">
     <div class="bar">
-      <h1>${esc(d.store)}</h1>
+      <h1>${d.brand?`<span style="font-size:12px;color:var(--sub);display:block">${esc(d.brand)}</span>`:""}${esc(d.store)}</h1>
       <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${draftItems(d).length}項目</span>
     </div>
     <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
@@ -2012,7 +2019,7 @@ function buildInspection(d,preview,provisional){
   const autoTasks=computeAutoTasks(d);
   return {
     provisional:!!provisional,
-    id:d.id, store:d.store, inspector:d.inspector, date:d.date,
+    id:d.id, store:d.store, inspector:d.inspector, date:d.date, brand:d.brand||"",
     tenantId:SHARED_TENANT_ID, storeId:String(d.store||"").trim(),
     enteredAt:d.startedAt, savedAt:preview?"":new Date().toISOString(),
     startedAt:d.startedAt, completedAt:preview?"":new Date().toISOString(),
@@ -2056,7 +2063,7 @@ function reportBody(insp,isPreview){
   <section class="card">
     <div class="rep-h">
       <div class="print-only" style="font-size:9pt;color:#666;margin-bottom:2mm">らくらく臨店チェック｜臨店チェック報告書　発行日：${fmtDate(todayStr())}</div>
-      <h2>${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}${insp.provisional?"（一時保存・入力途中）":""}</h2>
+      <h2>${insp.brand?esc(insp.brand)+"　":""}${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}${insp.provisional?"（一時保存・入力途中）":""}</h2>
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>
       ${(()=>{const ai=aiTotalScore(insp);return ai!=null?`<div class="meta" style="margin-top:8px">AI判定の平均：${ai}点／100（補助）</div>`:"";})()}
@@ -2076,7 +2083,7 @@ function reportBody(insp,isPreview){
   ${CHECK_CATS.map(cat=>`
   <section class="card">
     <h3>${esc(cat.name)}</h3>
-    ${cat.items.filter(it=>itemVisibleFor(it,insp.store)).map(it=>{
+    ${cat.items.filter(it=>itemVisibleFor(it,insp.store,insp.brand)).map(it=>{
       const a=byId(it.id); const sc=itemScoreOf(it,a); const aiSc=aiScoreOf(it,a);
       const extras=(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
         .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`).join("／");
@@ -2148,6 +2155,11 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.dataset.brandsel){
+    state.startBrand=state.startBrand===t.dataset.brandsel?"":t.dataset.brandsel;
+    document.querySelectorAll("[data-brandsel]").forEach(b=>b.classList.toggle("on-good",b.dataset.brandsel===state.startBrand));
+    return;
+  }
   if(t.id==="upd-go"){location.reload();return;}
   if(t.id==="upd-close"){document.getElementById("upd-bar")?.remove();return;}
   if(t.id==="rank-prev"||t.id==="rank-next"){
@@ -2281,7 +2293,7 @@ document.addEventListener("click",async e=>{
     const lost=Object.values(insp.answers||{}).some(a=>(a.photoCount||0)>0&&!(a.photos||[]).filter(Boolean).length);
     if(lost&&!confirm("一部の写真をクラウドから読み込めませんでした。このまま続きを入力して提出すると、その写真が消える可能性があります。通信のよい場所でやり直すのがおすすめです。続けますか？")) return;
     state.draft={
-      id:insp.id, store:insp.store, inspector:insp.inspector, date:insp.date,
+      id:insp.id, store:insp.store, inspector:insp.inspector, date:insp.date, brand:insp.brand||"",
       startedAt:insp.startedAt||insp.enteredAt||new Date().toISOString(),
       answers:JSON.parse(JSON.stringify(insp.answers||{})),
       pdca:JSON.parse(JSON.stringify(insp.pdca||{homework:[],interview:{}})),

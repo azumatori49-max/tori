@@ -14,9 +14,8 @@ import { useIsViewer } from '@/store/authStore';
 import { calcBilling, yen } from '@/lib/billing';
 import { exportReportsPdf } from '@/lib/exportPdf';
 import { downloadReportsCsv } from '@/lib/exportCsv';
-import { pdfBlockReason } from '@/lib/reportValidation';
 import { formatWorkDate } from '@/lib/format';
-import { confirmAsync, notify } from '@/lib/dialog';
+import { notify } from '@/lib/dialog';
 import { Button, Card, SectionTitle } from '@/components/ui';
 import { DatePicker } from '@/components/report/DatePicker';
 import { C } from '@/constants/colors';
@@ -110,23 +109,8 @@ export default function BillingScreen() {
     if (matched.length === 0) return;
     setBusy(true);
     try {
-      // 未完成（写真不足など）のレポートは確認のうえ除外して出力
-      const incomplete = matched.filter((r) => pdfBlockReason(r) !== null);
-      let targets = matched;
-      if (incomplete.length > 0) {
-        const okGo = await confirmAsync(
-          '未完成のレポートがあります',
-          `写真などが未完成のレポートが${incomplete.length}件あります。\nこれらを除いた${matched.length - incomplete.length}件をPDF出力しますか？`,
-          '除いて出力',
-        );
-        if (!okGo) return;
-        targets = matched.filter((r) => pdfBlockReason(r) === null);
-        if (targets.length === 0) {
-          notify('出力できるレポートがありません', '各レポートの写真などを完成させてください。');
-          return;
-        }
-      }
-      const res = await exportReportsPdf(targets, `メンテナンス報告書まとめ_${from}_${to}`);
+      // 請求用のまとめ出力は、未完成（写真不足など）のレポートも含めて全件出力する
+      const res = await exportReportsPdf(matched, `メンテナンス報告書まとめ_${from}_${to}`);
       if (res.message) notify('PDF', res.message);
     } catch (e) {
       notify('PDF出力に失敗しました', e instanceof Error ? e.message : String(e));

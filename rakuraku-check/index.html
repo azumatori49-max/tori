@@ -458,7 +458,7 @@ const CHECK_CATS = [
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
-    { id:"tequila", name:"テキーラタイム（鶏ヤローのみ）", photoOptional:true, noScore:true, evalOptional:true, storeMatch:"鶏ヤロー",
+    { id:"tequila", name:"テキーラタイム", photoOptional:true, noScore:true, storeMatch:"鶏ヤロー",
       desc:["テキーラタイムを実施できているか（この項目は総合点には含まれません）"],
       groups:[s5([
         ["最高","毎回しっかり実施され、店内が大きく盛り上がっている"],
@@ -816,7 +816,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.32.1";
+const APP_VERSION="v7.33.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する

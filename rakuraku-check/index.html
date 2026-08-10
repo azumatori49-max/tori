@@ -458,7 +458,7 @@ const CHECK_CATS = [
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
-    { id:"tequila", name:"テキーラタイム（鶏ヤローのみ）", photoOptional:true, noScore:true, evalOptional:true,
+    { id:"tequila", name:"テキーラタイム（鶏ヤローのみ）", photoOptional:true, noScore:true, evalOptional:true, storeMatch:"鶏ヤロー",
       desc:["テキーラタイムを実施できているか（この項目は総合点には含まれません）"],
       groups:[s5([
         ["最高","毎回しっかり実施され、店内が大きく盛り上がっている"],
@@ -767,13 +767,18 @@ function beep(){
     o.stop(ctx.currentTime+0.45);
   }catch(e){}
 }
+// storeMatch つきの項目（テキーラタイム＝鶏ヤローのみ 等）は、店舗名にその文字を含む店舗でだけ表示する
+function itemVisibleFor(item,store){return !item.storeMatch||String(store||"").includes(item.storeMatch);}
+function draftItems(d){return ALL_ITEMS.filter(it=>itemVisibleFor(it,d&&d.store));}
 function progressRatio(draft){
-  const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
-  return done/ALL_ITEMS.length;
+  const list=draftItems(draft);
+  const done=list.filter(it=>itemComplete(it,ans(it.id))).length;
+  return list.length?done/list.length:0;
 }
 function collectMissing(){
   const m=[]; const d=state.draft;
   CHECK_CATS.forEach((cat,ci)=>cat.items.forEach(item=>{
+    if(!itemVisibleFor(item,d&&d.store)) return;
     const a=ans(item.id);
     if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     if(!item.evalOptional) for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
@@ -810,7 +815,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.30.0";
+const APP_VERSION="v7.31.0";
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1587,7 +1592,7 @@ function viewTrends(){
       <h3 style="margin-bottom:2px">全項目の推移（グラフ）</h3>
       <p class="desc" style="margin-bottom:2px;font-size:11px">直近${TREND_N}回分（左が古い・右端の濃い棒と数字が最新）</p>
       ${CHECK_CATS.map(cat=>{
-        const rows=cat.items.map(it=>{
+        const rows=cat.items.filter(it=>itemVisibleFor(it,store)).map(it=>{
           const h=itemHistory(store,it);
           const lc=lowCount(store,it);
           if(!h.length) return `<div class="trow"><span class="tname">${esc(it.name)}</span><span class="tsc empty-sc">—</span></div>`;
@@ -1852,17 +1857,17 @@ function cloudStatusLabel(){
 /* ---------- チェック画面 ---------- */
 function viewCheck(){
   const d=state.draft;
-  const doneItems=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
+  const doneItems=draftItems(d).filter(it=>itemComplete(it,ans(it.id))).length;
   const pct=Math.round(progressRatio(d)*100);
   let body="";
-  if(state.catIndex<PDCA_CAT) body=CHECK_CATS[state.catIndex].items.map(itemCard).join("");
+  if(state.catIndex<PDCA_CAT) body=CHECK_CATS[state.catIndex].items.filter(it=>itemVisibleFor(it,d.store)).map(itemCard).join("");
   else if(state.catIndex===PDCA_CAT) body=pdcaView();
   else body=finishView();
   return `
   <header class="hd">
     <div class="bar">
       <h1>${esc(d.store)}</h1>
-      <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${ALL_ITEMS.length}項目</span>
+      <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${draftItems(d).length}項目</span>
     </div>
     <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <div class="save-row">
@@ -2071,7 +2076,7 @@ function reportBody(insp,isPreview){
   ${CHECK_CATS.map(cat=>`
   <section class="card">
     <h3>${esc(cat.name)}</h3>
-    ${cat.items.map(it=>{
+    ${cat.items.filter(it=>itemVisibleFor(it,insp.store)).map(it=>{
       const a=byId(it.id); const sc=itemScoreOf(it,a); const aiSc=aiScoreOf(it,a);
       const extras=(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
         .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`).join("／");
@@ -2125,8 +2130,8 @@ function refreshHeader(){
   const d=state.draft; if(!d) return;
   const bar=$(".progress i"); if(bar) bar.style.width=Math.round(progressRatio(d)*100)+"%";
   const meta=$(".hd .meta");
-  if(meta){const done=ALL_ITEMS.filter(it=>itemComplete(it,ans(it.id))).length;
-    meta.textContent=`${fmtDate(d.date)}／${d.inspector}　${done}/${ALL_ITEMS.length}項目`;}
+  if(meta){const list=draftItems(d);const done=list.filter(it=>itemComplete(it,ans(it.id))).length;
+    meta.textContent=`${fmtDate(d.date)}／${d.inspector}　${done}/${list.length}項目`;}
   document.querySelectorAll(".cat-chip").forEach((c,i)=>{
     const mark=catDoneMark(i);
     c.innerHTML=`${i+1}. ${esc(CAT_NAMES[i])}${mark}`;

@@ -71,7 +71,22 @@ jobs:
           cp site/index.html site/404.html
           mkdir -p site/rakuraku-check
           cp -r rakuraku-check/* site/rakuraku-check/
+          rm -rf site/rakuraku-check/companies
           touch site/.nojekyll
+
+      - name: Build per-company sites (rakuraku-check/c/<id>/)
+        run: |
+          if [ -d rakuraku-check/companies ]; then
+            for dir in rakuraku-check/companies/*/; do
+              id=$(basename "$dir")
+              out="site/rakuraku-check/c/$id"
+              mkdir -p "$out"
+              # 本体ファイル一式（companies を除く）＋ 会社別 config.js
+              find rakuraku-check -maxdepth 1 -type f -exec cp {} "$out/" \;
+              cp "$dir"config.js "$out/config.js"
+              echo "built company site: $id"
+            done
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

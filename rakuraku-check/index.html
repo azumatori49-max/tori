@@ -8,6 +8,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>らくらく臨店チェック</title>
+<script src="config.js"></script>
 </head>
 <body>
 <style>
@@ -308,6 +309,20 @@ input[type=number]{font-variant-numeric:tabular-nums}
 const PRIORITIES = ["高","中","低"];
 // 評価オプション: v=表示, s=点数, lv=色, issue=問題扱い(対応内容・期限・担当者を登録できる)
 // s5(): 5段階評価グループを生成。defs=[ [短い要約, 詳しい基準文], ... ]（5点→1点の順）
+/* ===== 会社別設定（マルチテナント） =====
+   同じフォルダに config.js（window.COMPANY_CONFIG を定義）を置くと、
+   アプリ名・屋号・接続先Firebase・テーマ色を会社ごとに差し替えられる。
+   config.js が無い場合は、このファイル内の既定値（自社用）で動作する。
+   会社の追加手順は rakuraku-check/companies/README.md を参照。 */
+const CC=window.COMPANY_CONFIG||{};
+const APP_NAME=CC.appName||"らくらく臨店チェック";
+const IS_COMPANY_SITE=!!CC.appName||location.pathname.includes("/c/");
+document.title=APP_NAME;
+if(CC.accentColor){
+  document.documentElement.style.setProperty("--accent",CC.accentColor);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",CC.accentColor);
+}
+
 function s5(defs){
   const meta=[["5点",100,"good",false],["4点",75,"good",false],["3点",50,"warn",true],["2点",25,"bad",true],["1点",0,"bad",true]];
   return {key:"main",label:"評価（5段階）",scale:true,
@@ -805,7 +820,9 @@ const FEATURE_AI=true;
 const AI_ENABLED=FEATURE_AI||new URLSearchParams(location.search).get("ai")==="on";
 // 共通のFirebase設定。ここに設定を書き込むと全ユーザー共通になり、個人での設定が不要になる。
 // 例: const SHARED_FB_CONFIG={config:{apiKey:"AIza...",authDomain:"xxx.firebaseapp.com",projectId:"xxx",appId:"1:..."},model:"gemini-3.5-flash",auto:true};
-const SHARED_FB_CONFIG={"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.1-flash-lite","auto":true};
+const SHARED_FB_CONFIG=CC.firebase
+  ?{config:CC.firebase,model:CC.aiModel||"gemini-3.1-flash-lite",auto:true}
+  :{"config":{"apiKey":"AIzaSyDlWe86HOOc3VZvvvPgmJ-NIb_dQyOIkco","authDomain":"rakuraku-check.firebaseapp.com","projectId":"rakuraku-check","storageBucket":"rakuraku-check.firebasestorage.app","messagingSenderId":"190827967653","appId":"1:190827967653:web:61db36c42eb9e65d13094c"},"model":"gemini-3.1-flash-lite","auto":true};
 // Firebase App Check（reCAPTCHA v3）のサイトキー。設定すると、承認したサイト以外からの
 // AI利用をGoogle側でブロックできる（Firebaseコンソール → App Check で有効化して取得）。
 const SHARED_APPCHECK_SITE_KEY=null;
@@ -815,10 +832,10 @@ const SHARED_GEMINI_KEY=null;
 let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
-const SHARED_TENANT_ID="default";
-const APP_VERSION="v7.33.0";
+const SHARED_TENANT_ID=CC.tenantId||"default";
+const APP_VERSION="v7.34.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
-const BRANDS=["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
+const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
 const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
@@ -1198,7 +1215,7 @@ function viewLock(){
   return `
   <div class="home-hero" style="text-align:center;padding-top:64px">
     <div style="display:flex;justify-content:center">${LOGO_SVG.replace("<svg ","<svg style=\"width:88px;height:88px\" ")}</div>
-    <h1 style="margin-top:12px">らくらく臨店チェック</h1>
+    <h1 style="margin-top:12px">${esc(APP_NAME)}</h1>
     <p style="margin:8px auto 0">アクセスコードを入力してください。</p>
   </div>
   <div class="wrap">
@@ -1261,7 +1278,7 @@ function viewHome(){
       ${LOGO_SVG}
       <div>
         <div class="eyebrow">AM改善チェック</div>
-        <h1>らくらく臨店チェック</h1>
+        <h1>${esc(APP_NAME)}</h1>
       </div>
     </div>
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
@@ -1361,7 +1378,7 @@ function viewHome(){
       <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信</p>
     </div>
     ${ADMIN_VISIBLE?`<button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>`:""}
-    <p class="hw-meta" style="text-align:center;margin-top:10px">らくらく臨店チェック ${APP_VERSION}</p>
+    <p class="hw-meta" style="text-align:center;margin-top:10px">${esc(APP_NAME)} ${APP_VERSION}</p>
   </div>`;
 }
 
@@ -1647,6 +1664,9 @@ const TREND_N=8; // 推移一覧に表示する直近のチェック回数
    （IndexedDB）のみで動作する。 */
 let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false;
 async function initCloud(){
+  // 会社別サイトで config.js（会社専用のFirebase設定）が無い場合は、
+  // 誤って自社のデータベースに接続しないようクラウド保存を無効にする
+  if(IS_COMPANY_SITE&&!CC.firebase){ cloudErr="この会社用のFirebase設定（config.js）が未設定のため、端末内保存のみで動作しています"; return; }
   if(!SHARED_FB_CONFIG||!SHARED_FB_CONFIG.config) return;
   try{
     const V=FB_SDK_VERSION;
@@ -1855,6 +1875,7 @@ async function cloudFetchGeminiKey(){
   }catch(e){}
 }
 function cloudStatusLabel(){
+  if(IS_COMPANY_SITE&&!CC.firebase) return `<span style="color:var(--sub)">この端末のみ（クラウド未設定：config.jsにFirebase設定を追加してください）</span>`;
   if(cloudReady) return `<span style="color:var(--good);font-weight:700">クラウド接続済み（全端末で共通）</span>`;
   if(cloudErr) return `<span style="color:var(--warn);font-weight:700">この端末のみ（クラウド接続エラー）</span>`;
   if(SHARED_FB_CONFIG) return `<span style="color:var(--sub)">クラウドに接続中…</span>`;
@@ -2062,7 +2083,7 @@ function reportBody(insp,isPreview){
   return `
   <section class="card">
     <div class="rep-h">
-      <div class="print-only" style="font-size:9pt;color:#666;margin-bottom:2mm">らくらく臨店チェック｜臨店チェック報告書　発行日：${fmtDate(todayStr())}</div>
+      <div class="print-only" style="font-size:9pt;color:#666;margin-bottom:2mm">${esc(APP_NAME)}｜臨店チェック報告書　発行日：${fmtDate(todayStr())}</div>
       <h2>${insp.brand?esc(insp.brand)+"　":""}${esc(insp.store)}　店舗チェック報告書${isPreview?"（プレビュー）":""}${insp.provisional?"（一時保存・入力途中）":""}</h2>
       <div class="meta">確認日：${fmtDate(insp.date)}　確認者：${esc(insp.inspector)}${insp.prevDate?`　前回：${fmtDate(insp.prevDate)}`:""}</div>
       <div class="score-ring"><b>${insp.totalScore}</b><span>総合点／100</span></div>

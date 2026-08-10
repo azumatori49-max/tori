@@ -11,9 +11,17 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { buildReportHtml, buildReportsHtml, reportFileName } from '@/lib/reportHtml';
+import { officialStoreName } from '@/lib/storeNames';
+import { useReportStore } from '@/store/reportStore';
 import type { MaintenanceReport, MaintenanceReportInsert } from '@/types/report';
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
+
+/** 店舗マスタの正式名称（例: 鶏ヤロー　柏店）にそろえてから出力する */
+function withOfficialName<T extends ReportLike>(report: T): T {
+  const master = useReportStore.getState().settings.stores;
+  return { ...report, storeName: officialStoreName(report.storeName, master) };
+}
 
 export interface ExportResult {
   ok: boolean;
@@ -69,7 +77,7 @@ export async function exportReportsPdf(
   fileName: string,
 ): Promise<ExportResult> {
   if (reports.length === 0) return { ok: false, message: '対象のレポートがありません。' };
-  const html = buildReportsHtml(reports);
+  const html = buildReportsHtml(reports.map(withOfficialName));
 
   if (Platform.OS === 'web') {
     return printOnWeb(html, fileName);
@@ -87,7 +95,8 @@ export async function exportReportsPdf(
   return { ok: true, message: `PDFを作成しました: ${uri}` };
 }
 
-export async function exportReportPdf(report: ReportLike): Promise<ExportResult> {
+export async function exportReportPdf(rawReport: ReportLike): Promise<ExportResult> {
+  const report = withOfficialName(rawReport);
   const html = buildReportHtml(report);
   const fileName = reportFileName(report);
 

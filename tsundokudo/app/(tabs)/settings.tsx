@@ -18,6 +18,7 @@ import { confirmAsync, notify } from '@/lib/dialog';
 import { Button, Card, Field, Input, SectionTitle } from '@/components/ui';
 import { C } from '@/constants/colors';
 import { yen } from '@/lib/billing';
+import { parseStoreList } from '@/lib/storeNames';
 
 /** 閲覧用リンクの完全URL（Webのみ。GitHub Pages はサブパス /tori を付ける） */
 function viewerLinkFor(token: string): string {
@@ -236,6 +237,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const settings = useReportStore((s) => s.settings);
   const updateSettings = useReportStore((s) => s.updateSettings);
+  // 店舗マスタの一括登録（貼り付け）
+  const [bulkStores, setBulkStores] = useState('');
   const user = useAuthStore((s) => s.user);
   const org = useAuthStore((s) => s.org);
   const guestOrg = useAuthStore((s) => s.guestOrg);
@@ -421,6 +424,35 @@ export default function SettingsScreen() {
             onChange={(stores) => updateSettings({ stores })}
           />
           <Text style={styles.hint}>※ レポート作成時に新しい店舗名を入力すると自動で追加されます</Text>
+
+          <View style={styles.divider} />
+          <Text style={styles.shareTitle}>一括登録（貼り付け）</Text>
+          <Text style={styles.hint}>
+            スプレッドシートからコピーした店舗リストを貼り付けて一気に登録できます（1行1店舗、タブ区切りもOK）。
+            正式名称（例: 鶏ヤロー　柏店）で登録しておくと、PDF出力時に店舗名が正式名称に変換されます。
+          </Text>
+          <Input
+            value={bulkStores}
+            onChangeText={setBulkStores}
+            placeholder={'鶏ヤロー　柏店\n鶏ヤロー　草加店\nまる助　みやのかわ本店…'}
+            multiline
+          />
+          <View style={{ height: 8 }} />
+          <Button
+            title="貼り付けた店舗を追加"
+            variant="ghost"
+            onPress={() => {
+              const parsed = parseStoreList(bulkStores);
+              const added = parsed.filter((v) => !settings.stores.includes(v));
+              if (added.length === 0) {
+                notify('追加できる店舗がありません', '内容を確認してください（既に登録済みの可能性）。');
+                return;
+              }
+              void updateSettings({ stores: [...settings.stores, ...added] });
+              setBulkStores('');
+              notify('店舗を追加しました', `${added.length}件を店舗マスタに追加しました。`);
+            }}
+          />
         </Card>
 
         <SectionTitle>会社</SectionTitle>

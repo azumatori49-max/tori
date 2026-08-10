@@ -17,8 +17,13 @@ import type { MaintenanceReport, MaintenanceReportInsert } from '@/types/report'
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
 
-/** 店舗マスタの正式名称（例: 鶏ヤロー　柏店）にそろえてから出力する */
+/**
+ * 店舗マスタの正式名称（例: 鶏ヤロー　柏店）にそろえてから出力する。
+ * 変換は会社名が「株式会社鶏ヤロー」のレポートのみ対象。
+ */
 function withOfficialName<T extends ReportLike>(report: T): T {
+  const isToriyaro = report.company.replace(/[\s　]/g, '') === '株式会社鶏ヤロー';
+  if (!isToriyaro) return report;
   const master = useReportStore.getState().settings.stores;
   return { ...report, storeName: officialStoreName(report.storeName, master) };
 }

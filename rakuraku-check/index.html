@@ -709,7 +709,7 @@ function csvEsc(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(
 function buildCsv(){
   const head=["日付","屋号","店舗","確認者","総合点(100点満点)","状態",
     ...ALL_ITEMS.map(i=>i.name+"(5点満点)"),
-    ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,""))];
+    ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,"")),"3点以下の理由まとめ"];
   const list=[...state.inspections].filter(i=>i.completedAt)
     .sort((a,b)=>(a.date+(a.completedAt||"")).localeCompare(b.date+(b.completedAt||"")));
   const rows=[head];
@@ -717,7 +717,9 @@ function buildCsv(){
     const iv=(i.pdca&&i.pdca.interview)||{};
     rows.push([i.date,i.brand||"",i.store,i.inspector,i.totalScore,i.provisional?"一時保存(入力途中)":"完了",
       ...ALL_ITEMS.map(it=>{const s=score5Of(it,i);return s==null?"":s;}),
-      ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim())]);
+      ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim()),
+      ALL_ITEMS.map(it=>{const a=i.answers&&i.answers[it.id];const r=a&&a.fields&&a.fields.lowReason;
+        return r&&String(r).trim()?`${it.name}：${String(r).trim()}`:null;}).filter(Boolean).join(" ／ ")]);
   }
   return rows.map(r=>r.map(csvEsc).join(",")).join("\n");
 }
@@ -855,7 +857,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.35.0";
+const APP_VERSION="v7.36.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1970,6 +1972,12 @@ function itemCard(item){
       <div class="chips" role="group" aria-label="${esc(g.label)}">
         ${g.options.map(o=>`<button class="chip${a.evals[g.key]===o.v?" on-"+o.lv:""}" data-eval="${item.id}:${g.key}:${esc(o.v)}" aria-pressed="${a.evals[g.key]===o.v}">${esc(o.v)}</button>`).join("")}
       </div>`}`).join("")}
+    ${(()=>{
+      // 3点以下（または注意・異常などの低評価）を選んだ項目には理由欄（任意）を出す
+      const low=item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o&&o.lv!=="good";});
+      return low?`<div class="field"><label>3点以下の理由・状況 <span style="color:var(--sub);font-weight:600">任意</span></label>
+        <textarea data-field="${item.id}:lowReason" placeholder="なぜこの評価になったか、現場の状況をメモできます（報告書に記載されます）">${esc(a.fields.lowReason||"")}</textarea></div>`:"";
+    })()}
     ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
     ${item.note?`<p class="note">${esc(item.note)}</p>`:""}
@@ -2134,6 +2142,7 @@ function reportBody(insp,isPreview){
         <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}${it.noScore?`<span class="hw-meta">（総合点対象外）</span>`:""}${aiSc!=null?`<span class="hw-meta">（AI：${aiSc}点）</span>`:""}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
+        ${filled(a.fields&&a.fields.lowReason)?`<div class="fx"><b>3点以下の理由：</b>${esc(a.fields.lowReason)}</div>`:""}
         ${AI_ENABLED&&a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
         ${a.photos.length?`<div class="photos" style="margin-top:8px">${a.photos.map((p,i)=>`<div class="ph"><img src="${p}" alt="${esc(it.name)}の写真${i+1}"></div>`).join("")}</div>`:""}
       </div>`;}).join("")}

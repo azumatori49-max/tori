@@ -474,7 +474,7 @@ const CHECK_CATS = [
         ["普通","活気にばらつきがある"],
         ["改善が必要","声が少なく、活気に欠ける"],
         ["早急な改善が必要","活気がなく、店の雰囲気が暗い"]])] },
-    { id:"quality", name:"商品品質",
+    { id:"quality", name:"商品品質管理",
       desc:["盛り付けが基準通りか","規定量が守られているか","温度は適切か","味は基準通りか","提供状態（見た目・スピード）は適切か"], photoOptional:true,
       groups:[s5([
         ["基準通り","盛り付け・規定量・温度・味・提供状態すべて基準通り"],
@@ -857,7 +857,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.36.0";
+const APP_VERSION="v7.36.1";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する

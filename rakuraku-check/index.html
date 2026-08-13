@@ -393,15 +393,17 @@ const CHECK_CATS = [
         ["早急な改善が必要","清掃されておらず、著しく汚れている"]])] },
   ]},
   { id:"kitchen", name:"キッチン", short:"キッチン", items:[
-    { id:"fridge", name:"冷蔵庫温度",
-      desc:["冷蔵庫・冷凍庫の温度が正常か"], photoLabel:"温度表示部分の写真",
-      groups:[{key:"main",label:"評価",options:[
-        {v:"正常",s:100,lv:"good"},
-        {v:"注意",s:50,lv:"warn"},
-        {v:"異常",s:0,lv:"bad",issue:true}]}],
+    { id:"fridge", name:"冷蔵・冷凍管理",
+      desc:["温度が正常範囲か","食材が整理されているか","汚れ・液漏れがないか","適切に保管されているか"], photoLabel:"庫内・温度表示の写真",
+      groups:[s5([
+        ["すべて良好","温度は正常範囲で、庫内は整理・清潔、保管も適切"],
+        ["ほぼ良好","おおむね良好だが、整理や汚れに軽い乱れがある"],
+        ["一部問題","温度・整理・汚れ・保管のいずれかに問題がある"],
+        ["複数問題","複数の点で問題があり、改善が必要"],
+        ["危険な状態","温度異常や著しい汚れ・液漏れがあり、早急な対応が必要"]])],
       extras:[
-        {key:"reportTo",label:"報告先",type:"text",show:a=>a.evals.main==="異常"}] },
-    ...[["cutting_board","まな板"],["knife","包丁"],["duster","ダスター"]].map(([id,label])=>(
+        {key:"reportTo",label:"報告先",type:"text",show:a=>["1点","2点"].includes(a.evals.main)}] },
+    ...[["cutting_board","まな板"],["knife","包丁"]].map(([id,label])=>(
     { id, name:label,
       desc:["汚れ・欠け・破損・劣化がないか","衛生的に管理されているか"],
       groups:[s5([
@@ -412,6 +414,16 @@ const CHECK_CATS = [
         ["要買い替え","使用に適さず、買い替えが必要"]])],
       extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",
         hint:"完了時に購入・交換タスクを自動作成します。"}] })),
+    { id:"duster", name:"ダスター・衛生ルール",
+      desc:["緑：キッチン用として使えているか","ピンク：ホール用として使えているか","白：メニュー表用として使えているか","おしぼりを代用していないか"],
+      groups:[s5([
+        ["ルール通り","色分け（緑=キッチン／ピンク=ホール／白=メニュー表）が守られ、清潔"],
+        ["ほぼ良好","色分けは守られているが、軽い汚れがある"],
+        ["一部乱れ","色分けの乱れ、または汚れが一部ある"],
+        ["ルール違反あり","色分けが守られていない、またはおしぼりを代用している"],
+        ["要買い替え・不衛生","不衛生で使用に適さず、買い替えが必要"]])],
+      extras:[{key:"buyList",label:"買い替え対象と数量",type:"textarea",show:a=>a.evals.main==="1点",
+        hint:"完了時に購入・交換タスクを自動作成します。"}] },
     { id:"fryer", name:"フライヤー", photoOptional:true, evalOptional:true,
       desc:["油の色や状態が正常か（写真・評価とも任意）"],
       groups:[
@@ -463,9 +475,9 @@ const CHECK_CATS = [
         ["改善が必要","声が少なく、活気に欠ける"],
         ["早急な改善が必要","活気がなく、店の雰囲気が暗い"]])] },
     { id:"quality", name:"商品品質",
-      desc:["味・温度・見た目・量・盛り付けが基準通りか"], photoOptional:true,
+      desc:["盛り付けが基準通りか","規定量が守られているか","温度は適切か","味は基準通りか","提供状態（見た目・スピード）は適切か"], photoOptional:true,
       groups:[s5([
-        ["基準通り","味・温度・見た目・量すべて基準通り"],
+        ["基準通り","盛り付け・規定量・温度・味・提供状態すべて基準通り"],
         ["ほぼ基準通り","おおむね基準通り"],
         ["一部基準外","一部が基準から外れている"],
         ["基準外が複数","複数の項目で基準から外れている"],
@@ -473,6 +485,16 @@ const CHECK_CATS = [
       extras:[
         {key:"product",label:"問題商品名",type:"text",show:a=>hasIssueEval(a,"quality")},
         {key:"improve",label:"改善内容",type:"textarea",show:a=>hasIssueEval(a,"quality")}] },
+    { id:"product_control", name:"商品管理", photoOptional:true,
+      desc:["仕込み日・担当者が記録されているか","保存方法は適切か","仕込み表通りに仕込まれているか","開封・仕込み済み商品が適切に管理されているか","粉類・食材の使い回しがないか"],
+      groups:[s5([
+        ["すべて適切","仕込み記録・保存・管理がすべてルール通り"],
+        ["ほぼ適切","おおむねルール通りだが、記録に軽い漏れがある"],
+        ["一部不備","記録漏れや保存方法の不備が一部ある"],
+        ["不備が多い","仕込み表と異なる・管理不備が複数ある"],
+        ["管理されていない","仕込み・保存が管理されておらず、使い回しの疑いがある"]])],
+      extras:[
+        {key:"detail",label:"問題内容",type:"textarea",show:a=>hasIssueEval(a,"product_control")}] },
     { id:"tequila", name:"テキーラタイム", photoOptional:true, noScore:true, storeMatch:"鶏ヤロー",
       desc:["テキーラタイムを実施できているか（この項目は総合点には含まれません）"],
       groups:[s5([
@@ -833,7 +855,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.34.0";
+const APP_VERSION="v7.35.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する

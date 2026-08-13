@@ -821,6 +821,10 @@ function collectMissing(){
     if(!item.photoOptional&&!item.noPhoto&&!a.photos.length) m.push({ci,id:item.id,label:item.name,what:"写真が未添付"});
     if(!item.evalOptional) for(const g of item.groups){ if(!a.evals[g.key]) m.push({ci,id:item.id,label:item.name,what:`「${g.label}」が未選択`}); }
   }));
+  // 面談は必須：被面談者名＋5つの質問すべて
+  const iv=(d.pdca&&d.pdca.interview)||{};
+  if(!filled(iv.interviewee)) m.push({ci:PDCA_CAT,id:"pdca-interview",label:"面談",what:"被面談者名が未入力"});
+  INTERVIEW_QS.forEach(q=>{ if(!filled(iv[q.key])) m.push({ci:PDCA_CAT,id:"pdca-interview",label:"面談",what:`「${q.label.replace(/^\d+\.\s*/,"")}」が未回答`}); });
   return m;
 }
 function compressPhoto(file){return new Promise((res,rej)=>{
@@ -855,7 +859,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.36.2";
+const APP_VERSION="v7.37.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1934,7 +1938,12 @@ function viewCheck(){
 }
 function catDoneMark(i){
   if(!state.draft) return "";
-  if(i<PDCA_CAT){ const ok=CHECK_CATS[i].items.every(it=>itemComplete(it,ans(it.id))); return ok?` <span class="st">✓</span>`:""; }
+  if(i<PDCA_CAT){ const ok=CHECK_CATS[i].items.filter(it=>itemVisibleFor(it,state.draft.store,state.draft.brand)).every(it=>itemComplete(it,ans(it.id))); return ok?` <span class="st">✓</span>`:""; }
+  if(i===PDCA_CAT){
+    const iv=(state.draft.pdca&&state.draft.pdca.interview)||{};
+    const ok=filled(iv.interviewee)&&INTERVIEW_QS.every(q=>filled(iv[q.key]));
+    return ok?` <span class="st">✓</span>`:"";
+  }
   return "";
 }
 function itemCard(item){
@@ -1991,13 +2000,13 @@ function pdcaView(){
   const iv=p.interview||(p.interview={});
   return `
   <section class="card" id="card-pdca-interview">
-    <h3>面談記録</h3>
-    <p class="desc">店舗社員との面談内容を記録します。</p>
+    <h3>面談記録 <span class="req">必須</span></h3>
+    <p class="desc">店舗社員との面談内容を記録します。被面談者名と5つの質問への回答が必須です。</p>
     <div class="row2">
-      ${INTERVIEW_FIELDS.map(f=>`<div class="field"><label>${esc(f.label)}</label><input type="${f.type}" value="${esc(iv[f.key]||"")}" data-iv="${f.key}"></div>`).join("")}
+      ${INTERVIEW_FIELDS.map(f=>`<div class="field"><label>${esc(f.label)}${f.key==="interviewee"?` <span class="req">必須</span>`:""}</label><input type="${f.type}" value="${esc(iv[f.key]||"")}" data-iv="${f.key}"></div>`).join("")}
     </div>
     ${INTERVIEW_QS.map(q=>`
-      <div class="field"><label>${esc(q.label)}</label>
+      <div class="field"><label>${esc(q.label)} <span class="req">必須</span></label>
         <textarea data-iv="${q.key}" placeholder="${esc(q.hint)}">${esc(iv[q.key]||"")}</textarea>
       </div>`).join("")}
     ${ivAiBox(iv)}

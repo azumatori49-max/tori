@@ -136,6 +136,11 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
 .rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
 .back-btn:disabled{opacity:.35;cursor:default}
+/* AIアシスタント */
+.chat-log{max-height:52vh;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
+.msg{max-width:86%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.6}
+.msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--bg);border:1px solid var(--line);border-bottom-left-radius:4px}
 /* 写真の拡大表示 */
 .ph img{cursor:zoom-in}
 .lightbox{position:fixed;inset:0;z-index:100;background:rgba(10,12,14,.88);display:flex;align-items:center;justify-content:center;padding:18px;cursor:zoom-out}
@@ -558,7 +563,7 @@ const INTERVIEW_QS=[
 
 /* ================= 状態・保存 ================= */
 let db=null;
-const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null };
+const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null, chat:[] };
 
 function openDB(){return new Promise((res,rej)=>{
   const r=indexedDB.open("rakuraku-check",2);
@@ -769,6 +774,96 @@ ${lines.join("\n")||"（データなし）"}
 ${ivs.join("\n\n")||"（記録なし）"}
 `;
 }
+/* ---------- AIアシスタント（β） ----------
+   全店のチェック結果・ランキング・面談内容をGemini（既存のAI接続）に渡し、
+   チャット形式で質問に答える。回答は補助情報という位置づけ。 */
+let chatBusy=false;
+function buildAssistantContext(){
+  const lines=[];
+  const cur=ymOf(todayStr());
+  for(const m of [cur,ymAdd(cur,-1)]){
+    const rank=storeRanking(m);
+    if(rank.length) lines.push(`【${ymLabel(m)}のランキング（総合点が低い順）】`+rank.map((r,i)=>`${i+1}位 ${r.brand?r.brand+" ":""}${r.store} ${r.score}点`).join("、"));
+  }
+  const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
+  const al=stores.map(s=>{const a=storeAlerts(s);return a.length?`${s}：${a.map(x=>`${x.it.name}（3点以下${x.c}回）`).join("、")}`:null;}).filter(Boolean);
+  if(al.length) lines.push("【アラート項目】"+al.join("／"));
+  const ds=dangerStores();
+  if(ds.length) lines.push("【面談リスクの高い店舗】"+ds.map(d=>`${d.store}（リスク${d.risk}・${d.level}${d.summary?`：${d.summary}`:""}）`).join("／"));
+  // チェックデータ本体（CSV・写真なし）。長すぎる場合は新しい記録を優先して収める
+  let csv=buildCsv();
+  const MAX=24000;
+  if(csv.length>MAX){
+    const rows=csv.split("\n");
+    const acc=[rows[0]]; let len=rows[0].length; let cut=false;
+    for(let i=rows.length-1;i>=1;i--){
+      if(len+rows[i].length>MAX){cut=true;break;}
+      acc.splice(1,0,rows[i]); len+=rows[i].length;
+    }
+    csv=acc.join("\n")+(cut?"\n（これより古い記録は省略）":"");
+  }
+  lines.push("【チェックデータ（CSV）】\n"+csv);
+  return lines.join("\n");
+}
+async function askAssistant(q){
+  if(chatBusy||!String(q||"").trim()) return;
+  if(!aiConfigured()){ showToast("AIが未設定です。管理画面でAI設定を行ってください"); return; }
+  state.chat.push({role:"user",text:String(q).trim()});
+  chatBusy=true; renderChat();
+  try{
+    const transcript=state.chat.slice(-10).map(m=>(m.role==="user"?"ユーザー：":"アシスタント：")+m.text).join("\n");
+    const prompt=`あなたは「${APP_NAME}」に組み込まれた、飲食チェーンのエリアマネージャー向けAIアシスタントです。
+以下の店舗チェックデータ（各項目は5点満点・3点以下は要改善・総合点は100点満点）と面談内容だけを根拠に、日本語で簡潔に答えてください。
+
+回答のルール：
+- データに基づいて答える。データに無いことを聞かれたら「データにありません」と伝える
+- 改善についての質問には、優先度の高い順に「どの店で・何を・どうするか」が分かる具体的な行動で答える
+- 箇条書き中心で短く。前置きや復唱はしない
+- 店舗名・点数は正確に引用する
+
+${buildAssistantContext()}
+
+これまでの会話：
+${transcript}
+アシスタント：`;
+    const text=await aiGenerate(prompt);
+    state.chat.push({role:"model",text:String(text||"").trim()||"（回答を生成できませんでした）"});
+  }catch(err){
+    state.chat.push({role:"model",text:"⚠ "+friendlyAIError(err)});
+  }finally{
+    chatBusy=false; renderChat();
+  }
+}
+function renderChat(){
+  if(state.view!=="assistant") return;
+  render();
+  const log=$("#chat-log"); if(log) log.scrollTop=log.scrollHeight;
+  const inp=$("#chat-in"); if(inp&&!chatBusy) inp.focus();
+}
+function viewAssistant(){
+  const msgs=state.chat.map(m=>`<div class="msg ${m.role==="user"?"me":"ai"}">${esc(m.text).replace(/\n/g,"<br>")}</div>`).join("");
+  const sugg=["今月の要臨店はどこ？","全店で一番改善が必要な項目は？","面談で気になる店舗は？","先月から悪化した店舗は？"];
+  return `
+  <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
+    <button class="back-btn" id="to-home">← 戻る</button>
+    <h1 style="flex:1">AIアシスタント</h1><span class="meta">β版</span>
+  </div></header>
+  <div class="wrap">
+    ${aiConfigured()?"":`<div class="miss no-print"><div class="ttl">AIが未設定のため利用できません。管理画面（URL末尾に ?admin=1）のAI設定を確認してください。</div></div>`}
+    <div class="card" style="padding:14px">
+      <div id="chat-log" class="chat-log">
+        ${msgs||`<p class="empty" style="padding:8px 4px">全店舗のチェック結果・ランキング・面談内容をもとに、AIがその場で答えます。<br>下の例をタップするか、自由に質問してください。</p>`}
+        ${chatBusy?`<div class="msg ai"><span class="spin" aria-hidden="true"></span>データを確認しています…</div>`:""}
+      </div>
+      <div class="chips" style="margin-top:10px">${sugg.map(s=>`<button class="chip" data-ask="${esc(s)}" ${chatBusy?"disabled":""}>${esc(s)}</button>`).join("")}</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input id="chat-in" placeholder="AIに質問する…" autocomplete="off" style="flex:1">
+        <button class="btn" id="chat-send" style="width:auto;padding:10px 18px;margin:0" ${chatBusy?"disabled":""}>送信</button>
+      </div>
+      <p class="hw-meta" style="margin-top:8px">AIの回答は補助情報です。重要な判断は報告書・推移グラフでご確認ください。</p>
+    </div>
+  </div>`;
+}
 async function copyText(txt){
   try{ await navigator.clipboard.writeText(txt); return true; }
   catch(e){
@@ -859,7 +954,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.37.0";
+const APP_VERSION="v7.38.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1278,6 +1373,7 @@ function render(){
   else if(state.view==="check") html=viewCheck();
   else if(state.view==="report") html=viewReport();
   else if(state.view==="trends") html=viewTrends();
+  else if(state.view==="assistant") html=viewAssistant();
   else if(state.view==="admin") html=viewAdmin();
   app.innerHTML=html;
   app.insertAdjacentHTML("afterbegin",'<div id="sync-bar" class="sync-bar"></div>');
@@ -1394,6 +1490,11 @@ function viewHome(){
           </button>
         </div>`).join(""):`<p class="empty">まだ記録がありません。最初のチェックを始めましょう。</p>`}
     </div>
+    ${AI_ENABLED?`<div class="card">
+      <h3>AIアシスタント <span class="badge todo">β</span></h3>
+      <p class="desc">「今月の要臨店はどこ？」「◯◯店の改善点は？」など、全店舗のチェック結果・面談内容をもとにAIがその場で答えます。</p>
+      <button class="btn sub" id="to-assistant">AIアシスタントを開く</button>
+    </div>`:""}
     <div class="card">
       <h3>ChatGPTでデータ分析</h3>
       <p class="desc">全店舗のチェック結果をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けるだけで、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
@@ -2207,6 +2308,9 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
+  if(t.id==="to-assistant"){state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
+  if(t.dataset.ask){askAssistant(t.dataset.ask);return;}
+  if(t.id==="chat-send"){const el=$("#chat-in");const q=(el&&el.value||"").trim();if(!q)return;el.value="";askAssistant(q);return;}
   if(t.dataset.brandsel){
     state.startBrand=state.startBrand===t.dataset.brandsel?"":t.dataset.brandsel;
     document.querySelectorAll("[data-brandsel]").forEach(b=>b.classList.toggle("on-good",b.dataset.brandsel===state.startBrand));
@@ -2356,6 +2460,13 @@ document.addEventListener("click",async e=>{
     persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
     showToast("一時保存した内容を読み込みました。続きを入力してください");
     return;
+  }
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&e.target&&e.target.id==="chat-in"){
+    e.preventDefault();
+    const q=e.target.value.trim();
+    if(q){ e.target.value=""; askAssistant(q); }
   }
 });
 document.addEventListener("change",async e=>{

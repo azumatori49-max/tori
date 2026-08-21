@@ -711,11 +711,11 @@ function storeRanking(month){
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
 /* ---------- CSV書き出し・ChatGPT分析用プロンプト ---------- */
 function csvEsc(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
-function buildCsv(){
+function buildCsv(month){ // month="YYYY-MM" を渡すとその月の分だけに絞る
   const head=["日付","屋号","店舗","確認者","総合点(100点満点)","状態",
     ...ALL_ITEMS.map(i=>i.name+"(5点満点)"),
     ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,""))];
-  const list=[...state.inspections].filter(i=>i.completedAt)
+  const list=[...state.inspections].filter(i=>i.completedAt&&(!month||ymOf(i.date)===month))
     .sort((a,b)=>(a.date+(a.completedAt||"")).localeCompare(b.date+(b.completedAt||"")));
   const rows=[head];
   for(const i of list){
@@ -875,10 +875,10 @@ async function copyText(txt){
     }catch(e2){ return false; }
   }
 }
-function downloadCsv(){
-  const blob=new Blob(["\uFEFF"+buildCsv()],{type:"text/csv;charset=utf-8"}); // BOM付き（Excelの文字化け防止）
+function downloadCsv(month){
+  const blob=new Blob(["\uFEFF"+buildCsv(month)],{type:"text/csv;charset=utf-8"}); // BOM付き（Excelの文字化け防止）
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=`臨店チェック_全店データ_${todayStr()}.csv`;
+  a.download=month?`臨店チェック_${ymLabel(month)}.csv`:`臨店チェック_全店データ_${todayStr()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),3000);
 }
@@ -954,7 +954,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.38.0";
+const APP_VERSION="v7.39.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1500,9 +1500,14 @@ function viewHome(){
       <p class="desc">全店舗のチェック結果をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けるだけで、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn sub" id="gpt-copy">プロンプト＋データをコピー</button>
-        <button class="btn ghost" id="csv-dl">CSVをダウンロード</button>
+        <button class="btn ghost" id="csv-dl">全期間のCSVをダウンロード</button>
       </div>
-      <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信</p>
+      <div class="row2" style="margin-top:12px;align-items:end">
+        <div class="field" style="margin:0"><label>月を指定してダウンロード</label>
+          <input type="month" id="csv-month" value="${ymOf(todayStr())}" max="${ymOf(todayStr())}"></div>
+        <button class="btn ghost" id="csv-dl-month" style="margin:0">この月のCSV</button>
+      </div>
+      <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信。CSVはExcelでも開けます</p>
     </div>
     ${ADMIN_VISIBLE?`<button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>`:""}
     <p class="hw-meta" style="text-align:center;margin-top:10px">${esc(APP_NAME)} ${APP_VERSION}</p>
@@ -2333,6 +2338,12 @@ document.addEventListener("click",async e=>{
   if(t.id==="csv-dl"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
     downloadCsv(); return;
+  }
+  if(t.id==="csv-dl-month"){
+    const m=($("#csv-month")&&$("#csv-month").value)||"";
+    if(!/^\d{4}-\d{2}$/.test(m)){showToast("月を選択してください");return;}
+    if(!state.inspections.some(i=>i.completedAt&&ymOf(i.date)===m)){showToast(`${ymLabel(m)}の完了チェックはありません`);return;}
+    downloadCsv(m); showToast(`${ymLabel(m)}のCSVをダウンロードしました`); return;
   }
   if(t.id==="gpt-store"){
     const ok=await copyText(storePrompt(state.trendStore));

@@ -252,6 +252,73 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .ai-box .sug{margin-top:4px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* ===== Liquid Glass テーマ（Apple風のすりガラスUI） =====
+   画面用のみ。印刷（@media print）はこれまで通り白ベタで出力される */
+body{
+  background:
+    radial-gradient(1100px 620px at 88% -12%, rgba(24,155,139,.18), transparent 62%),
+    radial-gradient(900px 560px at -12% 28%, rgba(96,165,250,.16), transparent 58%),
+    radial-gradient(820px 620px at 62% 112%, rgba(251,191,36,.12), transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+}
+.card{
+  background:rgba(255,255,255,.6);
+  border:1px solid rgba(255,255,255,.7);
+  border-radius:20px;
+  box-shadow:0 8px 32px rgba(31,45,61,.10), inset 0 1px 0 rgba(255,255,255,.75);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);
+  backdrop-filter:blur(18px) saturate(1.6);
+}
+.card::before{width:0}
+.hd{
+  background:rgba(247,246,242,.5);
+  border-bottom:1px solid rgba(255,255,255,.55);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);
+  backdrop-filter:blur(18px) saturate(1.6);
+}
+.sync-bar{
+  background:rgba(247,246,242,.5);
+  border-bottom:1px solid rgba(255,255,255,.5);
+  -webkit-backdrop-filter:blur(14px) saturate(1.5);
+  backdrop-filter:blur(14px) saturate(1.5);
+}
+/* 下部ナビは浮いたガラスのピルに */
+.navbar{background:transparent;border-top:none;padding:10px 14px calc(12px + env(safe-area-inset-bottom))}
+.navbar .in{
+  background:rgba(255,255,255,.55);
+  border:1px solid rgba(255,255,255,.7);
+  border-radius:22px;padding:8px;
+  box-shadow:0 12px 36px rgba(31,45,61,.16);
+  -webkit-backdrop-filter:blur(20px) saturate(1.7);
+  backdrop-filter:blur(20px) saturate(1.7);
+}
+.navbar .btn{border-radius:15px}
+.btn{border-radius:14px;box-shadow:0 6px 18px rgba(24,155,139,.28)}
+.btn.sub{background:rgba(255,255,255,.55);box-shadow:none;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.btn.ghost{background:rgba(255,255,255,.4);box-shadow:none;border-color:rgba(255,255,255,.7);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cat-chip{background:rgba(255,255,255,.5);border-color:rgba(255,255,255,.7);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.cat-chip.on{background:var(--accent);border-color:var(--accent);box-shadow:0 4px 14px rgba(24,155,139,.35)}
+.chip{background:rgba(255,255,255,.5);border-color:rgba(255,255,255,.75)}
+.back-btn{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.75);border-radius:12px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+input,select,textarea{background:rgba(255,255,255,.6);border-color:rgba(255,255,255,.8);border-radius:12px}
+.scale button{background:rgba(255,255,255,.45);border-color:rgba(255,255,255,.7);border-radius:14px}
+.photo-add{background:rgba(255,255,255,.4);border-radius:14px}
+.hw-row,.mcell,.miss{border-radius:14px}
+.miss{background:rgba(251,240,216,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.msg.ai{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.75)}
+.upd-bar{background:rgba(24,155,139,.85);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.home-hero h1{letter-spacing:.01em}
+/* すりガラス非対応の古いブラウザでは不透明に近づけて読みやすさを確保 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .card,.navbar .in{background:rgba(255,255,255,.94)}
+  .hd,.sync-bar{background:rgba(247,246,242,.96)}
+  .btn.sub,.back-btn,.cat-chip{background:rgba(255,255,255,.9)}
+}
 /* PC（1000px以上）専用のワイドレイアウト。スマホ・タブレットには影響しない */
 @media (min-width:1000px){
   #app{max-width:1120px;padding-bottom:110px}
@@ -261,7 +328,7 @@ input[type=number]{font-variant-numeric:tabular-nums}
   .navbar .in{max-width:800px}
   .card{padding:20px 22px}
   /* ホームはヒーローをカード風にし、下のカードを2カラムに並べる */
-  .home-hero{max-width:1064px;margin:20px auto 0;border-radius:16px;border:1px solid var(--line);background:var(--card)}
+  .home-hero{max-width:1064px;margin:20px auto 0;border-radius:22px;border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);box-shadow:0 8px 32px rgba(31,45,61,.08)}
   .home-hero+.wrap{max-width:1096px;columns:2;column-gap:18px}
   .home-hero+.wrap>*{break-inside:avoid;-webkit-column-break-inside:avoid}
   .home-hero+.wrap>#to-admin{column-span:all}
@@ -954,7 +1021,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.39.0";
+const APP_VERSION="v7.40.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する

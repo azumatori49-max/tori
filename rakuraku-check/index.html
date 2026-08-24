@@ -137,6 +137,13 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
 .back-btn:disabled{opacity:.35;cursor:default}
 /* AIアシスタント */
+.ai-hbtn{
+  flex:0 0 auto;border:none;border-radius:999px;padding:7px 14px;
+  font-size:12.5px;font-weight:800;letter-spacing:.04em;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),#12b8a2);
+  box-shadow:0 4px 14px rgba(24,155,139,.35);
+}
+.ai-hbtn:active{transform:scale(.96)}
 .chat-log{max-height:52vh;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
 .msg{max-width:86%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.6}
 .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
@@ -899,8 +906,11 @@ ${transcript}
     state.chat.push({role:"model",text:"⚠ "+friendlyAIError(err)});
   }finally{
     chatBusy=false; renderChat();
+    kvSet("chat",state.chat.slice(-40)).catch(()=>{}); // 直近40件を保存（開き直しても続きから）
   }
 }
+// どの画面のヘッダーからでもAIアシスタントを開けるボタン
+function aiHeaderBtn(){return AI_ENABLED?`<button class="ai-hbtn no-print" aria-label="AIアシスタントを開く">✦ AI</button>`:"";}
 function renderChat(){
   if(state.view!=="assistant") return;
   render();
@@ -913,7 +923,8 @@ function viewAssistant(){
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
     <button class="back-btn" id="to-home">← 戻る</button>
-    <h1 style="flex:1">AIアシスタント</h1><span class="meta">β版</span>
+    <h1 style="flex:1">AIアシスタント</h1>
+    <button class="back-btn" id="chat-clear" style="font-size:12px" ${state.chat.length?"":"disabled"}>履歴クリア</button>
   </div></header>
   <div class="wrap">
     ${aiConfigured()?"":`<div class="miss no-print"><div class="ttl">AIが未設定のため利用できません。管理画面（URL末尾に ?admin=1）のAI設定を確認してください。</div></div>`}
@@ -1021,7 +1032,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.40.0";
+const APP_VERSION="v7.41.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1469,6 +1480,7 @@ function viewHome(){
         <div class="eyebrow">AM改善チェック</div>
         <h1>${esc(APP_NAME)}</h1>
       </div>
+      <div style="margin-left:auto;align-self:flex-start">${aiHeaderBtn()}</div>
     </div>
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
     <p class="hw-meta" style="margin-top:6px">データ共有：${cloudStatusLabel()}</p>
@@ -1804,7 +1816,7 @@ function viewTrends(){
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
     <button class="back-btn" id="to-home" aria-label="戻る">← 戻る</button>
-    <h1 style="flex:1">${brand?esc(brand)+"　":""}${esc(store)}｜推移</h1><span class="meta">チェック${hist.length}回分</span>
+    <h1 style="flex:1">${brand?esc(brand)+"　":""}${esc(store)}｜推移</h1><span class="meta" style="margin-right:8px">チェック${hist.length}回分</span>${aiHeaderBtn()}
   </div></header>
   <div class="wrap">
     ${alerts.length?`<div class="card" style="border-color:var(--bad)">
@@ -2095,6 +2107,7 @@ function viewCheck(){
     <div class="bar">
       <h1>${d.brand?`<span style="font-size:12px;color:var(--sub);display:block">${esc(d.brand)}</span>`:""}${esc(d.store)}</h1>
       <span class="meta">${fmtDate(d.date)}／${esc(d.inspector)}　${doneItems}/${draftItems(d).length}項目</span>
+      ${aiHeaderBtn()}
     </div>
     <div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
     <div class="save-row">
@@ -2258,8 +2271,8 @@ function viewReport(){
   const insp=state.inspections.find(i=>i.id===state.reportId);
   if(!insp) return `<div class="wrap"><p class="empty">報告書が見つかりません。</p><button class="btn" id="to-home">ホームへ</button></div>`;
   return `
-  <header class="hd no-print"><div class="bar" style="padding-bottom:10px">
-    <h1>報告書</h1><span class="meta">${esc(insp.store)}／${fmtDate(insp.date)}</span>
+  <header class="hd no-print"><div class="bar" style="padding-bottom:10px;align-items:center">
+    <h1>報告書</h1><span class="meta" style="flex:1;text-align:right;margin-right:8px">${esc(insp.store)}／${fmtDate(insp.date)}</span>${aiHeaderBtn()}
   </div></header>
   <div class="wrap">
     ${insp.provisional?`<div class="miss no-print" style="margin-top:0">
@@ -2380,7 +2393,11 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,label");
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
-  if(t.id==="to-assistant"){state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
+  if(t.id==="to-assistant"||t.classList.contains("ai-hbtn")){state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
+  if(t.id==="chat-clear"){
+    if(state.chat.length&&!confirm("AIアシスタントの会話履歴を消しますか？"))return;
+    state.chat=[]; kvDel("chat").catch(()=>{}); render(); return;
+  }
   if(t.dataset.ask){askAssistant(t.dataset.ask);return;}
   if(t.id==="chat-send"){const el=$("#chat-in");const q=(el&&el.value||"").trim();if(!q)return;el.value="";askAssistant(q);return;}
   if(t.dataset.brandsel){
@@ -2588,6 +2605,7 @@ document.addEventListener("input",e=>{
     state.inspections=(await allInspections())||[];
     const draft=await kvGet("draft");
     if(draft) state.draft=draft;
+    state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）

@@ -238,13 +238,19 @@ export default function RatContractScreen() {
             <View style={styles.priceBox}>
               {price ? (
                 <>
-                  <Text style={styles.priceTier}>{price.tier}</Text>
+                  <Text style={styles.priceTier}>{price.tier}・年間契約</Text>
                   <View style={styles.priceRow}>
-                    <Text style={styles.priceLabel}>初回施工費（税抜）</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.priceLabel}>初回（税抜）</Text>
+                      <Text style={styles.priceDesc}>侵入口調査・穴塞ぎ施工</Text>
+                    </View>
                     <Text style={styles.priceVal}>¥{yen(price.initialFee)}</Text>
                   </View>
                   <View style={styles.priceRow}>
-                    <Text style={styles.priceLabel}>月額料金（税抜）</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.priceLabel}>毎月（税抜）</Text>
+                      <Text style={styles.priceDesc}>点検、ベイト交換、トラップ設置、侵入口チェック</Text>
+                    </View>
                     <Text style={styles.priceVal}>¥{yen(price.monthlyFee)}</Text>
                   </View>
                 </>
@@ -407,8 +413,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   priceTier: { fontSize: 12, fontWeight: '800', color: C.primaryDark, marginBottom: 6 },
-  priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
-  priceLabel: { fontSize: 13, color: C.textSub },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  priceLabel: { fontSize: 13, fontWeight: '700', color: C.textSub },
+  priceDesc: { fontSize: 10.5, color: C.textFaint, marginTop: 1 },
   priceVal: { fontSize: 14, fontWeight: '800', color: C.primaryDark },
   priceNote: { fontSize: 12.5, color: C.textSub },
   endDateBox: {

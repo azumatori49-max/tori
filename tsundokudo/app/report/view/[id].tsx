@@ -169,6 +169,20 @@ export default function ReportViewScreen() {
           <PhotoStrip photos={pest.photos} />
         </Card>
 
+        {/* ネズミ駆除（実施時のみ） */}
+        {report.ratControl?.done && (
+          <>
+            <SectionTitle>ネズミ駆除</SectionTitle>
+            <Card>
+              {report.ratControl.work !== '' && (
+                <Text style={styles.note}>{report.ratControl.work}</Text>
+              )}
+              <Row label="発生状況" value={report.ratControl.presence} />
+              <PhotoStrip photos={report.ratControl.photos} />
+            </Card>
+          </>
+        )}
+
         {/* トッピング */}
         <SectionTitle>トッピング（追加施工）</SectionTitle>
         <Card>

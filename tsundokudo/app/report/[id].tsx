@@ -19,6 +19,7 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
+import { useRatStore } from '@/store/ratStore';
 import { useIsViewer } from '@/store/authStore';
 import { confirmAsync, notify } from '@/lib/dialog';
 import {
@@ -208,6 +209,38 @@ export default function ReportFormScreen() {
     else router.replace('/reports');
   }
 
+  /** ネズミ駆除を実施したレポートを、店舗のネズミ契約の点検履歴に追加する */
+  async function appendRatVisit(f: MaintenanceReportInsert) {
+    try {
+      const rat = useRatStore.getState();
+      if (!rat.hydrated) await rat.hydrate();
+      const compact = (x: string) => x.replace(/[\s　]/g, '');
+      const contract = useRatStore
+        .getState()
+        .contracts.find((c) => compact(c.storeName) === compact(f.storeName));
+      if (!contract) return;
+      const today = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const date = /^\d{4}-\d{1,2}-\d{1,2}$/.test(f.workDate)
+        ? f.workDate
+        : `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+      await useRatStore.getState().updateContract(contract.id, {
+        visits: [
+          {
+            id: `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+            date,
+            work: f.ratControl.work,
+            presence: f.ratControl.presence,
+            photos: f.ratControl.photos,
+          },
+          ...contract.visits,
+        ],
+      });
+    } catch {
+      // レポート本体の保存は成功しているため、履歴追加の失敗は握りつぶす
+    }
+  }
+
   async function onSave() {
     // 途中でも一時保存できる（写真などの必須チェックはPDF出力時に行う）
     if (!form.storeName.trim()) {
@@ -218,6 +251,10 @@ export default function ReportFormScreen() {
       ? await store.createReport(form)
       : await store.updateReport(id, form);
     if (ok) {
+      // 新規保存時のみ履歴追加（編集の再保存で二重登録しない）
+      if (isNew && form.reportType !== 'order' && form.ratControl.done) {
+        await appendRatVisit(form);
+      }
       goBack();
     } else {
       notify('保存できませんでした', useReportStore.getState().error ?? '保存に失敗しました。');
@@ -577,6 +614,54 @@ export default function ReportFormScreen() {
               max={6}
               defaultCategory="その他"
             />
+          </Card>
+
+          {/* ── ネズミ駆除（任意） ── */}
+          <SectionTitle>
+            ネズミ駆除 <Text style={styles.optionalTag}>任意</Text>
+          </SectionTitle>
+          <Card>
+            <CheckBox
+              checked={form.ratControl.done}
+              label="ネズミ駆除を実施した"
+              onToggle={() =>
+                patch({ ratControl: { ...form.ratControl, done: !form.ratControl.done } })
+              }
+            />
+            {form.ratControl.done && (
+              <View style={styles.checklistBody}>
+                <Field label="作業内容">
+                  <Input
+                    value={form.ratControl.work}
+                    onChangeText={(v) => patch({ ratControl: { ...form.ratControl, work: v } })}
+                    placeholder="例: ベイト交換、トラップ2箇所設置、侵入口チェック"
+                    multiline
+                  />
+                </Field>
+                <Text style={styles.subLabel}>発生状況</Text>
+                <ChipSelect
+                  options={[...PEST_PRESENCE_OPTIONS]}
+                  value={form.ratControl.presence}
+                  allowEmpty={false}
+                  onChange={(v) =>
+                    patch({
+                      ratControl: { ...form.ratControl, presence: v as PestPresence | '' },
+                    })
+                  }
+                />
+                <Text style={styles.subLabel}>写真（枚数無制限）</Text>
+                <PhotoSection
+                  photos={form.ratControl.photos}
+                  onChange={(photos: ReportPhoto[]) =>
+                    patch({ ratControl: { ...form.ratControl, photos } })
+                  }
+                  defaultCategory="施工後"
+                />
+                <Text style={styles.hintText}>
+                  保存すると、この店舗のネズミ駆除契約（ネズミタブ）の点検履歴にも自動で追加されます。
+                </Text>
+              </View>
+            )}
           </Card>
 
           {/* ── トッピング ── */}

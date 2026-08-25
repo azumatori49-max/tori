@@ -32,6 +32,12 @@ export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
       presence: r.pestControl?.presence ?? '',
       photos: normPhotos(r.pestControl?.photos),
     },
+    ratControl: {
+      done: r.ratControl?.done ?? false,
+      work: r.ratControl?.work ?? '',
+      presence: r.ratControl?.presence ?? '',
+      photos: normPhotos(r.ratControl?.photos),
+    },
     diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: normPhotos(d.photos) })),
     annualSchedule: r.annualSchedule
       ? { ...r.annualSchedule, photos: normPhotos(r.annualSchedule.photos) }

@@ -34,6 +34,18 @@ export interface ChecklistItem {
 /** 害虫の状況（いるかいないか） */
 export type PestPresence = '多い' | '少ない' | '見ない';
 
+/** ネズミ駆除（レポート内の記録欄・任意） */
+export interface RatControl {
+  /** 実施したか */
+  done: boolean;
+  /** 作業内容（ベイト交換・トラップ設置・侵入口チェックなど） */
+  work: string;
+  /** 発生状況（多い/少ない/見ない） */
+  presence: PestPresence | '';
+  /** 写真（枚数無制限） */
+  photos: ReportPhoto[];
+}
+
 /** 害虫駆除 */
 export interface PestControl {
   /** 基本駆除 */
@@ -139,6 +151,8 @@ export interface MaintenanceReport {
   checklist: ChecklistItem[];
   /** 害虫駆除 */
   pestControl: PestControl;
+  /** ネズミ駆除（任意） */
+  ratControl: RatControl;
   /** トッピング */
   toppings: ToppingItem[];
   /** プチDIY */

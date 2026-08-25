@@ -58,9 +58,10 @@ export async function uploadReportPhotos(
   report: MaintenanceReport,
   orgId: string,
 ): Promise<MaintenanceReport> {
-  const [photos, pestPhotos, annualPhotos, checklist, diy] = await Promise.all([
+  const [photos, pestPhotos, ratPhotos, annualPhotos, checklist, diy] = await Promise.all([
     uploadPhotoList(report.photos, orgId),
     uploadPhotoList(report.pestControl.photos, orgId),
+    uploadPhotoList(report.ratControl.photos, orgId),
     uploadPhotoList(report.annualSchedule.photos, orgId),
     Promise.all(
       report.checklist.map(async (item) => ({
@@ -81,6 +82,7 @@ export async function uploadReportPhotos(
     checklist,
     diy,
     pestControl: { ...report.pestControl, photos: pestPhotos },
+    ratControl: { ...report.ratControl, photos: ratPhotos },
     annualSchedule: { ...report.annualSchedule, photos: annualPhotos },
   };
 }

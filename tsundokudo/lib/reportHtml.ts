@@ -74,6 +74,7 @@ function buildReportBody(report: ReportLike, issuer?: string): string {
     .join('');
 
   const pest = report.pestControl;
+  const rat = report.ratControl;
 
   // トッピング（定型＋追加分すべて表示）
   const toppingRows = report.toppings
@@ -127,6 +128,7 @@ function buildReportBody(report: ReportLike, issuer?: string): string {
       c.photos.map((p) => ({ ...p, caption: p.caption || c.name })),
     ),
     ...report.pestControl.photos.map((p) => ({ ...p, caption: p.caption || '害虫駆除' })),
+    ...(report.ratControl?.photos ?? []).map((p) => ({ ...p, caption: p.caption || 'ネズミ駆除' })),
     ...report.diy.flatMap((d) =>
       d.photos.map((p) => ({ ...p, caption: p.caption || d.name || 'プチDIY' })),
     ),
@@ -199,6 +201,12 @@ function buildReportBody(report: ReportLike, issuer?: string): string {
     <div class="pi">強殺虫剤 ${cb(pest.strongPesticide)}</div>
     <div class="pi">害虫の状況：<b>${esc(pest.presence) || '—'}</b></div>
   </div>
+
+  ${!rat?.done ? '' : `<div class="pest">
+    <div class="ph">ネズミ駆除</div>
+    <div class="pi">${esc(rat.work) || '実施'}</div>
+    <div class="pi">発生状況：<b>${esc(rat.presence) || '—'}</b></div>
+  </div>`}
 
   <div class="band cream mt">トッピング（追加施工）</div>
   <table class="grid">

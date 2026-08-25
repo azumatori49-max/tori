@@ -688,29 +688,47 @@ export default function ReportFormScreen() {
                     })
                   }
                 />
-                <Field label="初回施工費（税抜・円）">
-                  <Input
-                    value={form.ratControl.initialFee ? String(form.ratControl.initialFee) : ''}
-                    onChangeText={(v) =>
-                      patch({ ratControl: { ...form.ratControl, initialFee: toNum(v) } })
+                {(form.ratControl.initialFee > 0 || form.ratControl.monthlyFee > 0) && (
+                  <View style={styles.ratFeeBox}>
+                    {form.ratControl.initialFee > 0 && (
+                      <View style={styles.ratFeeRow}>
+                        <Text style={styles.ratFeeLabel}>初回施工費（税抜）</Text>
+                        <Text style={styles.ratFeeVal}>¥{yen(form.ratControl.initialFee)}</Text>
+                      </View>
+                    )}
+                    {form.ratControl.monthlyFee > 0 && (
+                      <View style={styles.ratFeeRow}>
+                        <Text style={styles.ratFeeLabel}>月額料金（税抜）</Text>
+                        <Text style={styles.ratFeeVal}>¥{yen(form.ratControl.monthlyFee)}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.hintText}>
+                      料金表から自動計算され、請求額（税込）とPDFの請求内訳に反映されます。
+                    </Text>
+                  </View>
+                )}
+                <CheckBox
+                  checked={form.ratControl.initialFee === 0 && form.ratControl.monthlyFee === 0}
+                  label="今回は料金を請求しない"
+                  size={20}
+                  onToggle={() => {
+                    const off =
+                      form.ratControl.initialFee === 0 && form.ratControl.monthlyFee === 0;
+                    if (!off) {
+                      patch({ ratControl: { ...form.ratControl, initialFee: 0, monthlyFee: 0 } });
+                    } else {
+                      // 料金表から復元（契約あり: 月額のみ / なし: 坪数から初回＋月額）
+                      const p = ratContract ? ratPricing(ratContract.tsubo) : ratPricing(ratTsubo);
+                      patch({
+                        ratControl: {
+                          ...form.ratControl,
+                          initialFee: ratContract ? 0 : (p?.initialFee ?? 0),
+                          monthlyFee: p?.monthlyFee ?? 0,
+                        },
+                      });
                     }
-                    placeholder="初回のみ。請求しない場合は空欄"
-                    keyboardType="number-pad"
-                  />
-                </Field>
-                <Field label="月額料金（税抜・円）">
-                  <Input
-                    value={form.ratControl.monthlyFee ? String(form.ratControl.monthlyFee) : ''}
-                    onChangeText={(v) =>
-                      patch({ ratControl: { ...form.ratControl, monthlyFee: toNum(v) } })
-                    }
-                    placeholder="請求しない場合は空欄"
-                    keyboardType="number-pad"
-                  />
-                </Field>
-                <Text style={styles.hintText}>
-                  入力した料金は下の請求額（税込）に自動で加算され、PDFの請求内訳にも表示されます。
-                </Text>
+                  }}
+                />
                 <Text style={styles.subLabel}>写真（枚数無制限）</Text>
                 <PhotoSection
                   photos={form.ratControl.photos}
@@ -1091,6 +1109,15 @@ const styles = StyleSheet.create({
   },
   ratInfoTitle: { fontSize: 13, fontWeight: '800', color: C.primaryDark, marginBottom: 6 },
   ratPriceLine: { fontSize: 12.5, fontWeight: '700', color: C.primaryDark, marginBottom: 6 },
+  ratFeeBox: {
+    backgroundColor: C.primaryLight,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  ratFeeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
+  ratFeeLabel: { fontSize: 13, color: C.textSub },
+  ratFeeVal: { fontSize: 14, fontWeight: '800', color: C.primaryDark },
   issueBadge: { fontSize: 10, fontWeight: '800', color: '#9A6B00' },
   issueCard: { borderColor: '#F0C36D', borderWidth: 1.5, backgroundColor: '#FFFBF2' },
   issueRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 },

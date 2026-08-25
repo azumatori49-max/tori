@@ -5,7 +5,7 @@
  *   /report/new   … 新規作成（任意で ?store= で店舗を初期指定）
  *   /report/:id   … 既存レポートの編集
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { useRatStore } from '@/store/ratStore';
+import { addMonths, ratPricing, ratStatus } from '@/lib/ratPlan';
 import { useIsViewer } from '@/store/authStore';
 import { confirmAsync, notify } from '@/lib/dialog';
 import {
@@ -100,6 +101,19 @@ export default function ReportFormScreen() {
 
   // 次回の課題の入力欄
   const [issueDraft, setIssueDraft] = useState('');
+
+  // ネズミ駆除: 店舗の契約照合（新規契約の自動作成用の坪数入力つき）
+  const ratContracts = useRatStore((s) => s.contracts);
+  const ratHydrated = useRatStore((s) => s.hydrated);
+  const [ratTsubo, setRatTsubo] = useState(0);
+  useEffect(() => {
+    if (!ratHydrated) void useRatStore.getState().hydrate();
+  }, [ratHydrated]);
+  const compactName = (x: string) => x.replace(/[\s　]/g, '');
+  const ratContract = ratContracts.find(
+    (c) => compactName(c.storeName) === compactName(form.storeName) && form.storeName.trim() !== '',
+  );
+  const ratNewPrice = ratPricing(ratTsubo);
 
   /** 店舗の前回レポートの「次回の課題」を引き継ぐ（達成チェック用） */
   function issuesForStore(name: string) {
@@ -209,7 +223,10 @@ export default function ReportFormScreen() {
     else router.replace('/reports');
   }
 
-  /** ネズミ駆除を実施したレポートを、店舗のネズミ契約の点検履歴に追加する */
+  /**
+   * ネズミ駆除を実施したレポートを店舗のネズミ契約に反映する。
+   * 契約が無ければ年間契約を自動作成（開始日＝施工日、満了日＝1年後）。
+   */
   async function appendRatVisit(f: MaintenanceReportInsert) {
     try {
       const rat = useRatStore.getState();
@@ -218,26 +235,35 @@ export default function ReportFormScreen() {
       const contract = useRatStore
         .getState()
         .contracts.find((c) => compact(c.storeName) === compact(f.storeName));
-      if (!contract) return;
       const today = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
       const date = /^\d{4}-\d{1,2}-\d{1,2}$/.test(f.workDate)
         ? f.workDate
         : `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-      await useRatStore.getState().updateContract(contract.id, {
-        visits: [
-          {
-            id: `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
-            date,
-            work: f.ratControl.work,
-            presence: f.ratControl.presence,
-            photos: f.ratControl.photos,
-          },
-          ...contract.visits,
-        ],
-      });
+      const visit = {
+        id: `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+        date,
+        work: f.ratControl.work,
+        presence: f.ratControl.presence,
+        photos: f.ratControl.photos,
+      };
+      if (contract) {
+        await useRatStore.getState().updateContract(contract.id, {
+          visits: [visit, ...contract.visits],
+        });
+      } else {
+        await useRatStore.getState().createContract({
+          storeName: f.storeName.trim(),
+          tsubo: ratTsubo,
+          startDate: date,
+          endDate: addMonths(date, 12),
+          renewals: [],
+          note: '',
+          visits: [visit],
+        });
+      }
     } catch {
-      // レポート本体の保存は成功しているため、履歴追加の失敗は握りつぶす
+      // レポート本体の保存は成功しているため、契約側の失敗は握りつぶす
     }
   }
 
@@ -657,9 +683,41 @@ export default function ReportFormScreen() {
                   }
                   defaultCategory="施工後"
                 />
-                <Text style={styles.hintText}>
-                  保存すると、この店舗のネズミ駆除契約（ネズミタブ）の点検履歴にも自動で追加されます。
-                </Text>
+                {ratContract ? (
+                  <View style={styles.ratInfoBox}>
+                    <Text style={styles.ratInfoTitle}>
+                      この店舗は契約{ratStatus(ratContract).key === 'expired' ? '終了' : '中'}
+                      （{ratStatus(ratContract).key === 'expired'
+                        ? `満了から${-ratStatus(ratContract).daysLeft}日`
+                        : `満了まで残り${ratStatus(ratContract).daysLeft}日`}）
+                    </Text>
+                    <Text style={styles.hintText}>
+                      保存すると、ネズミタブの点検履歴に自動で追加されます。
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.ratInfoBox}>
+                    <Text style={styles.ratInfoTitle}>この店舗はまだネズミ駆除契約がありません</Text>
+                    <Field label="坪数（契約の自動作成用）">
+                      <Input
+                        value={ratTsubo ? String(ratTsubo) : ''}
+                        onChangeText={(v) => setRatTsubo(toNum(v))}
+                        placeholder="例: 25"
+                        keyboardType="number-pad"
+                      />
+                    </Field>
+                    {ratNewPrice && (
+                      <Text style={styles.ratPriceLine}>
+                        {ratNewPrice.tier}：初回 ¥{yen(ratNewPrice.initialFee)} ／ 月額 ¥
+                        {yen(ratNewPrice.monthlyFee)}（税抜・年間契約）
+                      </Text>
+                    )}
+                    <Text style={styles.hintText}>
+                      保存すると年間契約を自動作成します（開始日＝施工日、満了日＝1年後）。
+                      管理はネズミタブで行えます。
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </Card>
@@ -978,6 +1036,14 @@ const styles = StyleSheet.create({
   subLabel: { fontSize: 12, fontWeight: '600', color: C.textSub, marginBottom: 6, marginTop: 10 },
   required: { fontSize: 10, fontWeight: '800', color: C.danger },
   optionalTag: { fontSize: 10, fontWeight: '700', color: C.textFaint },
+  ratInfoBox: {
+    marginTop: 10,
+    backgroundColor: C.primaryLight,
+    borderRadius: 12,
+    padding: 12,
+  },
+  ratInfoTitle: { fontSize: 13, fontWeight: '800', color: C.primaryDark, marginBottom: 6 },
+  ratPriceLine: { fontSize: 12.5, fontWeight: '700', color: C.primaryDark, marginBottom: 6 },
   issueBadge: { fontSize: 10, fontWeight: '800', color: '#9A6B00' },
   issueCard: { borderColor: '#F0C36D', borderWidth: 1.5, backgroundColor: '#FFFBF2' },
   issueRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 },

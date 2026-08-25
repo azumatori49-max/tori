@@ -9,7 +9,6 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useRatStore } from '@/store/ratStore';
-import { useIsViewer } from '@/store/authStore';
 import { ratPricing, ratStatus, type RatStatusKey } from '@/lib/ratPlan';
 import { yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
@@ -65,7 +64,6 @@ export default function RatScreen() {
   const contracts = useRatStore((s) => s.contracts);
   const hydrated = useRatStore((s) => s.hydrated);
   const hydrate = useRatStore((s) => s.hydrate);
-  const isViewer = useIsViewer();
 
   useEffect(() => {
     if (!hydrated) void hydrate();
@@ -115,22 +113,16 @@ export default function RatScreen() {
         {sorted.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>まだ契約がありません</Text>
-            <Text style={styles.emptySub}>右下のボタンから店舗の契約を登録できます</Text>
+            <Text style={styles.emptySub}>
+              レポート作成の「ネズミ駆除」欄で実施を記録すると、{'\n'}
+              契約が自動で作られてここに表示されます
+            </Text>
           </View>
         ) : (
           sorted.map((c) => <ContractCard key={c.id} c={c} />)
         )}
       </ScrollView>
 
-      {!isViewer && (
-        <Pressable
-          style={[styles.fab, { bottom: insets.bottom + 20 }]}
-          onPress={() => router.push('/rat/new')}
-        >
-          <Text style={styles.fabPlus}>＋</Text>
-          <Text style={styles.fabText}>新規契約</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -169,22 +161,4 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 16, fontWeight: '700', color: C.textSub },
   emptySub: { fontSize: 13, color: C.textFaint, marginTop: 6 },
-  fab: {
-    position: 'absolute',
-    right: 18,
-    backgroundColor: C.primary,
-    borderRadius: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 6,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  fabPlus: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  fabText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

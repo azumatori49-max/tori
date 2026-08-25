@@ -79,10 +79,10 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if (
-        // 会社の管理者: コード再発行のみ
+        // 会社の管理者: コード再発行と会社名の変更のみ
         isAdmin(orgId)
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['inviteCode', 'viewerToken'])
+             .hasOnly(['inviteCode', 'viewerToken', 'name'])
       ) || (
         // 運営者: 利用開始の承認/停止のみ
         isOperator()
@@ -118,6 +118,9 @@ service cloud.firestore {
         || getAfter(/databases/$(db)/documents/orgs/$(request.resource.data.orgId)).data.createdBy
            == request.auth.uid
       );
+      // 会社名変更時に表示名を追従させる（組織の付け替えは不可）
+      allow update: if isAdmin(resource.data.orgId)
+        && request.resource.data.orgId == resource.data.orgId;
       allow delete: if isAdmin(resource.data.orgId);
     }
 

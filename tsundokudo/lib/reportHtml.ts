@@ -45,7 +45,7 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
   </section>`;
 }
 
-function buildReportBody(report: ReportLike): string {
+function buildReportBody(report: ReportLike, issuer?: string): string {
   const b = calcBilling(report);
   const isOrder = report.reportType === 'order';
   const docTitle = isOrder ? 'オーダー工事報告書' : 'メンテナンス報告書';
@@ -230,6 +230,8 @@ function buildReportBody(report: ReportLike): string {
   ${nextIssueRows ? `<div class="band cream small mt">次回の課題</div>
   <div class="cmt">${nextIssueRows}</div>` : ''}`}
 
+  ${issuer ? `<div class="issuer">発行元：${esc(issuer)}</div>` : ''}
+
   ${photoSheet(allPhotos)}`;
 }
 
@@ -317,6 +319,9 @@ const DOC_OPEN = `<!DOCTYPE html>
   .annual-body { border:1px solid var(--bd); border-top:none; padding:6px 8px; white-space:pre-wrap; min-height:30px; }
   .cmt { border:1px solid var(--bd); border-top:none; padding:6px 8px; white-space:pre-wrap; min-height:34px; }
 
+  /* 発行元 */
+  .issuer { margin-top:10px; text-align:right; font-size:10.5px; font-weight:700; }
+
   /* 課題 */
   .issue-row { display:flex; align-items:center; gap:6px; padding:2px 0; }
   .issue-row .done { text-decoration:line-through; color:#666; }
@@ -335,16 +340,16 @@ const DOC_OPEN = `<!DOCTYPE html>
 `;
 const DOC_CLOSE = `</body>\n</html>`;
 
-export function buildReportHtml(report: ReportLike): string {
-  return DOC_OPEN + buildReportBody(report) + DOC_CLOSE;
+export function buildReportHtml(report: ReportLike, issuer?: string): string {
+  return DOC_OPEN + buildReportBody(report, issuer) + DOC_CLOSE;
 }
 
 /** 複数レポートを1つのPDF（レポートごとに改ページ）にまとめる */
-export function buildReportsHtml(reports: ReportLike[]): string {
+export function buildReportsHtml(reports: ReportLike[], issuer?: string): string {
   return (
     DOC_OPEN +
     reports
-      .map(buildReportBody)
+      .map((r) => buildReportBody(r, issuer))
       .join('<div style="page-break-before:always"></div>') +
     DOC_CLOSE
   );

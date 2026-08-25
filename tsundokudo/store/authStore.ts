@@ -89,6 +89,8 @@ interface AuthState {
   enterGuestByToken: (token: string) => Promise<boolean>;
   /** 招待コード/閲覧リンクの再発行（adminのみ） */
   rotateOrgCode: (kind: 'invite' | 'viewer') => Promise<boolean>;
+  /** 会社名（組織名）を変更する（管理者のみ） */
+  renameOrg: (name: string) => Promise<boolean>;
   /** 組織情報を再取得（承認待ち画面の「状態を確認」用） */
   refreshOrg: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -302,6 +304,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     } finally {
       guestEntryInProgress = false;
+    }
+  },
+
+  renameOrg: async (name) => {
+    const org = get().org;
+    const next = name.trim();
+    if (!fbDb || !org || !next) return false;
+    try {
+      const batch = writeBatch(fbDb);
+      batch.update(doc(fbDb, 'orgs', org.id), { name: next });
+      // 閲覧リンクの表示名も追従させる
+      batch.update(doc(fbDb, 'viewerLinks', org.viewerToken), { orgName: next });
+      await batch.commit();
+      set({ org: { ...org, name: next } });
+      return true;
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : '会社名を変更できませんでした。' });
+      return false;
     }
   },
 

@@ -239,6 +239,9 @@ export default function SettingsScreen() {
   const updateSettings = useReportStore((s) => s.updateSettings);
   // 店舗マスタの一括登録（貼り付け）
   const [bulkStores, setBulkStores] = useState('');
+  // 会社名の変更
+  const [orgNameDraft, setOrgNameDraft] = useState('');
+  const renameOrg = useAuthStore((s) => s.renameOrg);
   const user = useAuthStore((s) => s.user);
   const org = useAuthStore((s) => s.org);
   const guestOrg = useAuthStore((s) => s.guestOrg);
@@ -308,6 +311,39 @@ export default function SettingsScreen() {
                   <Text style={styles.accountNote}>
                     あなたの権限: {org.role === 'admin' ? '管理者' : 'メンバー'}
                   </Text>
+
+                  {org.role === 'admin' && (
+                    <>
+                      <View style={styles.divider} />
+                      <Text style={styles.shareTitle}>会社名の変更</Text>
+                      <Text style={styles.accountNote}>
+                        社名変更時はこちらで更新してください。報告書PDFの発行元にも反映されます。
+                      </Text>
+                      <Input
+                        value={orgNameDraft}
+                        onChangeText={setOrgNameDraft}
+                        placeholder={org.name}
+                      />
+                      <View style={{ height: 8 }} />
+                      <Button
+                        title="会社名を変更する"
+                        variant="ghost"
+                        onPress={() => {
+                          void (async () => {
+                            const v = orgNameDraft.trim();
+                            if (!v || v === org.name) return;
+                            const ok = await renameOrg(v);
+                            if (ok) {
+                              setOrgNameDraft('');
+                              notify('会社名を変更しました', `新しい会社名: ${v}`);
+                            } else {
+                              notify('変更できませんでした', useAuthStore.getState().error ?? '');
+                            }
+                          })();
+                        }}
+                      />
+                    </>
+                  )}
 
                   {org.role === 'admin' && (
                     <>

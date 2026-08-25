@@ -13,6 +13,7 @@ import * as Sharing from 'expo-sharing';
 import { buildReportHtml, buildReportsHtml, reportFileName } from '@/lib/reportHtml';
 import { officialStoreName } from '@/lib/storeNames';
 import { useReportStore } from '@/store/reportStore';
+import { useAuthStore } from '@/store/authStore';
 import type { MaintenanceReport, MaintenanceReportInsert } from '@/types/report';
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
@@ -26,6 +27,12 @@ function withOfficialName<T extends ReportLike>(report: T): T {
   if (!isToriyaro) return report;
   const master = useReportStore.getState().settings.stores;
   return { ...report, storeName: officialStoreName(report.storeName, master) };
+}
+
+/** 発行元（自社名）。ログイン組織 or 閲覧リンクの組織名 */
+function issuerName(): string {
+  const a = useAuthStore.getState();
+  return a.org?.name ?? a.guestOrg?.name ?? '';
 }
 
 export interface ExportResult {
@@ -82,7 +89,7 @@ export async function exportReportsPdf(
   fileName: string,
 ): Promise<ExportResult> {
   if (reports.length === 0) return { ok: false, message: '対象のレポートがありません。' };
-  const html = buildReportsHtml(reports.map(withOfficialName));
+  const html = buildReportsHtml(reports.map(withOfficialName), issuerName());
 
   if (Platform.OS === 'web') {
     return printOnWeb(html, fileName);
@@ -102,7 +109,7 @@ export async function exportReportsPdf(
 
 export async function exportReportPdf(rawReport: ReportLike): Promise<ExportResult> {
   const report = withOfficialName(rawReport);
-  const html = buildReportHtml(report);
+  const html = buildReportHtml(report, issuerName());
   const fileName = reportFileName(report);
 
   if (Platform.OS === 'web') {

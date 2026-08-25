@@ -892,6 +892,8 @@ async function askAssistant(q){
 回答のルール：
 - データに基づいて答える。データに無いことを聞かれたら「データにありません」と伝える
 - 改善についての質問には、優先度の高い順に「どの店で・何を・どうするか」が分かる具体的な行動で答える
+- 「全店を分析して」「改善アクションを出して」と言われたら、店舗ごとに優先度の高い行動（PDCAのDo）を最大3つずつ箇条書きにし、最後に全店共通で今週やるべきことを3つまでまとめる。計画や考察は書かず行動のみ
+- 「7月の」「先月の」など期間の指定があれば、CSVの日付列でその期間の記録だけに絞って答える
 - 箇条書き中心で短く。前置きや復唱はしない
 - 店舗名・点数は正確に引用する
 
@@ -919,7 +921,7 @@ function renderChat(){
 }
 function viewAssistant(){
   const msgs=state.chat.map(m=>`<div class="msg ${m.role==="user"?"me":"ai"}">${esc(m.text).replace(/\n/g,"<br>")}</div>`).join("");
-  const sugg=["今月の要臨店はどこ？","全店で一番改善が必要な項目は？","面談で気になる店舗は？","先月から悪化した店舗は？"];
+  const sugg=["全店を分析して改善アクション（Do）を出して","今月の要臨店はどこ？","全店で一番改善が必要な項目は？","面談で気になる店舗は？","先月から悪化した店舗は？"];
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
     <button class="back-btn" id="to-home">← 戻る</button>
@@ -1032,7 +1034,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.41.0";
+const APP_VERSION="v7.42.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1575,10 +1577,11 @@ function viewHome(){
       <button class="btn sub" id="to-assistant">AIアシスタントを開く</button>
     </div>`:""}
     <div class="card">
-      <h3>ChatGPTでデータ分析</h3>
-      <p class="desc">全店舗のチェック結果をCSVデータにまとめ、分析用の指示文（プロンプト）つきでコピーします。ChatGPTに貼り付けるだけで、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案してくれます。</p>
+      <h3>データ分析（PDCAのDo）</h3>
+      <p class="desc">全店舗のチェック結果から、エリアマネージャーが実行すべき行動（PDCAのDo）だけを提案させます。アプリ内のAIアシスタントに直接分析させるか、プロンプトをコピーしてChatGPTに貼り付けるかを選べます。</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn sub" id="gpt-copy">プロンプト＋データをコピー</button>
+        ${AI_ENABLED?`<button class="btn sub" id="gpt-assistant">AIアシスタントで今すぐ分析</button>`:""}
+        <button class="btn ghost" id="gpt-copy">ChatGPT用にプロンプト＋データをコピー</button>
         <button class="btn ghost" id="csv-dl">全期間のCSVをダウンロード</button>
       </div>
       <div class="row2" style="margin-top:12px;align-items:end">
@@ -2399,6 +2402,12 @@ document.addEventListener("click",async e=>{
     state.chat=[]; kvDel("chat").catch(()=>{}); render(); return;
   }
   if(t.dataset.ask){askAssistant(t.dataset.ask);return;}
+  if(t.id==="gpt-assistant"){
+    if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
+    state.view="assistant"; render(); scrollTo(0,0);
+    askAssistant("全店舗のデータを分析して、店舗ごとに優先度の高い改善アクション（PDCAのDo）を最大3つずつ出して。最後に全店共通で今週やるべきことを3つまでまとめて。");
+    return;
+  }
   if(t.id==="chat-send"){const el=$("#chat-in");const q=(el&&el.value||"").trim();if(!q)return;el.value="";askAssistant(q);return;}
   if(t.dataset.brandsel){
     state.startBrand=state.startBrand===t.dataset.brandsel?"":t.dataset.brandsel;

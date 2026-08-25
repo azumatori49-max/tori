@@ -97,6 +97,14 @@ service cloud.firestore {
         allow create, update, delete: if (isMember(orgId) && orgActive(orgId))
           || isOperator();
       }
+
+      // ── ネズミ駆除契約（レポートと同じ権限） ──
+      match /ratContracts/{contractId} {
+        allow read: if ((isMember(orgId) || isViewer(orgId)) && orgActive(orgId))
+          || isOperator();
+        allow create, update, delete: if (isMember(orgId) && orgActive(orgId))
+          || isOperator();
+      }
     }
 
     // ── 招待コードの逆引き（コードを知っている人のみ get 可） ──

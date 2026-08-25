@@ -37,6 +37,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="stores" options={{ title: '店舗', href: isViewer ? null : undefined }} />
       {/* 請求業務（絞り込み・まとめてPDF・CSV）。閲覧専用には出さない */}
       <Tabs.Screen name="billing" options={{ title: '請求', href: isViewer ? null : undefined }} />
+      {/* ネズミ駆除サービス（年間契約・毎月点検） */}
+      <Tabs.Screen name="rat" options={{ title: 'ネズミ', href: isViewer ? null : undefined }} />
       <Tabs.Screen name="settings" options={{ title: '設定' }} />
       {/* 運営者（サービス提供者）専用ページ */}
       <Tabs.Screen name="admin" options={{ title: '運営', href: isOperator ? undefined : null }} />

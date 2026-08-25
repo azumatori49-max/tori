@@ -11,6 +11,7 @@ import type {
   AnnualSchedule,
   DiyItem,
   MaintenanceReport,
+  RatControl,
   SupplyLine,
   ToppingItem,
 } from '@/types/report';
@@ -48,6 +49,8 @@ export interface BillingBreakdown {
   diy: number;
   /** 年間スケジュール追加費用 */
   annual: number;
+  /** ネズミ駆除（初回施工費＋月額料金） */
+  rat: number;
   /** 税抜き合計 */
   taxExcluded: number;
   /** 消費税額 */
@@ -64,16 +67,20 @@ export function calcBilling(report: {
   toppings: ToppingItem[];
   diy: DiyItem[];
   annualSchedule: AnnualSchedule;
+  ratControl?: RatControl;
 }): BillingBreakdown {
   const maintenance = report.maintenanceFee || 0;
   const supplies = suppliesTotal(report.supplies);
   const toppings = toppingsTotal(report.toppings);
   const diy = diyTotal(report.diy);
   const annual = report.annualSchedule?.fee || 0;
-  const taxExcluded = maintenance + supplies + toppings + diy + annual;
+  const rat = report.ratControl?.done
+    ? (report.ratControl.initialFee || 0) + (report.ratControl.monthlyFee || 0)
+    : 0;
+  const taxExcluded = maintenance + supplies + toppings + diy + annual + rat;
   const taxIncluded = Math.round(taxExcluded * (1 + (report.taxRate || 0)));
   const tax = taxIncluded - taxExcluded;
-  return { maintenance, supplies, toppings, diy, annual, taxExcluded, tax, taxIncluded };
+  return { maintenance, supplies, toppings, diy, annual, rat, taxExcluded, tax, taxIncluded };
 }
 
 /** 千円区切りの金額表示（例: 79750 → "79,750"） */

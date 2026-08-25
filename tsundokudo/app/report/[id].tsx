@@ -486,6 +486,12 @@ export default function ReportFormScreen() {
               <Text style={styles.billLabel}>{isOrder ? 'オーダー工事' : 'プチDIY'}</Text>
               <Text style={styles.billVal}>¥{yen(billing.diy)}</Text>
             </View>
+            {!isOrder && billing.rat > 0 && (
+              <View style={styles.billRow}>
+                <Text style={styles.billLabel}>ネズミ駆除</Text>
+                <Text style={styles.billVal}>¥{yen(billing.rat)}</Text>
+              </View>
+            )}
             {!isOrder && (
               <View style={styles.billRow}>
                 <Text style={styles.billLabel}>年間スケジュール</Text>
@@ -650,9 +656,16 @@ export default function ReportFormScreen() {
             <CheckBox
               checked={form.ratControl.done}
               label="ネズミ駆除を実施した"
-              onToggle={() =>
-                patch({ ratControl: { ...form.ratControl, done: !form.ratControl.done } })
-              }
+              onToggle={() => {
+                const next = !form.ratControl.done;
+                let rc = { ...form.ratControl, done: next };
+                // 契約済み店舗なら月額料金を自動セット（手入力があれば維持）
+                if (next && ratContract && rc.monthlyFee === 0) {
+                  const p = ratPricing(ratContract.tsubo);
+                  if (p) rc = { ...rc, monthlyFee: p.monthlyFee };
+                }
+                patch({ ratControl: rc });
+              }}
             />
             {form.ratControl.done && (
               <View style={styles.checklistBody}>
@@ -675,6 +688,29 @@ export default function ReportFormScreen() {
                     })
                   }
                 />
+                <Field label="初回施工費（税抜・円）">
+                  <Input
+                    value={form.ratControl.initialFee ? String(form.ratControl.initialFee) : ''}
+                    onChangeText={(v) =>
+                      patch({ ratControl: { ...form.ratControl, initialFee: toNum(v) } })
+                    }
+                    placeholder="初回のみ。請求しない場合は空欄"
+                    keyboardType="number-pad"
+                  />
+                </Field>
+                <Field label="月額料金（税抜・円）">
+                  <Input
+                    value={form.ratControl.monthlyFee ? String(form.ratControl.monthlyFee) : ''}
+                    onChangeText={(v) =>
+                      patch({ ratControl: { ...form.ratControl, monthlyFee: toNum(v) } })
+                    }
+                    placeholder="請求しない場合は空欄"
+                    keyboardType="number-pad"
+                  />
+                </Field>
+                <Text style={styles.hintText}>
+                  入力した料金は下の請求額（税込）に自動で加算され、PDFの請求内訳にも表示されます。
+                </Text>
                 <Text style={styles.subLabel}>写真（枚数無制限）</Text>
                 <PhotoSection
                   photos={form.ratControl.photos}
@@ -701,7 +737,18 @@ export default function ReportFormScreen() {
                     <Field label="坪数（契約の自動作成用）">
                       <Input
                         value={ratTsubo ? String(ratTsubo) : ''}
-                        onChangeText={(v) => setRatTsubo(toNum(v))}
+                        onChangeText={(v) => {
+                          const t = toNum(v);
+                          setRatTsubo(t);
+                          const p = ratPricing(t);
+                          patch({
+                            ratControl: {
+                              ...form.ratControl,
+                              initialFee: p ? p.initialFee : 0,
+                              monthlyFee: p ? p.monthlyFee : 0,
+                            },
+                          });
+                        }}
                         placeholder="例: 25"
                         keyboardType="number-pad"
                       />

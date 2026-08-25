@@ -176,7 +176,8 @@ function buildReportBody(report: ReportLike, issuer?: string): string {
           ${isOrder
             ? `<div class="ibr"><span>オーダー工事</span><span>¥${yen(b.diy)}</span></div>`
             : `<div class="ibr"><span>メンテナンス</span><span>¥${yen(b.maintenance)}</span></div>
-          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}`}
+          ${extra ? `<div class="ibr"><span>追加施工</span><span>¥${yen(extra)}</span></div>` : ''}
+          ${b.rat ? `<div class="ibr"><span>ネズミ駆除</span><span>¥${yen(b.rat)}</span></div>` : ''}`}
           <div class="ibr"><span>備品・資材・廃棄</span><span>¥${yen(b.supplies)}</span></div>
         </div>
       </div>
@@ -206,6 +207,8 @@ function buildReportBody(report: ReportLike, issuer?: string): string {
     <div class="ph">ネズミ駆除</div>
     <div class="pi">${esc(rat.work) || '実施'}</div>
     <div class="pi">発生状況：<b>${esc(rat.presence) || '—'}</b></div>
+    ${rat.initialFee ? `<div class="pi">初回施工費 ¥${yen(rat.initialFee)}</div>` : ''}
+    ${rat.monthlyFee ? `<div class="pi">月額 ¥${yen(rat.monthlyFee)}</div>` : ''}
   </div>`}
 
   <div class="band cream mt">トッピング（追加施工）</div>

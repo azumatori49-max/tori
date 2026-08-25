@@ -36,6 +36,8 @@ export function normalizeReport(r: MaintenanceReport): MaintenanceReport {
       done: r.ratControl?.done ?? false,
       work: r.ratControl?.work ?? '',
       presence: r.ratControl?.presence ?? '',
+      initialFee: r.ratControl?.initialFee ?? 0,
+      monthlyFee: r.ratControl?.monthlyFee ?? 0,
       photos: normPhotos(r.ratControl?.photos),
     },
     diy: (r.diy ?? []).map((d) => ({ ...d, fee: d.fee ?? 0, photos: normPhotos(d.photos) })),

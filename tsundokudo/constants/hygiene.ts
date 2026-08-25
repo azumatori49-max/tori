@@ -127,7 +127,7 @@ export function makeDefaultReport(settings: AppSettings): MaintenanceReportInser
     diy: makeDefaultDiy(),
     supplies: [],
     photos: [],
-    ratControl: { done: false, work: '', presence: '', photos: [] },
+    ratControl: { done: false, work: '', presence: '', initialFee: 0, monthlyFee: 0, photos: [] },
     annualSchedule: { comment: '', fee: 0, photos: [] },
     prevIssues: [],
     nextIssues: [],

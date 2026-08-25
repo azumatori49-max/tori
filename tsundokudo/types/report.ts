@@ -42,6 +42,10 @@ export interface RatControl {
   work: string;
   /** 発生状況（多い/少ない/見ない） */
   presence: PestPresence | '';
+  /** 初回施工費（円・税抜。請求する場合のみ設定、0=請求なし） */
+  initialFee: number;
+  /** 月額料金（円・税抜。請求する場合のみ設定、0=請求なし） */
+  monthlyFee: number;
   /** 写真（枚数無制限） */
   photos: ReportPhoto[];
 }

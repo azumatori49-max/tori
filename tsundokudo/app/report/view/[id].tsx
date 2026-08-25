@@ -117,6 +117,7 @@ export default function ReportViewScreen() {
           {!isOrder && <Row label="メンテナンス" value={`¥${yen(billing.maintenance)}`} />}
           {!isOrder && <Row label="トッピング" value={`¥${yen(billing.toppings)}`} />}
           <Row label={isOrder ? 'オーダー工事' : 'プチDIY'} value={`¥${yen(billing.diy)}`} />
+          {!isOrder && billing.rat > 0 && <Row label="ネズミ駆除" value={`¥${yen(billing.rat)}`} />}
           {!isOrder && <Row label="年間スケジュール" value={`¥${yen(billing.annual)}`} />}
           <Row label="備品 資材 廃棄" value={`¥${yen(billing.supplies)}`} />
           <Row label="小計（税抜）" value={`¥${yen(billing.taxExcluded)}`} />
@@ -178,6 +179,12 @@ export default function ReportViewScreen() {
                 <Text style={styles.note}>{report.ratControl.work}</Text>
               )}
               <Row label="発生状況" value={report.ratControl.presence} />
+              {report.ratControl.initialFee > 0 && (
+                <Row label="初回施工費" value={`¥${yen(report.ratControl.initialFee)}`} />
+              )}
+              {report.ratControl.monthlyFee > 0 && (
+                <Row label="月額料金" value={`¥${yen(report.ratControl.monthlyFee)}`} />
+              )}
               <PhotoStrip photos={report.ratControl.photos} />
             </Card>
           </>

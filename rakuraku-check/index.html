@@ -136,6 +136,27 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .tcat{font-size:10.5px;font-weight:700;color:var(--sub);letter-spacing:.05em;margin:5px 0 1px}
 .rank-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px}
 .back-btn:disabled{opacity:.35;cursor:default}
+/* PCダッシュボード（KPIタイル）。1000px未満では表示しない */
+.dash{display:none}
+@media (min-width:1000px){
+  .dash{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;max-width:1096px;margin:18px auto 0;padding:0 16px}
+  .tile{
+    text-align:left;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.7);
+    border-radius:18px;padding:14px 16px;
+    box-shadow:0 8px 32px rgba(31,45,61,.08);
+    -webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);
+  }
+  .tile .tl{font-size:11.5px;font-weight:700;color:var(--sub);letter-spacing:.03em}
+  .tile .tv{font-size:30px;font-weight:650;line-height:1.25;margin-top:2px;color:var(--ink)}
+  .tile .tv small{font-size:13px;font-weight:600;color:var(--sub);margin-left:2px}
+  .tile .tv.small-v{font-size:16px;font-weight:700;margin-top:8px}
+  .tile .td{font-size:12px;font-weight:700;margin-top:2px;color:var(--sub)}
+  .tile .td.up{color:var(--good)}
+  .tile .td.down{color:var(--bad)}
+  .tile .ts{font-size:12px;color:var(--sub);margin-top:2px}
+  .tile-link{cursor:pointer}
+  .tile-link:hover{box-shadow:0 10px 36px rgba(31,45,61,.16)}
+}
 /* AIアシスタント */
 .ai-hbtn{
   flex:0 0 auto;border:none;border-radius:999px;padding:7px 14px;
@@ -336,10 +357,10 @@ input,select,textarea{background:rgba(255,255,255,.6);border-color:rgba(255,255,
   .card{padding:20px 22px}
   /* ホームはヒーローをカード風にし、下のカードを2カラムに並べる */
   .home-hero{max-width:1064px;margin:20px auto 0;border-radius:22px;border:1px solid rgba(255,255,255,.7);background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);box-shadow:0 8px 32px rgba(31,45,61,.08)}
-  .home-hero+.wrap{max-width:1096px;columns:2;column-gap:18px}
-  .home-hero+.wrap>*{break-inside:avoid;-webkit-column-break-inside:avoid}
-  .home-hero+.wrap>#to-admin{column-span:all}
-  .home-hero+.wrap>p{column-span:all}
+  .home-hero+.wrap,.dash+.wrap{max-width:1096px;columns:2;column-gap:18px}
+  .home-hero+.wrap>*,.dash+.wrap>*{break-inside:avoid;-webkit-column-break-inside:avoid}
+  .home-hero+.wrap>#to-admin,.dash+.wrap>#to-admin{column-span:all}
+  .home-hero+.wrap>p,.dash+.wrap>p{column-span:all}
   /* チェック画面：評価ボタンを読みやすく */
   .scale button{padding:12px 14px}
   /* 推移：グラフの棒を少し大きく */
@@ -1034,7 +1055,7 @@ let deviceGeminiKey=null;
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.42.0";
+const APP_VERSION="v7.43.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1471,6 +1492,33 @@ function carriedHomework(insp){
   if(!insp) return [];
   return [...(insp.homework||[]),...(insp.autoTasks||[])];
 }
+/* PC用ダッシュボード（KPIタイル）。スマホでは表示しない */
+function dashboardHtml(){
+  const done=state.inspections.filter(i=>i.completedAt&&!i.provisional);
+  if(!done.length) return "";
+  const cur=ymOf(todayStr()), prev=ymAdd(cur,-1);
+  const curChecks=done.filter(i=>ymOf(i.date)===cur);
+  const prevChecks=done.filter(i=>ymOf(i.date)===prev);
+  const avg=a=>a.length?Math.round(a.reduce((s,i)=>s+(i.totalScore||0),0)/a.length):null;
+  const curAvg=avg(curChecks), prevAvg=avg(prevChecks);
+  const scoreDelta=(curAvg!=null&&prevAvg!=null)?curAvg-prevAvg:null;
+  const checkDelta=prevChecks.length?curChecks.length-prevChecks.length:null;
+  const worst=storeRanking(cur)[0]||null;
+  const stores=[...new Set(done.map(i=>i.store))];
+  const alertCount=stores.reduce((n,s)=>n+storeAlerts(s).length,0);
+  const risk=dangerStores().length;
+  const deltaHtml=(d,unit)=>d==null?"":d===0?`<div class="td">先月と同じ</div>`
+    :`<div class="td ${d>0?"up":"down"}">${d>0?"▲":"▼"} ${Math.abs(d)}${unit}（先月比）</div>`;
+  const stateHtml=n=>n>0?`<div class="ts" style="color:var(--bad);font-weight:700">⚠ 要対応</div>`:`<div class="ts" style="color:var(--good);font-weight:700">✓ 問題なし</div>`;
+  return `<div class="dash no-print">
+    <div class="tile"><div class="tl">今月のチェック</div><div class="tv">${curChecks.length}<small>件</small></div>${deltaHtml(checkDelta,"件")}</div>
+    <div class="tile"><div class="tl">今月の平均総合点</div><div class="tv">${curAvg!=null?curAvg:"—"}<small>${curAvg!=null?"点":""}</small></div>${deltaHtml(scoreDelta,"点")}</div>
+    ${worst?`<button class="tile tile-link" data-trend="${esc(worst.store)}"><div class="tl">今月の最下位店舗</div><div class="tv small-v">${worst.brand?`<span style="font-size:11px;color:var(--sub);display:block">${esc(worst.brand)}</span>`:""}${esc(worst.store)}</div><div class="ts">${worst.score}点 ・ タップで推移</div></button>`
+      :`<div class="tile"><div class="tl">今月の最下位店舗</div><div class="tv small-v">—</div><div class="ts">今月のチェックなし</div></div>`}
+    <div class="tile"><div class="tl">アラート項目（全店）</div><div class="tv">${alertCount}<small>件</small></div>${stateHtml(alertCount)}</div>
+    <div class="tile"><div class="tl">面談リスク店舗</div><div class="tv">${risk}<small>店</small></div>${stateHtml(risk)}</div>
+  </div>`;
+}
 function viewHome(){
   const stores=[...new Set(state.inspections.map(i=>i.store))];
   const past=[...state.inspections].sort((a,b)=>(b.date+(b.completedAt||"")).localeCompare(a.date+(a.completedAt||"")));
@@ -1487,6 +1535,7 @@ function viewHome(){
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
     <p class="hw-meta" style="margin-top:6px">データ共有：${cloudStatusLabel()}</p>
   </div>
+  ${dashboardHtml()}
   <div class="wrap">
     ${state.draft?`
     <div class="card" style="border-color:var(--accent)">

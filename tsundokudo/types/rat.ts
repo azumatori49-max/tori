@@ -33,6 +33,10 @@ export interface RatContract {
   storeName: string;
   /** 坪数 */
   tsubo: number;
+  /** 初回施工費（円・税抜）。既定は料金表、契約ごとに変更できる */
+  initialFee: number;
+  /** 月額料金（円・税抜）。既定は料金表、契約ごとに変更できる */
+  monthlyFee: number;
   /** 契約開始日（YYYY-MM-DD） */
   startDate: string;
   /** 契約満了日（開始日の1年後。更新で延長される） */

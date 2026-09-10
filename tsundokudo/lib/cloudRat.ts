@@ -14,6 +14,7 @@ import {
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 
 import { fbDb, fbStorage } from '@/lib/firebase';
+import { ratPricing } from '@/lib/ratPlan';
 import type { RatContract } from '@/types/rat';
 import type { ReportPhoto } from '@/types/report';
 
@@ -38,9 +39,12 @@ async function uploadPhotoList(photos: ReportPhoto[], orgId: string): Promise<Re
 
 /** 旧データに不足フィールドを補完 */
 export function normalizeRatContract(c: RatContract): RatContract {
+  const table = ratPricing(c.tsubo ?? 0);
   return {
     ...c,
     tsubo: c.tsubo ?? 0,
+    initialFee: c.initialFee ?? table?.initialFee ?? 0,
+    monthlyFee: c.monthlyFee ?? table?.monthlyFee ?? 0,
     renewals: c.renewals ?? [],
     note: c.note ?? '',
     visits: (c.visits ?? []).map((v) => ({ ...v, photos: v.photos ?? [], presence: v.presence ?? '' })),

@@ -68,6 +68,8 @@ export default function RatContractScreen() {
     return {
       storeName: '',
       tsubo: 0,
+      initialFee: 0,
+      monthlyFee: 0,
       startDate: '',
       endDate: '',
       renewals: [],
@@ -228,37 +230,67 @@ export default function RatContractScreen() {
             <Field label="坪数">
               <Input
                 value={form.tsubo ? String(form.tsubo) : ''}
-                onChangeText={(v) => patch({ tsubo: toNum(v) })}
+                onChangeText={(v) => {
+                  const t = toNum(v);
+                  const table = ratPricing(t);
+                  // 坪数を変えたら料金表の金額を自動セット（下の欄で個別調整できる）
+                  patch({
+                    tsubo: t,
+                    initialFee: table?.initialFee ?? 0,
+                    monthlyFee: table?.monthlyFee ?? 0,
+                  });
+                }}
                 placeholder="例: 25"
                 keyboardType="number-pad"
               />
             </Field>
+            <Field label="初回施工費（税抜・円）">
+              <Input
+                value={form.initialFee ? String(form.initialFee) : ''}
+                onChangeText={(v) => patch({ initialFee: toNum(v) })}
+                placeholder="坪数を入れると料金表から自動入力"
+                keyboardType="number-pad"
+              />
+            </Field>
+            <Field label="月額料金（税抜・円）">
+              <Input
+                value={form.monthlyFee ? String(form.monthlyFee) : ''}
+                onChangeText={(v) => patch({ monthlyFee: toNum(v) })}
+                placeholder="坪数を入れると料金表から自動入力"
+                keyboardType="number-pad"
+              />
+            </Field>
+            <Text style={styles.hint}>
+              金額はこの契約だけに適用されます。毎月のレポートの請求にはここの金額が使われます。
+            </Text>
 
-            {/* 料金の自動表示 */}
+            {/* この契約の料金（料金表は坪数入力時の初期値） */}
             <View style={styles.priceBox}>
-              {price ? (
+              {form.initialFee > 0 || form.monthlyFee > 0 ? (
                 <>
-                  <Text style={styles.priceTier}>{price.tier}・年間契約</Text>
+                  <Text style={styles.priceTier}>
+                    この契約の料金{price ? `（料金表: ${price.tier}）` : ''}・年間契約
+                  </Text>
                   <View style={styles.priceRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.priceLabel}>初回（税抜）</Text>
                       <Text style={styles.priceDesc}>侵入口調査・穴塞ぎ施工</Text>
                     </View>
-                    <Text style={styles.priceVal}>¥{yen(price.initialFee)}</Text>
+                    <Text style={styles.priceVal}>¥{yen(form.initialFee)}</Text>
                   </View>
                   <View style={styles.priceRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.priceLabel}>毎月（税抜）</Text>
                       <Text style={styles.priceDesc}>点検、ベイト交換、トラップ設置、侵入口チェック</Text>
                     </View>
-                    <Text style={styles.priceVal}>¥{yen(price.monthlyFee)}</Text>
+                    <Text style={styles.priceVal}>¥{yen(form.monthlyFee)}</Text>
                   </View>
                 </>
               ) : (
                 <Text style={styles.priceNote}>
                   {form.tsubo > 100
-                    ? '100坪を超える場合は個別見積です'
-                    : '坪数を入力すると料金が自動表示されます'}
+                    ? '100坪を超える場合は個別見積です。下の欄に金額を入力してください'
+                    : '坪数を入力すると料金表から自動入力されます'}
                 </Text>
               )}
             </View>

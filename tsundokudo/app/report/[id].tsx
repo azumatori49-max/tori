@@ -252,9 +252,12 @@ export default function ReportFormScreen() {
           visits: [visit, ...contract.visits],
         });
       } else {
+        const table = ratPricing(ratTsubo);
         await useRatStore.getState().createContract({
           storeName: f.storeName.trim(),
           tsubo: ratTsubo,
+          initialFee: table?.initialFee ?? 0,
+          monthlyFee: table?.monthlyFee ?? 0,
           startDate: date,
           endDate: addMonths(date, 12),
           renewals: [],
@@ -659,10 +662,10 @@ export default function ReportFormScreen() {
               onToggle={() => {
                 const next = !form.ratControl.done;
                 let rc = { ...form.ratControl, done: next };
-                // 契約済み店舗なら月額料金を自動セット（手入力があれば維持）
+                // 契約済み店舗なら契約の月額料金を自動セット
                 if (next && ratContract && rc.monthlyFee === 0) {
-                  const p = ratPricing(ratContract.tsubo);
-                  if (p) rc = { ...rc, monthlyFee: p.monthlyFee };
+                  const fee = ratContract.monthlyFee || ratPricing(ratContract.tsubo)?.monthlyFee || 0;
+                  if (fee) rc = { ...rc, monthlyFee: fee };
                 }
                 patch({ ratControl: rc });
               }}
@@ -717,13 +720,16 @@ export default function ReportFormScreen() {
                     if (!off) {
                       patch({ ratControl: { ...form.ratControl, initialFee: 0, monthlyFee: 0 } });
                     } else {
-                      // 料金表から復元（契約あり: 月額のみ / なし: 坪数から初回＋月額）
-                      const p = ratContract ? ratPricing(ratContract.tsubo) : ratPricing(ratTsubo);
+                      // 復元（契約あり: 契約の月額 / なし: 坪数から料金表の初回＋月額）
+                      const p = ratPricing(ratTsubo);
                       patch({
                         ratControl: {
                           ...form.ratControl,
                           initialFee: ratContract ? 0 : (p?.initialFee ?? 0),
-                          monthlyFee: p?.monthlyFee ?? 0,
+                          monthlyFee: ratContract
+                            ? ratContract.monthlyFee ||
+                              (ratPricing(ratContract.tsubo)?.monthlyFee ?? 0)
+                            : (p?.monthlyFee ?? 0),
                         },
                       });
                     }

@@ -46,7 +46,11 @@ function ContractCard({ c }: { c: RatContract }) {
       </View>
       <Text style={styles.itemMeta}>
         {c.tsubo ? `${c.tsubo}坪` : '坪数未設定'}
-        {price ? `　月額 ¥${yen(price.monthlyFee)}` : c.tsubo > 100 ? '　要見積' : ''}
+        {c.monthlyFee || price
+          ? `　月額 ¥${yen(c.monthlyFee || price?.monthlyFee || 0)}`
+          : c.tsubo > 100
+            ? '　要見積'
+            : ''}
         {`　点検 ${c.visits.length}回`}
       </Text>
       <Text style={styles.itemMeta}>

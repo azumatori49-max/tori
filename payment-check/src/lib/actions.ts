@@ -2,14 +2,27 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { findAdminByEmail, getDb } from "./db";
+import { getStore } from "./store";
 import { verifyPassword } from "./password";
 import { createSessionCookie, destroySession, getSession } from "./session";
+import type { MemberInput } from "./types";
 
 function requireSession() {
   const session = getSession();
   if (!session) redirect("/login");
   return session;
+}
+
+function memberInputFromForm(formData: FormData): MemberInput | null {
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return null;
+  return {
+    name,
+    email: String(formData.get("email") ?? "").trim() || null,
+    phone: String(formData.get("phone") ?? "").trim() || null,
+    monthly_fee: Number(formData.get("monthly_fee") ?? 0) || 0,
+    note: String(formData.get("note") ?? "").trim() || null,
+  };
 }
 
 export async function login(
@@ -19,7 +32,8 @@ export async function login(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  const admin = findAdminByEmail(email);
+  const store = await getStore();
+  const admin = await store.findAdminByEmail(email);
   if (!admin || !verifyPassword(password, admin.password_hash)) {
     return { error: "メールアドレスまたはパスワードが正しくありません" };
   }
@@ -35,44 +49,23 @@ export async function logout(): Promise<void> {
 
 export async function addMember(formData: FormData): Promise<void> {
   requireSession();
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  const input = memberInputFromForm(formData);
+  if (!input) return;
 
-  getDb()
-    .prepare(
-      "INSERT INTO members (name, email, phone, monthly_fee, note) VALUES (?, ?, ?, ?, ?)"
-    )
-    .run(
-      name,
-      String(formData.get("email") ?? "").trim() || null,
-      String(formData.get("phone") ?? "").trim() || null,
-      Number(formData.get("monthly_fee") ?? 0) || 0,
-      String(formData.get("note") ?? "").trim() || null
-    );
+  await (await getStore()).insertMember(input);
   revalidatePath("/members");
 }
 
 export async function updateMember(formData: FormData): Promise<void> {
   requireSession();
   const id = Number(formData.get("id"));
-  const name = String(formData.get("name") ?? "").trim();
-  if (!id || !name) return;
+  const input = memberInputFromForm(formData);
+  if (!id || !input) return;
 
-  getDb()
-    .prepare(
-      `UPDATE members
-       SET name = ?, email = ?, phone = ?, monthly_fee = ?, note = ?, active = ?
-       WHERE id = ?`
-    )
-    .run(
-      name,
-      String(formData.get("email") ?? "").trim() || null,
-      String(formData.get("phone") ?? "").trim() || null,
-      Number(formData.get("monthly_fee") ?? 0) || 0,
-      String(formData.get("note") ?? "").trim() || null,
-      formData.get("active") === "on" ? 1 : 0,
-      id
-    );
+  await (await getStore()).updateMember(id, {
+    ...input,
+    active: formData.get("active") === "on",
+  });
   revalidatePath("/members");
   redirect("/members");
 }
@@ -82,7 +75,7 @@ export async function deleteMember(formData: FormData): Promise<void> {
   const id = Number(formData.get("id"));
   if (!id) return;
 
-  getDb().prepare("DELETE FROM members WHERE id = ?").run(id);
+  await (await getStore()).deleteMember(id);
   revalidatePath("/members");
 }
 
@@ -92,31 +85,7 @@ export async function togglePayment(formData: FormData): Promise<void> {
   const month = String(formData.get("month") ?? "");
   if (!memberId || !/^\d{4}-\d{2}$/.test(month)) return;
 
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT id, status FROM payments WHERE member_id = ? AND month = ?")
-    .get(memberId, month) as { id: number; status: string } | undefined;
-
-  if (existing) {
-    if (existing.status === "paid") {
-      db.prepare(
-        "UPDATE payments SET status = 'unpaid', paid_at = NULL WHERE id = ?"
-      ).run(existing.id);
-    } else {
-      db.prepare(
-        "UPDATE payments SET status = 'paid', paid_at = datetime('now', 'localtime') WHERE id = ?"
-      ).run(existing.id);
-    }
-  } else {
-    const member = db
-      .prepare("SELECT monthly_fee FROM members WHERE id = ?")
-      .get(memberId) as { monthly_fee: number } | undefined;
-    db.prepare(
-      `INSERT INTO payments (member_id, month, amount, status, paid_at)
-       VALUES (?, ?, ?, 'paid', datetime('now', 'localtime'))`
-    ).run(memberId, month, member?.monthly_fee ?? 0);
-  }
-
+  await (await getStore()).togglePayment(memberId, month);
   revalidatePath("/payments");
   revalidatePath("/dashboard");
 }
@@ -127,26 +96,12 @@ export async function updatePaymentDetail(formData: FormData): Promise<void> {
   const month = String(formData.get("month") ?? "");
   if (!memberId || !/^\d{4}-\d{2}$/.test(month)) return;
 
-  const amount = Number(formData.get("amount") ?? 0) || 0;
-  const note = String(formData.get("note") ?? "").trim() || null;
-
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT id FROM payments WHERE member_id = ? AND month = ?")
-    .get(memberId, month) as { id: number } | undefined;
-
-  if (existing) {
-    db.prepare("UPDATE payments SET amount = ?, note = ? WHERE id = ?").run(
-      amount,
-      note,
-      existing.id
-    );
-  } else {
-    db.prepare(
-      "INSERT INTO payments (member_id, month, amount, status, note) VALUES (?, ?, ?, 'unpaid', ?)"
-    ).run(memberId, month, amount, note);
-  }
-
+  await (await getStore()).upsertPaymentDetail(
+    memberId,
+    month,
+    Number(formData.get("amount") ?? 0) || 0,
+    String(formData.get("note") ?? "").trim() || null
+  );
   revalidatePath("/payments");
   revalidatePath("/dashboard");
 }

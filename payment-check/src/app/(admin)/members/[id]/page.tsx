@@ -5,12 +5,12 @@ import { updateMember } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
-export default function MemberEditPage({
+export default async function MemberEditPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const member = getMember(Number(params.id));
+  const member = await getMember(Number(params.id));
   if (!member) notFound();
 
   return (

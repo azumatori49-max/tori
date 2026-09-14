@@ -13,7 +13,11 @@
 
 - Next.js 14（App Router / Server Actions）+ TypeScript
 - Tailwind CSS
-- SQLite（better-sqlite3、`data/payment-check.db` に自動作成）
+- データベース（環境変数で自動切り替え）
+  - ローカル開発: SQLite（better-sqlite3、`data/payment-check.db` に自動作成）
+  - 本番/Vercel: PostgreSQL（`DATABASE_URL` を設定。Supabase / Neon / Vercel Postgres など）
+
+テーブルと管理者アカウントは初回アクセス時に自動作成されます。
 
 ## セットアップ
 
@@ -40,10 +44,18 @@ http://localhost:3000 を開くとログイン画面が表示されます。
 
 | 変数 | 説明 |
 | --- | --- |
+| `DATABASE_URL` | PostgreSQL接続文字列。設定するとPostgreSQL、未設定ならSQLiteを使用 |
 | `ADMIN_EMAIL` | 初期管理者のメールアドレス |
 | `ADMIN_PASSWORD` | 初期管理者のパスワード |
 | `SESSION_SECRET` | セッションCookieの署名キー（本番では必ず設定してください） |
 
-## 注意（Vercelへのデプロイについて）
+## Vercelへのデプロイ手順
 
-データ保存にファイルベースのSQLiteを使用しているため、そのままではVercelのようなサーバーレス環境ではデータが永続化されません。Vercelへデプロイする場合は、Vercel Postgres / Supabase / Turso などの外部データベースへの置き換えが必要です。
+1. PostgreSQLデータベースを用意する（Supabase / Neon / Vercel Postgres のいずれか。無料枠で十分です）
+2. Vercelでプロジェクトを作成し、**Root Directory を `payment-check` に設定**する
+3. 環境変数を設定する
+   - `DATABASE_URL` — 手順1の接続文字列（例: `postgresql://user:pass@host:5432/postgres?sslmode=require`。Supabaseの場合は「Connection string → Transaction pooler」のURLを推奨）
+   - `SESSION_SECRET` — ランダムな文字列（例: `openssl rand -hex 32` で生成）
+4. デプロイすると、初回アクセス時にテーブルと管理者アカウント（admin@toriyaro.com）が自動作成されます
+
+`DATABASE_URL` 未設定のままVercelにデプロイするとSQLiteが使われ、サーバーレス環境ではデータが永続化されないので注意してください。

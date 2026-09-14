@@ -23,10 +23,10 @@ function StatCard({
   );
 }
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
   const month = currentMonth();
-  const summary = monthSummary(month);
-  const recent = recentPaidPayments(5);
+  const summary = await monthSummary(month);
+  const recent = await recentPaidPayments(5);
 
   return (
     <div className="space-y-8">

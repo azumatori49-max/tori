@@ -10,7 +10,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default function PaymentsPage({
+export default async function PaymentsPage({
   searchParams,
 }: {
   searchParams: { month?: string };
@@ -18,8 +18,8 @@ export default function PaymentsPage({
   const month = /^\d{4}-\d{2}$/.test(searchParams.month ?? "")
     ? (searchParams.month as string)
     : currentMonth();
-  const rows = listMemberPayments(month);
-  const summary = monthSummary(month);
+  const rows = await listMemberPayments(month);
+  const summary = await monthSummary(month);
 
   return (
     <div className="space-y-6">

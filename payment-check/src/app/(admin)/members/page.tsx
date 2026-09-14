@@ -5,8 +5,8 @@ import { formatYen } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function MembersPage() {
-  const members = listMembers();
+export default async function MembersPage() {
+  const members = await listMembers();
 
   return (
     <div className="space-y-6">

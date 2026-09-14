@@ -1,21 +1,32 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import type { Role } from "./types";
 
-const COOKIE_NAME = "pc_session";
+const COOKIE_NAME = "chibic_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7日間
 
 function secret(): string {
-  return process.env.SESSION_SECRET ?? "payment-check-dev-secret";
+  return process.env.SESSION_SECRET ?? "chibic-dev-secret";
 }
 
 function sign(payload: string): string {
   return createHmac("sha256", secret()).update(payload).digest("hex");
 }
 
-export type Session = { email: string; name: string; exp: number };
+export type Session = {
+  uid: string;
+  email: string;
+  name: string;
+  role: Role;
+  storeId: string | null;
+  mustChange: boolean;
+  exp: number;
+};
 
-export function createSessionCookie(email: string, name: string): void {
-  const session: Session = { email, name, exp: Date.now() + SESSION_TTL_MS };
+export function createSessionCookie(
+  data: Omit<Session, "exp">
+): void {
+  const session: Session = { ...data, exp: Date.now() + SESSION_TTL_MS };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   cookies().set(COOKIE_NAME, `${payload}.${sign(payload)}`, {
     httpOnly: true,

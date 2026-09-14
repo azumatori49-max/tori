@@ -1,40 +1,26 @@
-import { getStore } from "./store";
-import type { Member, MemberPaymentRow, PaidPayment } from "./types";
-
-export * from "./types";
-
-export async function listMembers(): Promise<Member[]> {
-  return (await getStore()).listMembers();
+// SQLite / PostgreSQL 両対応の薄いクエリアダプタ。
+// クエリは `?` プレースホルダで書き、Postgres側で $n に変換する。
+export interface DB {
+  all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  get<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined>;
+  run(sql: string, params?: unknown[]): Promise<void>;
+  transaction<T>(fn: (tx: DB) => Promise<T>): Promise<T>;
 }
 
-export async function getMember(id: number): Promise<Member | undefined> {
-  return (await getStore()).getMember(id);
-}
+let dbPromise: Promise<DB> | null = null;
 
-export async function listMemberPayments(
-  month: string
-): Promise<MemberPaymentRow[]> {
-  return (await getStore()).listMemberPayments(month);
-}
-
-export async function recentPaidPayments(
-  limit: number
-): Promise<PaidPayment[]> {
-  return (await getStore()).recentPaidPayments(limit);
-}
-
-export async function monthSummary(month: string): Promise<{
-  total: number;
-  paid: number;
-  unpaid: number;
-  paidAmount: number;
-}> {
-  const rows = await listMemberPayments(month);
-  const paidRows = rows.filter((r) => r.payment_status === "paid");
-  return {
-    total: rows.length,
-    paid: paidRows.length,
-    unpaid: rows.length - paidRows.length,
-    paidAmount: paidRows.reduce((sum, r) => sum + (r.payment_amount ?? 0), 0),
-  };
+export function getDb(): Promise<DB> {
+  if (!dbPromise) {
+    const url = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+    dbPromise = (
+      url
+        ? import("./postgres-adapter").then((m) => m.createPostgresDb(url))
+        : import("./sqlite-adapter").then((m) => m.createSqliteDb())
+    ).then(async (db) => {
+      const { initSchema } = await import("./schema");
+      await initSchema(db);
+      return db;
+    });
+  }
+  return dbPromise;
 }

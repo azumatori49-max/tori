@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Payment Check | 入金チェックシステム",
-  description: "会員の入金状況を管理するシステム",
+  title: "CHIBIC 入金確認",
+  description: "本部の入金確認・照合システム",
 };
 
 export default function RootLayout({

@@ -1,35 +1,58 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
-import { login } from "@/lib/actions";
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-    >
-      {pending ? "ログイン中..." : "ログイン"}
-    </button>
-  );
-}
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function LoginForm() {
-  const [state, formAction] = useFormState(login, undefined);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+    const form = new FormData(e.currentTarget);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.get("email"),
+          password: form.get("password"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "ログインに失敗しました");
+        setPending(false);
+        return;
+      }
+      router.push(
+        data.mustChange
+          ? "/change-password"
+          : data.role === "hq"
+            ? "/dashboard"
+            : "/store"
+      );
+      router.refresh();
+    } catch {
+      setError("通信に失敗しました。もう一度お試しください");
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="mt-6 space-y-4">
-      {state?.error && (
-        <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
-          {state.error}
+    <form onSubmit={onSubmit} className="space-y-4">
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+          {error}
         </p>
       )}
       <div>
         <label
           htmlFor="email"
-          className="mb-1 block text-sm font-medium text-slate-700"
+          className="mb-1 block text-xs font-medium text-neutral-600"
         >
           メールアドレス
         </label>
@@ -39,14 +62,14 @@ export function LoginForm() {
           type="email"
           required
           autoComplete="email"
-          placeholder="admin@example.com"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          placeholder="your@chibic.jp"
+          className="input"
         />
       </div>
       <div>
         <label
           htmlFor="password"
-          className="mb-1 block text-sm font-medium text-slate-700"
+          className="mb-1 block text-xs font-medium text-neutral-600"
         >
           パスワード
         </label>
@@ -57,10 +80,12 @@ export function LoginForm() {
           required
           autoComplete="current-password"
           placeholder="••••••••"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          className="input"
         />
       </div>
-      <SubmitButton />
+      <button type="submit" disabled={pending} className="btn-primary w-full">
+        🔒 {pending ? "確認中..." : "ログイン"}
+      </button>
     </form>
   );
 }

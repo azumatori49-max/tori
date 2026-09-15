@@ -28,8 +28,9 @@ export function StoresClient({
   const [q, setQ] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
-  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<Store | null>(null);
+  const [csvResult, setCsvResult] = useState<{ imported: number; skipped: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [mfInput, setMfInput] = useState("");
@@ -121,7 +122,7 @@ export function StoresClient({
   }
 
   async function toggle(store: Store) {
-    setMenuFor(null);
+    setDeactivateTarget(null);
     await fetch("/api/stores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -139,10 +140,10 @@ export function StoresClient({
     });
     const data = await res.json();
     if (res.ok) {
-      alert(`店舗CSV取込: ${data.imported}件追加 / ${data.skipped}件スキップ`);
+      setCsvResult({ imported: data.imported, skipped: data.skipped });
       router.refresh();
     } else {
-      alert(data.error ?? "取込に失敗しました");
+      setError(data.error ?? "取込に失敗しました");
     }
   }
 
@@ -199,7 +200,14 @@ export function StoresClient({
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      {error && !edit && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+      )}
+      <p className="text-xs text-neutral-400">
+        CSV一括取込の列順: 店舗コード, 店舗名, エリア。登録済みのコードはスキップされます。
+      </p>
+
+      <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-neutral-200 bg-neutral-50">
             <tr>
@@ -230,46 +238,66 @@ export function StoresClient({
                     {store.active === 1 ? "有効" : "無効"}
                   </span>
                 </td>
-                <td className="td relative text-right">
-                  <button
-                    className="rounded-lg px-2 py-1 text-neutral-400 hover:bg-neutral-100"
-                    onClick={() =>
-                      setMenuFor(menuFor === store.id ? null : store.id)
-                    }
-                  >
-                    ⋮
-                  </button>
-                  {menuFor === store.id && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setMenuFor(null)}
-                      />
-                      <div className="absolute right-4 z-20 mt-1 w-32 rounded-lg border border-neutral-200 bg-white py-1 text-left shadow-lg">
-                        <button
-                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100"
-                          onClick={() => {
-                            openEdit(store);
-                            setMenuFor(null);
-                          }}
-                        >
-                          編集
-                        </button>
-                        <button
-                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100"
-                          onClick={() => toggle(store)}
-                        >
-                          {store.active === 1 ? "無効化" : "有効化"}
-                        </button>
-                      </div>
-                    </>
-                  )}
+                <td className="td text-right">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <button
+                      className="btn-outline px-2 py-1 text-xs"
+                      onClick={() => openEdit(store)}
+                    >
+                      編集
+                    </button>
+                    <button
+                      className="btn-outline px-2 py-1 text-xs"
+                      onClick={() =>
+                        store.active === 1 ? setDeactivateTarget(store) : toggle(store)
+                      }
+                    >
+                      {store.active === 1 ? "無効化" : "有効化"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-sm p-5 shadow-2xl">
+            <h3 className="font-bold">店舗を無効化しますか？</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              {deactivateTarget.name}（{deactivateTarget.code}）を無効にすると、月次グリッドやダッシュボード、CSV取込の対象から外れます。データは保持され、いつでも有効化に戻せます。
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn-outline" onClick={() => setDeactivateTarget(null)}>
+                キャンセル
+              </button>
+              <button className="btn-primary" onClick={() => toggle(deactivateTarget)}>
+                無効化する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {csvResult && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-sm p-5 shadow-2xl">
+            <h3 className="font-bold">店舗CSV取込の結果</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              {csvResult.imported}件追加 / {csvResult.skipped}件スキップ
+              {csvResult.skipped > 0 &&
+                "（コードや店舗名の不足、登録済みコードの行はスキップされます）"}
+            </p>
+            <div className="mt-4 text-right">
+              <button className="btn-primary" onClick={() => setCsvResult(null)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {edit && (
         <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-10">

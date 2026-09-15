@@ -2,18 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { UserMenu } from "./user-menu";
+import { NavLinks } from "./nav-links";
 
 export const dynamic = "force-dynamic";
-
-const navItems = [
-  { href: "/dashboard", label: "ダッシュボード" },
-  { href: "/grid", label: "月次グリッド" },
-  { href: "/import/mf", label: "MF入金CSV" },
-  { href: "/import/pos", label: "POS売上CSV" },
-  { href: "/history", label: "取込履歴" },
-  { href: "/master/users", label: "ユーザー" },
-  { href: "/master/stores", label: "店舗" },
-];
 
 export default function HqLayout({
   children,
@@ -39,17 +30,7 @@ export default function HqLayout({
               </span>
               <span className="text-sm">入金確認システム</span>
             </Link>
-            <nav className="flex items-center gap-0.5 overflow-x-auto text-sm">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <NavLinks />
           </div>
           <UserMenu name={session.name} />
         </div>

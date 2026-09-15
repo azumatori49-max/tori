@@ -24,9 +24,14 @@ export function UsersClient({
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
-  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<Row | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [csvResult, setCsvResult] = useState<{
+    imported: number;
+    skipped: number;
+    created: Array<{ email: string; password: string }>;
+  } | null>(null);
   const [issued, setIssued] = useState<{ title: string; email: string; password: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const csvInput = useRef<HTMLInputElement>(null);
@@ -59,15 +64,11 @@ export function UsersClient({
     const text = await file.text();
     const data = await post({ action: "importCsv", csvText: text });
     if (data) {
-      alert(
-        `ユーザーCSV取込: ${data.imported}件追加 / ${data.skipped}件スキップ\n` +
-          (data.created ?? [])
-            .map(
-              (c: { email: string; password: string }) =>
-                `${c.email} → 初期パスワード: ${c.password}`
-            )
-            .join("\n")
-      );
+      setCsvResult({
+        imported: data.imported,
+        skipped: data.skipped,
+        created: data.created ?? [],
+      });
       router.refresh();
     }
   }
@@ -95,8 +96,8 @@ export function UsersClient({
           onChange={(e) => setRoleFilter(e.target.value)}
         >
           <option value="">全ロール</option>
-          <option value="hq">hq</option>
-          <option value="store_staff">store_staff</option>
+          <option value="hq">hq（本部担当者）</option>
+          <option value="store_staff">store_staff（店舗担当者）</option>
         </select>
         <select
           className="input w-32"
@@ -108,7 +109,11 @@ export function UsersClient({
           <option value="inactive">無効</option>
         </select>
         <div className="ml-auto flex gap-2">
-          <button className="btn-outline" onClick={() => csvInput.current?.click()}>
+          <button
+            className="btn-outline"
+            onClick={() => csvInput.current?.click()}
+            title="列の順番: 氏名, メールアドレス, ロール(hq / store_staff), 店舗コード（store_staffの場合）"
+          >
             CSV取込
           </button>
           <input
@@ -128,7 +133,11 @@ export function UsersClient({
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <p className="text-xs text-neutral-400">
+        CSV一括取込の列順: 氏名, メールアドレス, ロール（hq または store_staff）, 店舗コード（店舗担当者のみ）。初期パスワードは自動生成され、取込後に一覧表示されます。
+      </p>
+
+      <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-neutral-200 bg-neutral-50">
             <tr>
@@ -171,54 +180,30 @@ export function UsersClient({
                 <td className="td text-neutral-500">
                   {fmtDateTime(user.last_login_at)}
                 </td>
-                <td className="td relative text-right">
-                  <button
-                    className="rounded-lg px-2 py-1 text-neutral-400 hover:bg-neutral-100"
-                    onClick={() =>
-                      setMenuFor(menuFor === user.id ? null : user.id)
-                    }
-                  >
-                    ⋮
-                  </button>
-                  {menuFor === user.id && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setMenuFor(null)}
-                      />
-                      <div className="absolute right-4 z-20 mt-1 w-44 rounded-lg border border-neutral-200 bg-white py-1 text-left shadow-lg">
-                        <button
-                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100"
-                          onClick={() => {
-                            setResetTarget(user);
-                            setMenuFor(null);
-                          }}
-                        >
-                          パスワードリセット
-                        </button>
-                        <button
-                          className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100"
-                          onClick={async () => {
-                            setMenuFor(null);
-                            const data = await post({ action: "toggle", id: user.id });
-                            if (data) router.refresh();
-                          }}
-                        >
-                          {user.active === 1 ? "無効化" : "有効化"}
-                        </button>
-                        <button
-                          className="block w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50"
-                          onClick={async () => {
-                            setMenuFor(null);
-                            const data = await post({ action: "delete", id: user.id });
-                            if (data) router.refresh();
-                          }}
-                        >
-                          削除
-                        </button>
-                      </div>
-                    </>
-                  )}
+                <td className="td text-right">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <button
+                      className="btn-outline px-2 py-1 text-xs"
+                      onClick={() => setResetTarget(user)}
+                    >
+                      パスワードリセット
+                    </button>
+                    <button
+                      className="btn-outline px-2 py-1 text-xs"
+                      onClick={async () => {
+                        const data = await post({ action: "toggle", id: user.id });
+                        if (data) router.refresh();
+                      }}
+                    >
+                      {user.active === 1 ? "無効化" : "有効化"}
+                    </button>
+                    <button
+                      className="btn-outline border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                      onClick={() => setDeleteTarget(user)}
+                    >
+                      削除
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -252,6 +237,65 @@ export function UsersClient({
             router.refresh();
           }}
         />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-sm p-5 shadow-2xl">
+            <h3 className="font-bold">ユーザーを削除しますか？</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              {deleteTarget.name}（{deleteTarget.email}）を削除します。この操作は元に戻せません。ログインだけ止めたい場合は「無効化」を使ってください。
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn-outline" onClick={() => setDeleteTarget(null)}>
+                キャンセル
+              </button>
+              <button
+                className="btn-primary bg-red-600 hover:bg-red-700"
+                onClick={async () => {
+                  const data = await post({ action: "delete", id: deleteTarget.id });
+                  setDeleteTarget(null);
+                  if (data) router.refresh();
+                }}
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {csvResult && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-md p-5 shadow-2xl">
+            <h3 className="font-bold">ユーザーCSV取込の結果</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              {csvResult.imported}件追加 / {csvResult.skipped}件スキップ
+              {csvResult.skipped > 0 &&
+                "（必須項目の不足、メールアドレスの重複、存在しない店舗コードの行はスキップされます）"}
+            </p>
+            {csvResult.created.length > 0 && (
+              <>
+                <p className="mt-3 text-xs font-medium text-neutral-600">
+                  初期パスワード（この画面でしか表示されません）
+                </p>
+                <div className="mt-1 max-h-60 overflow-y-auto rounded-lg bg-neutral-100 p-3 font-mono text-xs">
+                  {csvResult.created.map((c) => (
+                    <div key={c.email} className="flex justify-between gap-3 py-0.5">
+                      <span className="truncate">{c.email}</span>
+                      <span className="shrink-0 font-bold">{c.password}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <div className="mt-4 text-right">
+              <button className="btn-primary" onClick={() => setCsvResult(null)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {issued && (

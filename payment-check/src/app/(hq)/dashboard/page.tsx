@@ -108,12 +108,15 @@ export default async function DashboardPage() {
       {/* 差額あり（未確認） */}
       <section>
         <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-neutral-900">
-          差額あり（未確認） — {formatMonth(month)}
+          差額あり（未確認）
           <span className="badge border border-neutral-200 bg-white text-neutral-500">
             {data.diffRows.length}件
           </span>
+          <span className="text-xs font-normal text-neutral-400">
+            直近6か月分・日付の新しい順
+          </span>
         </h2>
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           {data.diffRows.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-neutral-400">
               未確認の差額はありません
@@ -144,7 +147,7 @@ export default async function DashboardPage() {
                         href={`/grid?store=${row.storeId}&month=${row.month}`}
                         className="text-xs text-neutral-500 underline hover:text-neutral-900"
                       >
-                        月次グリッド →
+                        月次グリッドで確認 →
                       </Link>
                     </td>
                   </tr>
@@ -160,7 +163,7 @@ export default async function DashboardPage() {
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">
           4日連続入金なし
         </h2>
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           {data.noDepositStores.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-neutral-400">
               該当する店舗はありません

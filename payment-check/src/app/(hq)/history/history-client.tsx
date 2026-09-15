@@ -34,7 +34,6 @@ function StatusBadge({ row }: { row: Row }) {
 export function HistoryClient({ imports }: { imports: Row[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<"mf" | "pos">("mf");
-  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [detail, setDetail] = useState<Row | null>(null);
   const [rollbackTarget, setRollbackTarget] = useState<Row | null>(null);
   const [newMenu, setNewMenu] = useState(false);
@@ -116,7 +115,7 @@ export function HistoryClient({ imports }: { imports: Row[] }) {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-x-auto">
         {rows.length === 0 ? (
           <p className="px-4 py-12 text-center text-sm text-neutral-400">
             取込履歴はまだありません
@@ -158,45 +157,23 @@ export function HistoryClient({ imports }: { imports: Row[] }) {
                     {row.dup_skipped}
                   </td>
                   <td className="td text-right tabular-nums">{row.unmatched}</td>
-                  <td className="td relative text-right">
-                    <button
-                      className="btn-outline"
-                      onClick={() =>
-                        setMenuFor(menuFor === row.id ? null : row.id)
-                      }
-                    >
-                      操作 ▾
-                    </button>
-                    {menuFor === row.id && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setMenuFor(null)}
-                        />
-                        <div className="absolute right-4 z-20 mt-1 w-36 rounded-lg border border-neutral-200 bg-white py-1 text-left shadow-lg">
-                          <button
-                            className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-100"
-                            onClick={() => {
-                              setDetail(row);
-                              setMenuFor(null);
-                            }}
-                          >
-                            取込詳細
-                          </button>
-                          {row.status === "completed" && (
-                            <button
-                              className="block w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                setRollbackTarget(row);
-                                setMenuFor(null);
-                              }}
-                            >
-                              取込取り消し
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
+                  <td className="td text-right">
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <button
+                        className="btn-outline px-2 py-1 text-xs"
+                        onClick={() => setDetail(row)}
+                      >
+                        取込詳細
+                      </button>
+                      {row.status === "completed" && (
+                        <button
+                          className="btn-outline border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                          onClick={() => setRollbackTarget(row)}
+                        >
+                          取込取り消し
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

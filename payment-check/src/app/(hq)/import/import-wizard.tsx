@@ -19,6 +19,8 @@ const LABELS = {
       ["code", "店舗コード列"],
     ] as Array<[string, string]>,
     previewHead: ["取引日", "入金額", "店舗コード", "特定店舗", "状態"],
+    hint: "取引日（入金日）、入金額、店舗コード（振込名義や摘要に含まれるコード）の3列。入金額が0円以下の行は出金行として自動でスキップされます。",
+    sampleHeader: "日付,入金額,店舗コード",
     overwriteNote:
       "ON: 同じ営業日・店舗の既存 mf_deposits を DELETE してから INSERT します。1日に複数入金がある場合は CSV の内容に置き換わります（既存の複数件 → CSV の件数になる）。",
     normalNote: "OFF: 同じ営業日・店舗の行は重複としてスキップします（既存優先）。",
@@ -34,6 +36,8 @@ const LABELS = {
       ["card", "カード売上額列（任意）"],
     ] as Array<[string, string]>,
     previewHead: ["営業日", "店舗コード", "店舗名", "現金売上額", "カード売上額", "状態"],
+    hint: "営業日、店舗コード、現金売上額の3列（カード売上額は任意）。店舗マスタに登録のないコードの行は取込対象から除外されます。",
+    sampleHeader: "日付,店舗コード,現金売上,カード売上",
     overwriteNote:
       "ON: 同じ営業日・店舗の既存 pos_sales を CSV 値で置き換えます。",
     normalNote: "OFF: 既存行があるとスキップ（既存値を保持）。",
@@ -73,7 +77,8 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
   const router = useRouter();
   const L = LABELS[kind];
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [file, setFile] = useState<{ name: string; size: number; text: string } | null>(null);
+  const [file, setFile] = useState<{ name: string; size: number; text: string; encoding: string } | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [mapping, setMapping] = useState<Mapping | null>(null);
   const [overwrite, setOverwrite] = useState(false);
@@ -118,14 +123,29 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
   }
 
   async function onFile(f: File) {
-    const text = await f.text();
-    const info = { name: f.name, size: f.size, text };
+    // MoneyForward / POSレジのCSVはShift-JISで出力されることが多いため自動判定する
+    const buf = await f.arrayBuffer();
+    let text: string;
+    let encoding = "UTF-8";
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch {
+      text = new TextDecoder("shift_jis").decode(buf);
+      encoding = "Shift-JIS";
+    }
+    const info = { name: f.name, size: f.size, text, encoding };
     setFile(info);
     setAssignments({});
     setOverwrite(false);
+    setShowAll(false);
     setStep(2);
     await runPreview(text, null, false, {});
   }
+
+  const requiredKeys = kind === "mf" ? ["date", "amount", "code"] : ["date", "code", "cash"];
+  const missingColumns = L.columns
+    .filter(([key]) => requiredKeys.includes(key) && (mapping?.[key] ?? -1) < 0)
+    .map(([, label]) => label);
 
   async function execute() {
     if (!file || !preview) return;
@@ -234,7 +254,20 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
           <p className="text-sm font-medium">
             CSVファイルをドロップ または クリックして選択
           </p>
-          <p className="text-xs text-neutral-400">UTF-8のCSVに対応しています</p>
+          <p className="text-xs text-neutral-400">
+            UTF-8 / Shift-JIS どちらのCSVも自動判定して読み込みます
+          </p>
+          <div className="mt-4 w-full max-w-md rounded-lg bg-neutral-50 p-3 text-left text-xs text-neutral-500">
+            <p className="font-medium text-neutral-700">必要な列</p>
+            <p className="mt-1">{L.hint}</p>
+            <p className="mt-2 font-medium text-neutral-700">ヘッダ行の例</p>
+            <code className="mt-1 block rounded bg-white px-2 py-1 font-mono text-[11px] text-neutral-700">
+              {L.sampleHeader}
+            </code>
+            <p className="mt-2">
+              列名が違っていても、次の画面で手動で列を選べます。
+            </p>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -255,7 +288,11 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
               <div>
                 <p className="font-medium">{file.name}</p>
                 <p className="text-xs text-neutral-400">
-                  {file.size} B / {preview?.rowCount ?? "-"}行 / utf-8
+                  {file.size.toLocaleString()} B / {preview?.rowCount ?? "-"}行 /{" "}
+                  {file.encoding}
+                  {loading && (
+                    <span className="ml-2 text-neutral-500">プレビューを生成中...</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -295,6 +332,11 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
                 </div>
               ))}
             </div>
+            {missingColumns.length > 0 && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                「{missingColumns.join("」「")}」が自動で選べませんでした。上の一覧から該当する列を選び、「マッピングを再適用」を押してください。
+              </p>
+            )}
             <button
               className="btn-outline mt-3"
               disabled={loading}
@@ -403,10 +445,20 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
 
           {/* プレビュー */}
           {preview && (
-            <div className="card overflow-hidden">
-              <h3 className="border-b border-neutral-200 px-4 py-3 text-sm font-bold">
-                プレビュー（先頭10行）
-              </h3>
+            <div className="card overflow-x-auto">
+              <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                <h3 className="text-sm font-bold">
+                  プレビュー（{showAll ? `全${preview.rows.length}行` : "先頭10行"}）
+                </h3>
+                {preview.rows.length > 10 && (
+                  <button
+                    className="text-xs text-neutral-500 underline hover:text-neutral-900"
+                    onClick={() => setShowAll((v) => !v)}
+                  >
+                    {showAll ? "先頭10行のみ表示" : `全${preview.rows.length}行を表示`}
+                  </button>
+                )}
+              </div>
               <table className="w-full">
                 <thead className="border-b border-neutral-200 bg-neutral-50">
                   <tr>
@@ -418,7 +470,7 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.rows.slice(0, 10).map((row) => (
+                  {(showAll ? preview.rows : preview.rows.slice(0, 10)).map((row) => (
                     <tr
                       key={row.index}
                       className={`border-b border-neutral-100 last:border-0 ${
@@ -478,17 +530,29 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
             >
               ‹ 戻る
             </button>
-            <button
-              className="btn-primary"
-              disabled={loading || importCount === 0}
-              onClick={execute}
-            >
-              {loading
-                ? "取込中..."
-                : overwrite
-                  ? `上書き取込（${importCount}件） ›`
-                  : `取込実行（${importCount}件） ›`}
-            </button>
+            <div className="flex items-center gap-3">
+              {!loading && importCount === 0 && preview && (
+                <span className="text-xs text-neutral-500">
+                  取込対象の行がありません
+                </span>
+              )}
+              <button
+                className="btn-primary"
+                disabled={loading || importCount === 0 || missingColumns.length > 0}
+                onClick={execute}
+                title={
+                  missingColumns.length > 0
+                    ? "必要な列がすべて選択されていません"
+                    : undefined
+                }
+              >
+                {loading
+                  ? "処理中..."
+                  : overwrite
+                    ? `上書き取込（${importCount}件） ›`
+                    : `取込実行（${importCount}件） ›`}
+              </button>
+            </div>
           </div>
         </>
       )}

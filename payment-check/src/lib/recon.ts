@@ -230,7 +230,6 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
     `SELECT * FROM stores WHERE active = 1 ORDER BY code`
   );
   const today = todayStringLocal();
-  const month = today.slice(0, 7);
 
   const lastMf = await db.get<{ ts: string }>(
     `SELECT MAX(imported_at) AS ts FROM csv_imports WHERE kind = 'mf' AND status = 'completed'`
@@ -239,22 +238,35 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
     `SELECT MAX(imported_at) AS ts FROM csv_imports WHERE kind = 'pos' AND status = 'completed'`
   );
 
-  // 当月の未確認差額
+  // 未確認差額（月を限定せず、データのある直近6か月分を対象にする）
   const diffRows: DashboardData["diffRows"] = [];
   for (const store of stores) {
-    const grid = await buildMonthGrid(db, store, month);
-    for (const row of grid.rows) {
-      if (row.status === "unconfirmed" && row.diff !== null && row.diff !== 0) {
-        diffRows.push({
-          storeId: store.id,
-          storeName: store.name,
-          date: row.date,
-          diff: row.diff,
-          month,
-        });
+    const monthRows = await db.all<{ m: string }>(
+      `SELECT DISTINCT SUBSTR(date, 1, 7) AS m FROM (
+         SELECT date FROM mf_deposits WHERE store_id = ?
+         UNION ALL SELECT date FROM pos_sales WHERE store_id = ?
+         UNION ALL SELECT date FROM daily_reports WHERE store_id = ?
+       ) AS d ORDER BY m DESC LIMIT 6`,
+      [store.id, store.id, store.id]
+    );
+    for (const { m } of monthRows) {
+      const grid = await buildMonthGrid(db, store, m);
+      for (const row of grid.rows) {
+        if (row.status === "unconfirmed" && row.diff !== null && row.diff !== 0) {
+          diffRows.push({
+            storeId: store.id,
+            storeName: store.name,
+            date: row.date,
+            diff: row.diff,
+            month: m,
+          });
+        }
       }
     }
   }
+
+  diffRows.sort((a, b) => b.date.localeCompare(a.date));
+  diffRows.splice(50);
 
   // 直近7日でCSV取込データが存在しない日数
   const last7: string[] = [];

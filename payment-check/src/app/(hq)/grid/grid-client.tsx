@@ -66,12 +66,18 @@ export function GridClient({
   grid: MonthGrid;
 }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<DayRow | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [photoView, setPhotoView] = useState<string | null>(null);
 
   const nav = (storeId: string, month: string) =>
     router.push(`/grid?store=${storeId}&month=${month}`);
+
+  // 詳細シートの前日/翌日移動はデータのある日だけを対象にする
+  const dataRows = grid.rows.filter((r) => r.status !== null);
+  const selectedIndex = dataRows.findIndex((r) => r.date === selectedDate);
+  const selected = selectedIndex >= 0 ? dataRows[selectedIndex] : null;
+  const hasData = dataRows.length > 0;
 
   return (
     <div className="space-y-4">
@@ -84,9 +90,15 @@ export function GridClient({
           >
             ‹ 前月
           </button>
-          <span className="px-2 text-sm font-semibold">
-            {fmtMonth(grid.month)}
-          </span>
+          <input
+            type="month"
+            value={grid.month}
+            onChange={(e) => {
+              if (/^\d{4}-\d{2}$/.test(e.target.value)) nav(grid.store.id, e.target.value);
+            }}
+            aria-label="表示する月"
+            className="rounded-md border-0 bg-transparent px-1 text-sm font-semibold outline-none"
+          />
           <button
             className="rounded-md px-2.5 py-1 text-sm hover:bg-neutral-100"
             onClick={() => nav(grid.store.id, shiftMonth(grid.month, 1))}
@@ -98,6 +110,7 @@ export function GridClient({
           className="input w-auto"
           value={grid.store.id}
           onChange={(e) => nav(e.target.value, grid.month)}
+          aria-label="店舗を選択"
         >
           {stores.map((s) => (
             <option key={s.id} value={s.id}>
@@ -107,7 +120,14 @@ export function GridClient({
         </select>
       </div>
 
-      <div className="card overflow-hidden">
+      {!hasData && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          {fmtMonth(grid.month)}
+          の{grid.store.name}にはデータがありません。CSVを取り込むか、前月/翌月で他の月を確認してください。
+        </p>
+      )}
+
+      <div className="card overflow-x-auto">
         {/* ヘッダ */}
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-neutral-200 p-4">
           <div>
@@ -173,7 +193,7 @@ export function GridClient({
               return (
                 <tr
                   key={row.date}
-                  onClick={() => !empty && setSelected(row)}
+                  onClick={() => !empty && setSelectedDate(row.date)}
                   className={`border-b border-neutral-100 last:border-0 ${
                     empty
                       ? "text-neutral-300"
@@ -250,12 +270,22 @@ export function GridClient({
 
       {selected && (
         <DetailSheet
+          key={selected.date}
           row={selected}
           storeId={grid.store.id}
           storeName={grid.store.name}
-          onClose={() => setSelected(null)}
+          onClose={() => setSelectedDate(null)}
+          onPrev={
+            selectedIndex > 0
+              ? () => setSelectedDate(dataRows[selectedIndex - 1].date)
+              : undefined
+          }
+          onNext={
+            selectedIndex < dataRows.length - 1
+              ? () => setSelectedDate(dataRows[selectedIndex + 1].date)
+              : undefined
+          }
           onSaved={() => {
-            setSelected(null);
             router.refresh();
           }}
           onPhoto={setPhotoView}
@@ -295,6 +325,8 @@ function DetailSheet({
   storeId,
   storeName,
   onClose,
+  onPrev,
+  onNext,
   onSaved,
   onPhoto,
 }: {
@@ -302,22 +334,28 @@ function DetailSheet({
   storeId: string;
   storeName: string;
   onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   onSaved: () => void;
   onPhoto: (src: string) => void;
 }) {
   const initialStatus = row.status ?? "unconfirmed";
   const [status, setStatus] = useState(initialStatus);
   const [memo, setMemo] = useState(row.memo ?? "");
+  const [savedStatus, setSavedStatus] = useState(initialStatus);
+  const [savedMemo, setSavedMemo] = useState(row.memo ?? "");
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const changed = useMemo(
-    () => status !== initialStatus || (memo.trim() || "") !== (row.memo ?? ""),
-    [status, memo, initialStatus, row.memo]
+    () => status !== savedStatus || (memo.trim() || "") !== (savedMemo.trim() || ""),
+    [status, memo, savedStatus, savedMemo]
   );
 
   async function save() {
     setSaving(true);
+    setSaveError(null);
     const res = await fetch("/api/reviews", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -325,8 +363,13 @@ function DetailSheet({
     });
     setSaving(false);
     if (res.ok) {
+      setSavedStatus(status);
+      setSavedMemo(memo);
       setSavedMsg(true);
-      setTimeout(onSaved, 600);
+      setTimeout(() => setSavedMsg(false), 1500);
+      onSaved();
+    } else {
+      setSaveError("保存に失敗しました。もう一度お試しください");
     }
   }
 
@@ -344,12 +387,31 @@ function DetailSheet({
             <h2 className="font-bold">{storeName}</h2>
             <p className="text-xs text-neutral-500">{fmtDateJa(row.date)}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onPrev}
+              disabled={!onPrev}
+              className="rounded-lg px-2 py-1 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+              title="前のデータがある日へ"
+            >
+              ‹ 前日
+            </button>
+            <button
+              onClick={onNext}
+              disabled={!onNext}
+              className="rounded-lg px-2 py-1 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+              title="次のデータがある日へ"
+            >
+              翌日 ›
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+              aria-label="閉じる"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4 p-4">
@@ -485,10 +547,15 @@ function DetailSheet({
         </div>
 
         <div className="sticky bottom-0 border-t border-neutral-200 bg-white p-4">
+          {saveError && (
+            <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {saveError}
+            </p>
+          )}
           <button
             onClick={save}
             disabled={!changed || saving}
-            className="btn-primary w-full"
+            className={`w-full ${savedMsg ? "btn-primary bg-emerald-600 hover:bg-emerald-600" : "btn-primary"}`}
           >
             {savedMsg
               ? "保存しました"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DayRow, MonthGrid } from "@/lib/recon";
 
@@ -353,6 +353,24 @@ function DetailSheet({
     [status, memo, savedStatus, savedMemo]
   );
 
+  // 写真は重いので、シートを開いたときに別途読み込む
+  const [photos, setPhotos] = useState<string[] | null>(row.hasPhotos ? null : []);
+  useEffect(() => {
+    if (!row.hasPhotos) return;
+    let cancelled = false;
+    fetch(`/api/reports/photos?storeId=${storeId}&date=${row.date}`)
+      .then((r) => (r.ok ? r.json() : { photos: [] }))
+      .then((d) => {
+        if (!cancelled) setPhotos(d.photos ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotos([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [row.hasPhotos, row.date, storeId]);
+
   async function save() {
     setSaving(true);
     setSaveError(null);
@@ -470,12 +488,14 @@ function DetailSheet({
           {/* 写真 */}
           <div>
             <p className="mb-1 text-xs font-medium text-neutral-500">
-              写真（{row.report?.photos.length ?? 0}枚）
+              写真{photos !== null && `（${photos.length}枚）`}
             </p>
-            {row.report && row.report.photos.length > 0 ? (
+            {photos === null ? (
+              <p className="text-sm text-neutral-400">読み込み中...</p>
+            ) : photos.length > 0 ? (
               <>
                 <div className="flex gap-2">
-                  {row.report.photos.map((src, i) => (
+                  {photos.map((src, i) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       key={i}

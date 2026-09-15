@@ -254,13 +254,29 @@ async function seed(db: DB): Promise<void> {
 }
 
 export async function initSchema(db: DB): Promise<void> {
-  for (const ddl of TABLES) {
-    await db.run(ddl);
+  // サーバーレスでは起動のたびに呼ばれるので、テーブルが揃っていれば1クエリで済ませる
+  let userCount: number | null = null;
+  try {
+    // 最初と最後に作るテーブルを両方参照し、どちらかが無ければエラーにしてDDLへ進む
+    const row = await db.get<{ count: number | string }>(
+      "SELECT (SELECT COUNT(*) FROM users) AS count, (SELECT COUNT(*) FROM reviews) AS r"
+    );
+    userCount = Number(row?.count ?? 0);
+  } catch {
+    userCount = null;
   }
-  const row = await db.get<{ count: number | string }>(
-    "SELECT COUNT(*) AS count FROM users"
-  );
-  if (Number(row?.count ?? 0) === 0) {
+
+  if (userCount === null) {
+    for (const ddl of TABLES) {
+      await db.run(ddl);
+    }
+    const row = await db.get<{ count: number | string }>(
+      "SELECT COUNT(*) AS count FROM users"
+    );
+    userCount = Number(row?.count ?? 0);
+  }
+
+  if (userCount === 0) {
     await seed(db);
   }
 }

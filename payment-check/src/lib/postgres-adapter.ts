@@ -33,7 +33,14 @@ function wrap(sql: Sql): DB {
 }
 
 export async function createPostgresDb(url: string): Promise<DB> {
-  // prepare: false でpgbouncer(トランザクションプーリング)互換にする
-  const sql = postgres(url, { prepare: false, onnotice: () => {} });
+  // prepare: false でpgbouncer(トランザクションプーリング)互換にする。
+  // サーバーレスでは同時実行ごとにプロセスが立つので、接続数は小さく・アイドルは早めに切る
+  const sql = postgres(url, {
+    prepare: false,
+    onnotice: () => {},
+    max: 3,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
   return wrap(sql);
 }

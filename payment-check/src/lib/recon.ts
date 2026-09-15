@@ -1,6 +1,5 @@
 import type { DB } from "./db";
 import type {
-  DailyReport,
   DataSourceBadge,
   MfDeposit,
   PosSale,
@@ -26,7 +25,6 @@ export type DayRow = {
   hasComment: boolean;
   report: {
     comment: string | null;
-    photos: string[];
     manualDeposit: number | null;
     manualSales: number | null;
   } | null;
@@ -44,30 +42,67 @@ export type MonthGrid = {
   unconfirmedDiffTotal: number;
 };
 
-export async function buildMonthGrid(
-  db: DB,
-  store: Store,
-  month: string
-): Promise<MonthGrid> {
-  const from = `${month}-01`;
-  const to = `${month}-31`;
+// 写真本体(photos_json)は重いので一覧では読まず、有無だけを持つ
+type ReportLite = {
+  store_id: string;
+  date: string;
+  manual_deposit: number | null;
+  manual_sales: number | null;
+  comment: string | null;
+  photos_len: number;
+};
 
-  const deposits = await db.all<MfDeposit>(
-    `SELECT * FROM mf_deposits WHERE store_id = ? AND date >= ? AND date <= ?`,
-    [store.id, from, to]
-  );
-  const sales = await db.all<PosSale>(
-    `SELECT * FROM pos_sales WHERE store_id = ? AND date >= ? AND date <= ?`,
-    [store.id, from, to]
-  );
-  const reports = await db.all<DailyReport>(
-    `SELECT * FROM daily_reports WHERE store_id = ? AND date >= ? AND date <= ?`,
-    [store.id, from, to]
-  );
-  const reviews = await db.all<Review>(
-    `SELECT * FROM reviews WHERE store_id = ? AND date >= ? AND date <= ?`,
-    [store.id, from, to]
-  );
+export type ReconData = {
+  deposits: MfDeposit[];
+  sales: PosSale[];
+  reports: ReportLite[];
+  reviews: Review[];
+};
+
+// 複数店舗・期間分をまとめて4クエリで読み込む（店舗×月ごとに問い合わせない）
+export async function loadReconData(
+  db: DB,
+  storeIds: string[],
+  from: string,
+  to: string
+): Promise<ReconData> {
+  if (storeIds.length === 0) {
+    return { deposits: [], sales: [], reports: [], reviews: [] };
+  }
+  const marks = storeIds.map(() => "?").join(",");
+  const params = [...storeIds, from, to];
+  const [deposits, sales, reports, reviews] = await Promise.all([
+    db.all<MfDeposit>(
+      `SELECT * FROM mf_deposits WHERE store_id IN (${marks}) AND date >= ? AND date <= ?`,
+      params
+    ),
+    db.all<PosSale>(
+      `SELECT * FROM pos_sales WHERE store_id IN (${marks}) AND date >= ? AND date <= ?`,
+      params
+    ),
+    db.all<ReportLite>(
+      `SELECT store_id, date, manual_deposit, manual_sales, comment, LENGTH(photos_json) AS photos_len
+       FROM daily_reports WHERE store_id IN (${marks}) AND date >= ? AND date <= ?`,
+      params
+    ),
+    db.all<Review>(
+      `SELECT * FROM reviews WHERE store_id IN (${marks}) AND date >= ? AND date <= ?`,
+      params
+    ),
+  ]);
+  return { deposits, sales, reports, reviews };
+}
+
+// 読み込み済みデータから1店舗・1か月分のグリッドを組み立てる（DBアクセスなし）
+export function computeMonthGrid(
+  store: Store,
+  month: string,
+  data: ReconData
+): MonthGrid {
+  const deposits = data.deposits.filter((d) => d.store_id === store.id);
+  const sales = data.sales.filter((s) => s.store_id === store.id);
+  const reports = data.reports.filter((r) => r.store_id === store.id);
+  const reviews = data.reviews.filter((r) => r.store_id === store.id);
 
   const rows: DayRow[] = [];
   const days = daysInMonth(month);
@@ -110,21 +145,9 @@ export async function buildMonthGrid(
 
     // データ元バッジ
     const depositSource: "csv" | "manual" | null =
-      depositManual !== null && depositCsv !== null
-        ? "manual"
-        : depositManual !== null
-          ? "manual"
-          : depositCsv !== null
-            ? "csv"
-            : null;
+      depositManual !== null ? "manual" : depositCsv !== null ? "csv" : null;
     const salesSource: "csv" | "manual" | null =
-      salesManual !== null && salesCsv !== null
-        ? "manual"
-        : salesManual !== null
-          ? "manual"
-          : salesCsv !== null
-            ? "csv"
-            : null;
+      salesManual !== null ? "manual" : salesCsv !== null ? "csv" : null;
     const depositOverride = depositManual !== null && depositCsv !== null;
     const salesOverride = salesManual !== null && salesCsv !== null;
 
@@ -158,7 +181,6 @@ export async function buildMonthGrid(
       }
     }
 
-    const photos: string[] = report ? JSON.parse(report.photos_json || "[]") : [];
     rows.push({
       date,
       day,
@@ -171,12 +193,12 @@ export async function buildMonthGrid(
       salesManual,
       diff,
       source,
-      hasPhotos: photos.length > 0,
+      // "[]" は2文字なので、それより長ければ写真あり
+      hasPhotos: (report?.photos_len ?? 0) > 2,
       hasComment: !!report?.comment,
       report: report
         ? {
             comment: report.comment,
-            photos,
             manualDeposit: report.manual_deposit,
             manualSales: report.manual_sales,
           }
@@ -206,6 +228,15 @@ export async function buildMonthGrid(
   };
 }
 
+export async function buildMonthGrid(
+  db: DB,
+  store: Store,
+  month: string
+): Promise<MonthGrid> {
+  const data = await loadReconData(db, [store.id], `${month}-01`, `${month}-31`);
+  return computeMonthGrid(store, month, data);
+}
+
 export type DashboardData = {
   lastImports: { mf: string | null; pos: string | null };
   diffRows: Array<{
@@ -229,46 +260,9 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
   const stores = await db.all<Store>(
     `SELECT * FROM stores WHERE active = 1 ORDER BY code`
   );
+  const storeIds = stores.map((s) => s.id);
   const today = todayStringLocal();
 
-  const lastMf = await db.get<{ ts: string }>(
-    `SELECT MAX(imported_at) AS ts FROM csv_imports WHERE kind = 'mf' AND status = 'completed'`
-  );
-  const lastPos = await db.get<{ ts: string }>(
-    `SELECT MAX(imported_at) AS ts FROM csv_imports WHERE kind = 'pos' AND status = 'completed'`
-  );
-
-  // 未確認差額（月を限定せず、データのある直近6か月分を対象にする）
-  const diffRows: DashboardData["diffRows"] = [];
-  for (const store of stores) {
-    const monthRows = await db.all<{ m: string }>(
-      `SELECT DISTINCT SUBSTR(date, 1, 7) AS m FROM (
-         SELECT date FROM mf_deposits WHERE store_id = ?
-         UNION ALL SELECT date FROM pos_sales WHERE store_id = ?
-         UNION ALL SELECT date FROM daily_reports WHERE store_id = ?
-       ) AS d ORDER BY m DESC LIMIT 6`,
-      [store.id, store.id, store.id]
-    );
-    for (const { m } of monthRows) {
-      const grid = await buildMonthGrid(db, store, m);
-      for (const row of grid.rows) {
-        if (row.status === "unconfirmed" && row.diff !== null && row.diff !== 0) {
-          diffRows.push({
-            storeId: store.id,
-            storeName: store.name,
-            date: row.date,
-            diff: row.diff,
-            month: m,
-          });
-        }
-      }
-    }
-  }
-
-  diffRows.sort((a, b) => b.date.localeCompare(a.date));
-  diffRows.splice(50);
-
-  // 直近7日でCSV取込データが存在しない日数
   const last7: string[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date();
@@ -279,14 +273,74 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
       ).padStart(2, "0")}`
     );
   }
-  const mfDates = await db.all<{ date: string }>(
-    `SELECT DISTINCT date FROM mf_deposits WHERE source = 'csv' AND date >= ?`,
-    [last7[6]]
-  );
-  const posDates = await db.all<{ date: string }>(
-    `SELECT DISTINCT date FROM pos_sales WHERE source = 'csv' AND date >= ?`,
-    [last7[6]]
-  );
+
+  const marks = storeIds.map(() => "?").join(",") || "NULL";
+  // 互いに依存しない問い合わせはまとめて投げる
+  const [lastImports, monthRows, lastDeposits, mfDates, posDates] =
+    await Promise.all([
+      db.all<{ kind: string; ts: string | null }>(
+        `SELECT kind, MAX(imported_at) AS ts FROM csv_imports WHERE status = 'completed' GROUP BY kind`
+      ),
+      db.all<{ store_id: string; m: string }>(
+        `SELECT DISTINCT store_id, SUBSTR(date, 1, 7) AS m FROM (
+           SELECT store_id, date FROM mf_deposits WHERE store_id IN (${marks})
+           UNION ALL SELECT store_id, date FROM pos_sales WHERE store_id IN (${marks})
+           UNION ALL SELECT store_id, date FROM daily_reports WHERE store_id IN (${marks})
+         ) AS d ORDER BY m DESC`,
+        [...storeIds, ...storeIds, ...storeIds]
+      ),
+      db.all<{ store_id: string; date: string }>(
+        `SELECT store_id, MAX(date) AS date FROM mf_deposits GROUP BY store_id`
+      ),
+      db.all<{ date: string }>(
+        `SELECT DISTINCT date FROM mf_deposits WHERE source = 'csv' AND date >= ?`,
+        [last7[6]]
+      ),
+      db.all<{ date: string }>(
+        `SELECT DISTINCT date FROM pos_sales WHERE source = 'csv' AND date >= ?`,
+        [last7[6]]
+      ),
+    ]);
+
+  // 店舗ごとにデータのある直近6か月を対象にする
+  const monthsByStore = new Map<string, string[]>();
+  for (const { store_id, m } of monthRows) {
+    const list = monthsByStore.get(store_id) ?? [];
+    if (list.length < 6) list.push(m);
+    monthsByStore.set(store_id, list);
+  }
+  const allMonths = Array.from(monthsByStore.values()).flat();
+
+  const diffRows: DashboardData["diffRows"] = [];
+  if (allMonths.length > 0) {
+    const minMonth = allMonths.reduce((a, b) => (a < b ? a : b));
+    const maxMonth = allMonths.reduce((a, b) => (a > b ? a : b));
+    const data = await loadReconData(
+      db,
+      storeIds,
+      `${minMonth}-01`,
+      `${maxMonth}-31`
+    );
+    for (const store of stores) {
+      for (const m of monthsByStore.get(store.id) ?? []) {
+        const grid = computeMonthGrid(store, m, data);
+        for (const row of grid.rows) {
+          if (row.status === "unconfirmed" && row.diff !== null && row.diff !== 0) {
+            diffRows.push({
+              storeId: store.id,
+              storeName: store.name,
+              date: row.date,
+              diff: row.diff,
+              month: m,
+            });
+          }
+        }
+      }
+    }
+  }
+  diffRows.sort((a, b) => b.date.localeCompare(a.date));
+  diffRows.splice(50);
+
   const mfSet = new Set(mfDates.map((r) => r.date));
   const posSet = new Set(posDates.map((r) => r.date));
   const missingCsvDays = {
@@ -295,13 +349,12 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
   };
 
   // 4日連続入金なし
+  const lastDepositByStore = new Map(
+    lastDeposits.map((r) => [r.store_id, r.date])
+  );
   const noDepositStores: DashboardData["noDepositStores"] = [];
   for (const store of stores) {
-    const last = await db.get<{ date: string }>(
-      `SELECT MAX(date) AS date FROM mf_deposits WHERE store_id = ?`,
-      [store.id]
-    );
-    const lastDate = last?.date ?? null;
+    const lastDate = lastDepositByStore.get(store.id) ?? null;
     const since = lastDate ?? store.created_at.slice(0, 10);
     const streak = Math.max(
       0,
@@ -324,7 +377,10 @@ export async function buildDashboard(db: DB): Promise<DashboardData> {
   noDepositStores.sort((a, b) => b.streak - a.streak);
 
   return {
-    lastImports: { mf: lastMf?.ts ?? null, pos: lastPos?.ts ?? null },
+    lastImports: {
+      mf: lastImports.find((r) => r.kind === "mf")?.ts ?? null,
+      pos: lastImports.find((r) => r.kind === "pos")?.ts ?? null,
+    },
     diffRows,
     missingCsvDays,
     noDepositStores,

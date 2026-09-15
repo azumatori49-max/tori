@@ -165,6 +165,24 @@ input[type=number]{font-variant-numeric:tabular-nums}
   box-shadow:0 4px 14px rgba(24,155,139,.35);
 }
 .ai-hbtn:active{transform:scale(.96)}
+/* MCP連携（外部AIへジャンプ） */
+.mcp-hbtn{
+  flex:0 0 auto;border:none;border-radius:999px;padding:7px 14px;
+  font-size:12.5px;font-weight:800;letter-spacing:.04em;color:#fff;cursor:pointer;
+  background:linear-gradient(135deg,#5B6CFF,#9B59FF);
+  box-shadow:0 4px 14px rgba(91,108,255,.35);
+}
+.mcp-hbtn:active{transform:scale(.96)}
+.mcp-sheet{position:fixed;inset:0;z-index:100;background:rgba(10,12,14,.55);display:flex;align-items:flex-end;justify-content:center}
+.mcp-sheet .in{background:var(--card);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.25);max-height:86vh;overflow-y:auto;position:relative}
+@media (min-width:700px){.mcp-sheet{align-items:center;padding:18px}.mcp-sheet .in{border-radius:22px}}
+.mcp-sheet .mcp-x{position:absolute;top:10px;right:12px;font-size:26px;line-height:1;padding:6px 10px;color:var(--sub)}
+.mcp-links{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.mcp-links a{display:flex;align-items:center;gap:12px;text-decoration:none;border:1px solid var(--line);border-radius:14px;padding:13px 14px;color:var(--ink);background:var(--bg)}
+.mcp-links a:active{transform:scale(.985)}
+.mcp-links .ic{font-size:22px;flex:0 0 auto}
+.mcp-links b{font-size:14.5px}
+.mcp-links small{display:block;font-weight:500;color:var(--sub);font-size:11.5px;margin-top:1px}
 .chat-log{max-height:52vh;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px}
 .msg{max-width:86%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.6}
 .msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
@@ -232,7 +250,8 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .navbar .in{max-width:640px;margin:0 auto;display:flex;gap:10px}
 .navbar .btn{padding:12px}
 .home-hero{padding:34px 16px 10px;text-align:left}
-.hero-top{display:flex;align-items:center;gap:14px}
+.hero-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.hero-top h1{overflow-wrap:anywhere}
 .hero-top svg{width:68px;height:68px;flex:0 0 auto}
 .home-hero .eyebrow{font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--accent)}
 .home-hero h1{font-size:26px;font-weight:800;letter-spacing:.02em;margin-top:4px;text-wrap:balance}
@@ -934,6 +953,7 @@ ${transcript}
 }
 // どの画面のヘッダーからでもAIアシスタントを開けるボタン
 function aiHeaderBtn(){return AI_ENABLED?`<button class="ai-hbtn no-print" aria-label="AIアシスタントを開く">✦ AI</button>`:"";}
+function mcpHeaderBtn(){return `<button class="mcp-hbtn no-print" aria-label="ChatGPT・Claudeでデータ分析（MCP連携）">⚡ MCP</button>`;}
 function renderChat(){
   if(state.view!=="assistant") return;
   render();
@@ -1056,7 +1076,7 @@ let deviceMcpUrl=null;   // MCP接続URL（この端末内にのみ保存）
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.44.0";
+const APP_VERSION="v7.45.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1531,7 +1551,7 @@ function viewHome(){
         <div class="eyebrow">AM改善チェック</div>
         <h1>${esc(APP_NAME)}</h1>
       </div>
-      <div style="margin-left:auto;align-self:flex-start">${aiHeaderBtn()}</div>
+      <div style="margin-left:auto;align-self:flex-start;display:flex;gap:8px">${mcpHeaderBtn()}${aiHeaderBtn()}</div>
     </div>
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
     <p class="hw-meta" style="margin-top:6px">データ共有：${cloudStatusLabel()}</p>
@@ -2485,6 +2505,7 @@ document.addEventListener("click",async e=>{
   if(!t) return;
   if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
   if(t.id==="to-assistant"||t.classList.contains("ai-hbtn")){state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
+  if(t.classList.contains("mcp-hbtn")){openMcpPanel();return;}
   if(t.id==="chat-clear"){
     if(state.chat.length&&!confirm("AIアシスタントの会話履歴を消しますか？"))return;
     state.chat=[]; kvDel("chat").catch(()=>{}); render(); return;
@@ -2743,6 +2764,47 @@ async function checkForUpdate(){
     const m=(await res.text()).match(/APP_VERSION="([^"]+)"/);
     if(m&&m[1]!==APP_VERSION){ updateFound=true; showUpdateBanner(m[1]); }
   }catch(e){}
+}
+/* MCP連携パネル（ChatGPT・Claudeへジャンプ） */
+function openMcpPanel(){
+  if(document.getElementById("mcp-sheet")) return;
+  const q=encodeURIComponent(`${APP_NAME}のコネクタ（MCP）を使って、今月のチェック状況のサマリーと、点数が低い店舗の改善アドバイスを教えて`);
+  const d=document.createElement("div");
+  d.id="mcp-sheet"; d.className="mcp-sheet no-print";
+  d.innerHTML=`
+  <div class="in">
+    <button class="mcp-x" id="mcp-x" aria-label="閉じる">×</button>
+    <h3 style="font-size:17px">⚡ MCP連携で分析</h3>
+    <p class="desc" style="margin-top:6px">ChatGPTやClaudeのチャットが、このアプリのチェックデータ（サマリー・ランキング・面談内容など）を直接読んで答えてくれます。</p>
+    <div class="mcp-links">
+      <a href="https://chatgpt.com/?q=${q}" target="_blank" rel="noopener">
+        <span class="ic">🟢</span><span><b>ChatGPTで分析する</b><small>質問を入れた状態でChatGPTが開きます</small></span>
+      </a>
+      <a href="https://claude.ai/new?q=${q}" target="_blank" rel="noopener">
+        <span class="ic">🟠</span><span><b>Claudeで分析する</b><small>質問を入れた状態でClaudeが開きます</small></span>
+      </a>
+    </div>
+    ${deviceMcpUrl?`
+    <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">
+      <button class="btn ghost" id="mcp-copy2" style="flex:0 0 auto;width:auto;padding:10px 16px">接続URLをコピー（初回登録用）</button>
+      <span class="note" id="mcp-copy2-st" style="border:none;padding:0;margin:0"></span>
+    </div>`:""}
+    <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:13px">初回だけ：コネクタ登録のやり方</summary>
+      <p class="note" style="margin-top:6px"><b>Claude</b>：claude.ai（PCブラウザ）→ 設定 → コネクタ → カスタムコネクタを追加 → 名前「${esc(APP_NAME)}」＋接続URLを貼って追加<br>
+      <b>ChatGPT</b>（Plus以上・PCブラウザ）：設定 → プラグイン → 高度な設定 → 開発者モードON → 作成 → 名前＋接続URL、認証「認証なし」で追加<br>
+      接続URLは${deviceMcpUrl?"上のボタンでコピーできます":"管理画面の「MCP連携」で保存・コピーできます"}。⚠ 社外の人には共有しないでください。</p>
+    </details>
+  </div>`;
+  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);};
+  const onKey=ev=>{if(ev.key==="Escape")close();};
+  d.addEventListener("click",ev=>{if(ev.target===d||ev.target.id==="mcp-x")close();});
+  document.addEventListener("keydown",onKey);
+  d.querySelector("#mcp-copy2")?.addEventListener("click",async()=>{
+    const ok=await copyText(deviceMcpUrl||"");
+    const st=d.querySelector("#mcp-copy2-st");
+    if(st) st.textContent=ok?"コピーしました":"コピーできませんでした";
+  });
+  document.body.appendChild(d);
 }
 /* 写真の拡大表示（タップで開く・どこをタップしても閉じる） */
 function openLightbox(src){

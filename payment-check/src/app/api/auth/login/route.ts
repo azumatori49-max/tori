@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
-import { createSessionCookie } from "@/lib/session";
+import { createSessionCookie, REMEMBER_TTL_MS } from "@/lib/session";
 import { nowString } from "@/lib/config";
 import type { User } from "@/lib/types";
 
 export async function POST(req: Request) {
-  const { email, password } = (await req.json()) as {
+  const { email, password, remember } = (await req.json()) as {
     email?: string;
     password?: string;
+    remember?: boolean;
   };
   const db = await getDb();
   const user = await db.get<User>(`SELECT * FROM users WHERE email = ?`, [
@@ -29,14 +30,17 @@ export async function POST(req: Request) {
     nowString(),
     user.id,
   ]);
-  createSessionCookie({
-    uid: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    storeId: user.store_id,
-    mustChange: user.must_change_password === 1,
-  });
+  createSessionCookie(
+    {
+      uid: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      storeId: user.store_id,
+      mustChange: user.must_change_password === 1,
+    },
+    remember ? REMEMBER_TTL_MS : undefined
+  );
   return NextResponse.json({
     ok: true,
     mustChange: user.must_change_password === 1,

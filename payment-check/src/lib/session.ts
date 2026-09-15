@@ -23,16 +23,19 @@ export type Session = {
   exp: number;
 };
 
+export const REMEMBER_TTL_MS = 1000 * 60 * 60 * 24 * 30; // ログイン状態を保持: 30日間
+
 export function createSessionCookie(
-  data: Omit<Session, "exp">
+  data: Omit<Session, "exp">,
+  ttlMs: number = SESSION_TTL_MS
 ): void {
-  const session: Session = { ...data, exp: Date.now() + SESSION_TTL_MS };
+  const session: Session = { ...data, exp: Date.now() + ttlMs };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   cookies().set(COOKIE_NAME, `${payload}.${sign(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    maxAge: SESSION_TTL_MS / 1000,
+    maxAge: ttlMs / 1000,
     path: "/",
   });
 }

@@ -27,13 +27,17 @@ export async function POST(req: Request) {
     `UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?`,
     [hashPassword(p), session.uid]
   );
-  createSessionCookie({
-    uid: session.uid,
-    email: session.email,
-    name: session.name,
-    role: session.role,
-    storeId: session.storeId,
-    mustChange: false,
-  });
+  // ログイン時に選んだ保持期間を引き継ぐ
+  createSessionCookie(
+    {
+      uid: session.uid,
+      email: session.email,
+      name: session.name,
+      role: session.role,
+      storeId: session.storeId,
+      mustChange: false,
+    },
+    Math.max(session.exp - Date.now(), 60 * 1000)
+  );
   return NextResponse.json({ ok: true, role: session.role });
 }

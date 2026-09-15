@@ -20,6 +20,7 @@ export function LoginForm() {
         body: JSON.stringify({
           email: form.get("email"),
           password: form.get("password"),
+          remember: form.get("remember") === "on",
         }),
       });
       const data = await res.json();
@@ -83,9 +84,21 @@ export function LoginForm() {
           className="input"
         />
       </div>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          name="remember"
+          defaultChecked
+          className="h-4 w-4"
+        />
+        ログイン状態を保持する（30日間）
+      </label>
       <button type="submit" disabled={pending} className="btn-primary w-full">
         {pending ? "確認中..." : "ログイン"}
       </button>
+      <p className="text-center text-[11px] text-neutral-400">
+        ブラウザの「パスワードを保存」を使うと、次回から入力を省略できます
+      </p>
     </form>
   );
 }

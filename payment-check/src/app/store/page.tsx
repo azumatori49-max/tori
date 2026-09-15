@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import type { DailyReport, Store } from "@/lib/types";
 import { StoreReportClient } from "./report-client";
+import { DbWarningBanner } from "../db-warning-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,13 @@ export default async function StorePage() {
   );
 
   return (
-    <StoreReportClient
-      userName={session.name}
-      storeName={store?.name ?? ""}
-      reports={JSON.parse(JSON.stringify(reports))}
-    />
+    <>
+      <DbWarningBanner />
+      <StoreReportClient
+        userName={session.name}
+        storeName={store?.name ?? ""}
+        reports={JSON.parse(JSON.stringify(reports))}
+      />
+    </>
   );
 }

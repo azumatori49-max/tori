@@ -1073,10 +1073,11 @@ const SHARED_APPCHECK_SITE_KEY=null;
 const SHARED_GEMINI_KEY=null;
 let deviceGeminiKey=null;
 let deviceMcpUrl=null;   // MCP接続URL（この端末内にのみ保存）
+let deviceGptUrl=null;   // 分析用カスタムGPTのリンク（クラウドで全端末に共有）
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.45.0";
+const APP_VERSION="v7.46.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1736,10 +1737,13 @@ function viewAdmin(){
       <div class="field"><label>接続URL（https://….workers.dev/mcp/… の形式）</label>
         <input id="mcp-url" autocomplete="off" placeholder="https://xxxx.workers.dev/mcp/…" value="${esc(deviceMcpUrl||"")}">
       </div>
+      <div class="field"><label>分析用カスタムGPTのリンク（任意・保存すると全端末の⚡MCPボタンがこのGPTに飛ぶ）</label>
+        <input id="mcp-gpt" autocomplete="off" placeholder="https://chatgpt.com/g/g-…" value="${esc(deviceGptUrl||"")}">
+      </div>
       <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <button class="btn sub" id="mcp-save">保存</button>
-        ${deviceMcpUrl?`<button class="btn ghost" id="mcp-copy">URLをコピー</button>
-        <button class="btn ghost" id="mcp-clear" style="color:var(--bad)">削除</button>`:""}
+        ${deviceMcpUrl?`<button class="btn ghost" id="mcp-copy">URLをコピー</button>`:""}
+        ${deviceMcpUrl||deviceGptUrl?`<button class="btn ghost" id="mcp-clear" style="color:var(--bad)">削除</button>`:""}
       </div>
       <p class="note" id="mcp-status"></p>
       <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Claude に接続する手順</summary>
@@ -1804,12 +1808,17 @@ function bindAdmin(){
     }
   });
   $("#mcp-save")?.addEventListener("click",async()=>{
-    const st=$("#mcp-status"); const v=$("#mcp-url").value.trim();
-    if(!v){st.textContent="接続URLを貼り付けてください。";return;}
-    if(!/^https:\/\/.+\/mcp\//.test(v)){st.textContent="URLの形式が違うようです（https://…/mcp/… の形式で貼り付けてください）。";return;}
-    deviceMcpUrl=v; await kvSet("mcpUrl",v).catch(()=>{});
+    const st=$("#mcp-status");
+    const v=$("#mcp-url").value.trim(), g=$("#mcp-gpt").value.trim();
+    if(!v&&!g){st.textContent="接続URLかGPTリンクを貼り付けてください。";return;}
+    if(v&&!/^https:\/\/.+\/mcp\//.test(v)){st.textContent="接続URLの形式が違うようです（https://…/mcp/… の形式で貼り付けてください）。";return;}
+    if(g&&!/^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(g)){st.textContent="GPTリンクの形式が違うようです（https://chatgpt.com/g/… の形式で貼り付けてください）。";return;}
+    if(v){ deviceMcpUrl=v; await kvSet("mcpUrl",v).catch(()=>{}); }
+    let sharedGpt=false;
+    if(g){ deviceGptUrl=g; await kvSet("gptUrl",g).catch(()=>{}); sharedGpt=await cloudSaveGptUrl(g); }
     render();
-    const s2=$("#mcp-status"); if(s2) s2.textContent="保存しました（この端末内のみ）。「URLをコピー」でAI側に登録できます。";
+    const s2=$("#mcp-status");
+    if(s2) s2.textContent="保存しました。"+(g?(sharedGpt?"GPTリンクは全端末に自動共有されます。":"GPTリンクはこの端末に保存しました（クラウド未接続のため共有は保留）。"):"接続URLはこの端末内のみに保存されます。");
   });
   $("#mcp-copy")?.addEventListener("click",async()=>{
     const st=$("#mcp-status");
@@ -1817,8 +1826,10 @@ function bindAdmin(){
     st.textContent=ok?"コピーしました。Claude／ChatGPTのコネクタ登録画面に貼り付けてください。":"コピーできませんでした。上の欄から手動でコピーしてください。";
   });
   $("#mcp-clear")?.addEventListener("click",async()=>{
-    if(!confirm("保存した接続URLを削除しますか？（サーバー側は変わりません）")) return;
+    if(!confirm("保存した接続URL・GPTリンクを削除しますか？（GPTリンクは全端末から消えます。サーバー側は変わりません）")) return;
     deviceMcpUrl=null; await kvDel("mcpUrl").catch(()=>{});
+    deviceGptUrl=null; await kvDel("gptUrl").catch(()=>{});
+    await cloudDeleteGptUrl();
     render();
   });
   $("#gen-go")?.addEventListener("click",async()=>{
@@ -2002,6 +2013,7 @@ async function initCloud(){
     catch(e){ /* 匿名認証が無効でも、テストモードのルールなら動作する */ }
     setTimeout(()=>syncOutbox(),0); // ログイン直後の自動再送
     setTimeout(()=>cloudFetchGeminiKey(),0); // 共有AIキーの取得
+    setTimeout(()=>cloudFetchGptUrl(),0);    // 共有GPTリンクの取得
     fsMods=fsMod;
     fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
     fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
@@ -2192,6 +2204,34 @@ async function cloudFetchGeminiKey(){
     if(k&&k!==deviceGeminiKey){
       deviceGeminiKey=k; aiModels={};
       kvSet("geminiKey",k).catch(()=>{});
+      if(state.view==="admin") render();
+    }
+  }catch(e){}
+}
+// 分析用カスタムGPTのリンクをクラウド（Firestore config/gpt）で全端末に共有する
+async function cloudSaveGptUrl(u){
+  if(!fsDb) return false;
+  try{
+    await fsMods.setDoc(fsMods.doc(fsDb,"config","gpt"),{url:u,updatedAt:new Date().toISOString()});
+    return true;
+  }catch(e){ return false; }
+}
+async function cloudDeleteGptUrl(){
+  if(!fsDb) return;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","gpt")); }catch(e){}
+}
+async function cloudFetchGptUrl(){
+  if(!fsDb||!fsMods.getDoc) return;
+  try{
+    const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","gpt"));
+    const u=snap&&snap.exists&&snap.exists()?(snap.data()||{}).url:null;
+    if(u&&u!==deviceGptUrl){
+      deviceGptUrl=u;
+      kvSet("gptUrl",u).catch(()=>{});
+      if(state.view==="admin") render();
+    }else if(!u&&deviceGptUrl){
+      // 管理者がリンクを削除した場合は他の端末からも消す
+      deviceGptUrl=null; kvDel("gptUrl").catch(()=>{});
       if(state.view==="admin") render();
     }
   }catch(e){}
@@ -2726,6 +2766,7 @@ document.addEventListener("input",e=>{
     state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
     deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
+    deviceGptUrl=(await kvGet("gptUrl").catch(()=>null))||null;
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{
@@ -2777,8 +2818,8 @@ function openMcpPanel(){
     <h3 style="font-size:17px">⚡ MCP連携で分析</h3>
     <p class="desc" style="margin-top:6px">ChatGPTやClaudeのチャットが、このアプリのチェックデータ（サマリー・ランキング・面談内容など）を直接読んで答えてくれます。</p>
     <div class="mcp-links">
-      <a href="https://chatgpt.com/?q=${q}" target="_blank" rel="noopener">
-        <span class="ic">🟢</span><span><b>ChatGPTで分析する</b><small>質問を入れた状態でChatGPTが開きます</small></span>
+      <a href="${deviceGptUrl?esc(deviceGptUrl):`https://chatgpt.com/?q=${q}`}" target="_blank" rel="noopener">
+        <span class="ic">🟢</span><span><b>ChatGPTで分析する</b><small>${deviceGptUrl?"専用GPTが開きます（コネクタ登録は不要）":"質問を入れた状態でChatGPTが開きます"}</small></span>
       </a>
       <a href="https://claude.ai/new?q=${q}" target="_blank" rel="noopener">
         <span class="ic">🟠</span><span><b>Claudeで分析する</b><small>質問を入れた状態でClaudeが開きます</small></span>
@@ -2790,8 +2831,8 @@ function openMcpPanel(){
       <span class="note" id="mcp-copy2-st" style="border:none;padding:0;margin:0"></span>
     </div>`:""}
     <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:13px">初回だけ：コネクタ登録のやり方</summary>
-      <p class="note" style="margin-top:6px"><b>Claude</b>：claude.ai（PCブラウザ）→ 設定 → コネクタ → カスタムコネクタを追加 → 名前「${esc(APP_NAME)}」＋接続URLを貼って追加<br>
-      <b>ChatGPT</b>（Plus以上・PCブラウザ）：設定 → プラグイン → 高度な設定 → 開発者モードON → 作成 → 名前＋接続URL、認証「認証なし」で追加<br>
+      <p class="note" style="margin-top:6px">${deviceGptUrl?`<b>ChatGPT</b>：登録不要です。上のボタンから専用GPTを開くだけで使えます。<br>`:""}<b>Claude</b>：claude.ai（PCブラウザ）→ 設定 → コネクタ → カスタムコネクタを追加 → 名前「${esc(APP_NAME)}」＋接続URLを貼って追加<br>
+      ${deviceGptUrl?"":`<b>ChatGPT</b>（Plus以上・PCブラウザ）：設定 → プラグイン → 高度な設定 → 開発者モードON → 作成 → 名前＋接続URL、認証「認証なし」で追加<br>`}
       接続URLは${deviceMcpUrl?"上のボタンでコピーできます":"管理画面の「MCP連携」で保存・コピーできます"}。⚠ 社外の人には共有しないでください。</p>
     </details>
   </div>`;

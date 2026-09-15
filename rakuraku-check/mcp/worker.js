@@ -223,6 +223,61 @@ async function callTool(name, args) {
   throw new Error(`unknown tool: ${name}`);
 }
 
+/* ---------- ChatGPT カスタムGPT（Actions）用の REST API ----------
+ * GPTs の Actions は MCP ではなく REST + OpenAPI を使うため、同じデータを
+ * GET /gpt/summary などで返す。認証は Authorization: Bearer <SECRET>。
+ * OpenAPI 定義は GET /gpt/openapi.json（公開・秘密情報は含まない）。 */
+async function handleGpt(request, url) {
+  if (SECRET.includes("PASTE_") || SERVER_API_KEY.includes("PASTE_"))
+    return new Response("Server not configured (SECRET / SERVER_API_KEY)", { status: 500 });
+  const auth = request.headers.get("Authorization") || "";
+  if (auth !== `Bearer ${SECRET}`)
+    return new Response(JSON.stringify({ error: "認証エラー：APIキー（Bearer）が正しくありません" }),
+      { status: 401, headers: { "Content-Type": "application/json; charset=utf-8" } });
+  if (request.method !== "GET") return new Response(null, { status: 405 });
+  const q = url.searchParams, path = url.pathname.slice("/gpt/".length);
+  const opt = k => q.get(k) || undefined;
+  try {
+    let out;
+    if (path === "summary") out = await callTool("get_summary", {});
+    else if (path === "ranking") out = await callTool("get_ranking", { month: opt("month") });
+    else if (path === "checks") out = await callTool("list_checks", { month: opt("month"), store: opt("store") });
+    else if (path === "check") {
+      if (!q.get("store")) return new Response(JSON.stringify({ error: "storeパラメータは必須です" }), { status: 400, headers: { "Content-Type": "application/json; charset=utf-8" } });
+      out = await callTool("get_check_detail", { store: q.get("store"), date: opt("date") });
+    }
+    else if (path === "interviews") out = await callTool("get_interviews", { store: opt("store"), limit: q.get("limit") ? Number(q.get("limit")) : undefined });
+    else if (path === "csv") return new Response(await callTool("get_csv", { month: opt("month") }), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    else return new Response("Not found", { status: 404 });
+    return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json; charset=utf-8" } });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: { "Content-Type": "application/json; charset=utf-8" } });
+  }
+}
+function gptOpenapi(url) {
+  const P = (summary, params, opId) => ({
+    get: { operationId: opId, summary,
+      parameters: params.map(([name, desc, required]) => ({
+        name, in: "query", required: !!required, description: desc, schema: { type: "string" } })),
+      responses: { "200": { description: "OK" } } },
+  });
+  const doc = {
+    openapi: "3.1.0",
+    info: { title: "らくらく臨店チェック データAPI", version: "1.0.0",
+      description: "店舗巡回チェックのデータ（サマリー・ランキング・面談・CSV）を読み取り専用で返す。点数は項目5点満点・総合点100点満点、3点以下は要改善。" },
+    servers: [{ url: `${url.origin}/gpt` }],
+    paths: {
+      "/summary": P("全店舗の現況サマリー（今月・先月の件数と平均点、ワーストランキング、アラート、面談リスク店舗）。まずこれを呼ぶ。", [], "getSummary"),
+      "/ranking": P("指定月の店舗ランキング（総合点が低い順）", [["month", "YYYY-MM形式。省略時は今月"]], "getRanking"),
+      "/checks": P("チェック一覧（日付・屋号・店舗・確認者・総合点）", [["month", "YYYY-MM形式"], ["store", "店舗名（部分一致）"]], "listChecks"),
+      "/check": P("1回のチェックの詳細（全項目の点数・面談・宿題）", [["store", "店舗名（部分一致）", true], ["date", "YYYY-MM-DD形式（省略時は最新）"]], "getCheckDetail"),
+      "/interviews": P("店長面談の記録一覧（新しい順）", [["store", "店舗名（部分一致）"], ["limit", "件数上限（既定10）"]], "getInterviews"),
+      "/csv": P("全チェックデータをCSVで取得（分析用）", [["month", "YYYY-MM形式"]], "getCsv"),
+    },
+  };
+  return new Response(JSON.stringify(doc, null, 1), { headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+
 /* ---------- MCP（JSON-RPC over Streamable HTTP） ---------- */
 function rpcResult(id, result) { return { jsonrpc: "2.0", id, result }; }
 function rpcError(id, code, message) { return { jsonrpc: "2.0", id, error: { code, message } }; }
@@ -254,6 +309,9 @@ async function handleRpc(msg) {
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    // ChatGPT カスタムGPT（Actions）用の入り口
+    if (url.pathname === "/gpt/openapi.json") return gptOpenapi(url);
+    if (url.pathname.startsWith("/gpt/")) return handleGpt(request, url);
     // 認証：URLパスの末尾セグメントが SECRET と一致すること
     if (url.pathname !== `/mcp/${SECRET}`) return new Response("Not found", { status: 404 });
     if (SECRET.includes("PASTE_") || SERVER_API_KEY.includes("PASTE_"))

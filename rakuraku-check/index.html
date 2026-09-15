@@ -1052,10 +1052,11 @@ const SHARED_APPCHECK_SITE_KEY=null;
 // セキュリティ上、公開ソースには書かず、管理画面から入力してこの端末内(IndexedDB)に保存する。
 const SHARED_GEMINI_KEY=null;
 let deviceGeminiKey=null;
+let deviceMcpUrl=null;   // MCP接続URL（この端末内にのみ保存）
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.43.0";
+const APP_VERSION="v7.44.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1710,6 +1711,26 @@ function viewAdmin(){
       <p class="note" id="gk-status"></p>
     </div>`:""}
     <div class="card">
+      <h3>MCP連携（Claude・ChatGPTと接続） <span class="badge ${deviceMcpUrl?"done":"todo"}">${deviceMcpUrl?"設定済み":"未設定"}</span></h3>
+      <p class="desc">MCPサーバー経由で、ClaudeやChatGPTのチャットから<b>チェックデータを直接参照</b>できます（サマリー・ランキング・面談内容・CSVなど。読み取り専用）。デプロイ済みの<b>接続URL</b>をここに保存しておくと、いつでもコピーしてAI側に登録できます。</p>
+      <div class="field"><label>接続URL（https://….workers.dev/mcp/… の形式）</label>
+        <input id="mcp-url" autocomplete="off" placeholder="https://xxxx.workers.dev/mcp/…" value="${esc(deviceMcpUrl||"")}">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn sub" id="mcp-save">保存</button>
+        ${deviceMcpUrl?`<button class="btn ghost" id="mcp-copy">URLをコピー</button>
+        <button class="btn ghost" id="mcp-clear" style="color:var(--bad)">削除</button>`:""}
+      </div>
+      <p class="note" id="mcp-status"></p>
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">Claude に接続する手順</summary>
+        <p class="note" style="margin-top:6px">① claude.ai（PCブラウザ）→ 設定 → コネクタ → 「カスタムコネクタを追加」<br>② 名前「らくらく臨店チェック」、URLに上の接続URLを貼り付けて追加<br>③ チャットの検索・ツールからコネクタをONにして「今月のサマリー教えて」と質問</p>
+      </details>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-weight:600">ChatGPT に接続する手順（Plus以上・PCブラウザのみ）</summary>
+        <p class="note" style="margin-top:6px">① chatgpt.com（PCブラウザ）→ 設定 → プラグイン（旧コネクター）→ 高度な設定 → <b>開発者モードをON</b><br>② 「作成」→ 名前「らくらく臨店チェック」、MCPサーバーURLに上の接続URL、認証は「認証なし」で追加<br>③ チャットの「＋」→ 開発者モードでONにして質問（無料プランでは利用不可）</p>
+      </details>
+      <p class="note" style="color:var(--bad)">⚠ 接続URLは合鍵そのものです。社外の人に共有しないでください。URLはこの端末内にのみ保存されます（漏れた場合はCloudflare側でSECRETを変更して再デプロイ）。</p>
+    </div>
+    <div class="card">
       <h3>セットアップ支援（管理者向け）</h3>
       <p class="desc">firebaseConfigやアクセスコードを<b>チャットやメールに貼らずに</b>共通設定するためのツールです。入力内容はこの画面の中だけで処理され、どこにも送信されません。生成された行をコピーして、GitHub上で <code>rakuraku-check/index.html</code> の同じ名前の行と置き換えれば設定完了です。</p>
       <div class="field"><label>共通AI設定にする firebaseConfig（任意）</label>
@@ -1761,6 +1782,24 @@ function bindAdmin(){
     }catch(err){
       st.textContent="接続失敗："+friendlyAIError(err).slice(0,120)+(lastAIError?`　詳細：${lastAIError.slice(0,160)}`:"");
     }
+  });
+  $("#mcp-save")?.addEventListener("click",async()=>{
+    const st=$("#mcp-status"); const v=$("#mcp-url").value.trim();
+    if(!v){st.textContent="接続URLを貼り付けてください。";return;}
+    if(!/^https:\/\/.+\/mcp\//.test(v)){st.textContent="URLの形式が違うようです（https://…/mcp/… の形式で貼り付けてください）。";return;}
+    deviceMcpUrl=v; await kvSet("mcpUrl",v).catch(()=>{});
+    render();
+    const s2=$("#mcp-status"); if(s2) s2.textContent="保存しました（この端末内のみ）。「URLをコピー」でAI側に登録できます。";
+  });
+  $("#mcp-copy")?.addEventListener("click",async()=>{
+    const st=$("#mcp-status");
+    const ok=await copyText(deviceMcpUrl||"");
+    st.textContent=ok?"コピーしました。Claude／ChatGPTのコネクタ登録画面に貼り付けてください。":"コピーできませんでした。上の欄から手動でコピーしてください。";
+  });
+  $("#mcp-clear")?.addEventListener("click",async()=>{
+    if(!confirm("保存した接続URLを削除しますか？（サーバー側は変わりません）")) return;
+    deviceMcpUrl=null; await kvDel("mcpUrl").catch(()=>{});
+    render();
   });
   $("#gen-go")?.addEventListener("click",async()=>{
     const msg=$("#gen-msg"); const out=[];
@@ -2665,6 +2704,7 @@ document.addEventListener("input",e=>{
     if(draft) state.draft=draft;
     state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
+    deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{

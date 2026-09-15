@@ -84,7 +84,7 @@ export function LoginForm() {
         />
       </div>
       <button type="submit" disabled={pending} className="btn-primary w-full">
-        🔒 {pending ? "確認中..." : "ログイン"}
+        {pending ? "確認中..." : "ログイン"}
       </button>
     </form>
   );

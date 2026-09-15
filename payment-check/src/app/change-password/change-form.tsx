@@ -94,7 +94,7 @@ export function ChangePasswordForm() {
           onClick={onLogout}
           className="text-xs text-neutral-500 underline hover:text-neutral-800"
         >
-          ⎋ ログアウトする
+          ログアウトする
         </button>
       </div>
     </>

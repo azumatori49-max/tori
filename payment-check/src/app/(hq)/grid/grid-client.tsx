@@ -44,16 +44,16 @@ function StatusBadge({ row }: { row: DayRow }) {
   if (row.status === "confirmed") {
     return (
       <span className="badge bg-emerald-100 text-emerald-700">
-        ✓ 確認済{row.auto ? " (自動)" : ""}
+        確認済{row.auto ? " (自動)" : ""}
       </span>
     );
   }
   if (row.status === "checking") {
-    return <span className="badge bg-sky-100 text-sky-700">◔ 確認中</span>;
+    return <span className="badge bg-sky-100 text-sky-700">確認中</span>;
   }
   return (
     <span className="badge border border-neutral-300 bg-white text-neutral-500">
-      ◻ 未確認
+      未確認
     </span>
   );
 }
@@ -147,7 +147,7 @@ export function GridClient({
               disabled={grid.unconfirmedCount === 0}
               onClick={() => setBulkOpen(true)}
             >
-              ⚡ 全未確認を確認済にする
+              全未確認を確認済にする
             </button>
           </div>
         </div>
@@ -209,8 +209,16 @@ export function GridClient({
                     <SourceBadge source={row.source} />
                   </td>
                   <td className="td">
-                    {row.hasPhotos && <span title="写真あり">📷</span>}
-                    {row.hasComment && <span title="コメントあり">💬</span>}
+                    {row.hasPhotos && (
+                      <span className="badge mr-1 bg-neutral-100 text-neutral-600">
+                        写真
+                      </span>
+                    )}
+                    {row.hasComment && (
+                      <span className="badge bg-neutral-100 text-neutral-600">
+                        メモ
+                      </span>
+                    )}
                     {!row.hasPhotos && !row.hasComment && (
                       <span className="text-neutral-300">—</span>
                     )}
@@ -323,9 +331,9 @@ function DetailSheet({
   }
 
   const statuses = [
-    ["unconfirmed", "◻ 未確認"],
-    ["checking", "◔ 確認中"],
-    ["confirmed", "✓ 確認済"],
+    ["unconfirmed", "未確認"],
+    ["checking", "確認中"],
+    ["confirmed", "確認済"],
   ] as const;
 
   return (
@@ -340,7 +348,7 @@ function DetailSheet({
             onClick={onClose}
             className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
           >
-            ✕
+            ×
           </button>
         </div>
 
@@ -487,8 +495,8 @@ function DetailSheet({
               : saving
                 ? "保存中..."
                 : changed
-                  ? "💾 保存"
-                  : "💾 変更なし"}
+                  ? "保存"
+                  : "変更なし"}
           </button>
         </div>
       </div>

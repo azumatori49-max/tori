@@ -14,7 +14,7 @@ export default function ChangePasswordPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-900 text-lg text-white">
-        🔑
+        入
       </div>
       <h1 className="text-lg font-bold text-neutral-900">
         初回ログイン: パスワード変更

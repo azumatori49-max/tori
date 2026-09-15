@@ -62,7 +62,7 @@ export function HistoryClient({ imports }: { imports: Row[] }) {
         <h1 className="text-xl font-bold">CSV取込履歴</h1>
         <div className="relative">
           <button className="btn-primary" onClick={() => setNewMenu((v) => !v)}>
-            ↥ 新規取込 ▾
+            新規取込 ▾
           </button>
           {newMenu && (
             <>

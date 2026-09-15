@@ -61,7 +61,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
               <Link href={href} className="btn-outline">
-                ↥ 取込
+                取込
               </Link>
             </div>
           ))}
@@ -72,13 +72,13 @@ export default async function DashboardPage() {
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card border-emerald-200 bg-emerald-50/60 p-4">
           <p className="text-2xl font-bold text-neutral-900">
-            ⊘ {data.diffRows.length}件
+            {data.diffRows.length}件
           </p>
           <p className="mt-1 text-xs text-neutral-500">差額あり（未確認）</p>
         </div>
         <div className="card border-amber-200 bg-amber-50/60 p-4">
           <p className="text-2xl font-bold text-neutral-900">
-            ◷ {Math.max(data.missingCsvDays.mf, data.missingCsvDays.pos)}日分
+            {Math.max(data.missingCsvDays.mf, data.missingCsvDays.pos)}日分
           </p>
           <p className="mt-1 text-xs text-neutral-500">
             CSV未取込（直近7日 / MF:{data.missingCsvDays.mf} POS:
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
         </div>
         <div className="card border-red-200 bg-red-50/60 p-4">
           <p className="text-2xl font-bold text-neutral-900">
-            ⊗ {data.noDepositStores.length}店舗
+            {data.noDepositStores.length}店舗
           </p>
           <p className="mt-1 text-xs text-neutral-500">4日連続入金なし</p>
         </div>
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
       {/* 差額あり（未確認） */}
       <section>
         <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-neutral-900">
-          ⚠ 差額あり（未確認） — {formatMonth(month)}
+          差額あり（未確認） — {formatMonth(month)}
           <span className="badge border border-neutral-200 bg-white text-neutral-500">
             {data.diffRows.length}件
           </span>
@@ -158,7 +158,7 @@ export default async function DashboardPage() {
       {/* 4日連続入金なし */}
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">
-          ⊗ 4日連続入金なし
+          4日連続入金なし
         </h2>
         <div className="card overflow-hidden">
           {data.noDepositStores.length === 0 ? (

@@ -86,7 +86,7 @@ export function UsersClient({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 氏名・メールで検索"
+          placeholder="氏名・メールで検索"
           className="input w-56"
         />
         <select
@@ -109,7 +109,7 @@ export function UsersClient({
         </select>
         <div className="ml-auto flex gap-2">
           <button className="btn-outline" onClick={() => csvInput.current?.click()}>
-            ↥ CSV取込
+            CSV取込
           </button>
           <input
             ref={csvInput}
@@ -123,7 +123,7 @@ export function UsersClient({
             }}
           />
           <button className="btn-primary" onClick={() => setAddOpen(true)}>
-            👤 ユーザーを追加
+            ユーザーを追加
           </button>
         </div>
       </div>
@@ -328,7 +328,7 @@ function AddUserDialog({
         <div className="flex items-center justify-between">
           <h3 className="font-bold">ユーザーを追加</h3>
           <button className="text-neutral-400 hover:text-neutral-700" onClick={onClose}>
-            ✕
+            ×
           </button>
         </div>
         <p className="mt-1 text-xs text-neutral-500">
@@ -419,7 +419,7 @@ function AddUserDialog({
             キャンセル
           </button>
           <button className="btn-primary" disabled={pending} onClick={submit}>
-            {pending ? "追加中..." : "👤 ユーザーを追加"}
+            {pending ? "追加中..." : "ユーザーを追加"}
           </button>
         </div>
       </div>

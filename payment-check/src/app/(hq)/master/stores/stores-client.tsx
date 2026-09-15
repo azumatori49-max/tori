@@ -154,7 +154,7 @@ export function StoresClient({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 店舗名・コードで検索"
+          placeholder="店舗名・コードで検索"
           className="input w-56"
         />
         <select
@@ -180,7 +180,7 @@ export function StoresClient({
         </select>
         <div className="ml-auto flex gap-2">
           <button className="btn-outline" onClick={() => csvInput.current?.click()}>
-            ↥ CSV取込
+            CSV取込
           </button>
           <input
             ref={csvInput}
@@ -282,7 +282,7 @@ export function StoresClient({
                 className="text-neutral-400 hover:text-neutral-700"
                 onClick={() => setEdit(null)}
               >
-                ✕
+                ×
               </button>
             </div>
             {error && (
@@ -400,7 +400,7 @@ export function StoresClient({
                               })
                             }
                           >
-                            🗑
+                            ×
                           </button>
                         </span>
                       ))}

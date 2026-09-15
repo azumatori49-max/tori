@@ -19,7 +19,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-900 text-lg text-white">
-        🏦
+        入
       </div>
       <h1 className="text-xl font-bold text-neutral-900">入金確認システム</h1>
       <p className="mt-1 text-xs text-neutral-500">ログイン</p>

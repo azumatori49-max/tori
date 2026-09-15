@@ -6,13 +6,13 @@ import { UserMenu } from "./user-menu";
 export const dynamic = "force-dynamic";
 
 const navItems = [
-  { href: "/dashboard", label: "ダッシュボード", icon: "▦" },
-  { href: "/grid", label: "月次グリッド", icon: "▤" },
-  { href: "/import/mf", label: "MF入金CSV", icon: "↥" },
-  { href: "/import/pos", label: "POS売上CSV", icon: "↥" },
-  { href: "/history", label: "取込履歴", icon: "↺" },
-  { href: "/master/users", label: "ユーザー", icon: "﹡" },
-  { href: "/master/stores", label: "店舗", icon: "⌂" },
+  { href: "/dashboard", label: "ダッシュボード" },
+  { href: "/grid", label: "月次グリッド" },
+  { href: "/import/mf", label: "MF入金CSV" },
+  { href: "/import/pos", label: "POS売上CSV" },
+  { href: "/history", label: "取込履歴" },
+  { href: "/master/users", label: "ユーザー" },
+  { href: "/master/stores", label: "店舗" },
 ];
 
 export default function HqLayout({
@@ -35,7 +35,7 @@ export default function HqLayout({
               className="flex shrink-0 items-center gap-2 font-bold text-neutral-900"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 text-xs text-white">
-                🏦
+                入
               </span>
               <span className="text-sm">入金確認システム</span>
             </Link>
@@ -46,7 +46,7 @@ export default function HqLayout({
                   href={item.href}
                   className="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900"
                 >
-                  {item.icon} {item.label}
+                  {item.label}
                 </Link>
               ))}
             </nav>

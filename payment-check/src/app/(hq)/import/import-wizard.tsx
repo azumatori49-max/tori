@@ -231,7 +231,6 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
             if (f) onFile(f);
           }}
         >
-          <span className="text-3xl">📄</span>
           <p className="text-sm font-medium">
             CSVファイルをドロップ または クリックして選択
           </p>
@@ -253,7 +252,6 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
         <>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm">
-              <span>🗎</span>
               <div>
                 <p className="font-medium">{file.name}</p>
                 <p className="text-xs text-neutral-400">
@@ -497,8 +495,8 @@ export function ImportWizard({ kind }: { kind: "mf" | "pos" }) {
 
       {step === 3 && result && (
         <div className="card flex flex-col items-center gap-3 p-12">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
-            ✓
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
+            完了
           </span>
           <p className="font-bold">取込が完了しました</p>
           <p className="text-sm text-neutral-500">

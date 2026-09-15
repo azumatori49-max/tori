@@ -79,11 +79,11 @@ export function StoreReportClient({
     <div className="mx-auto max-w-xl px-4 py-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold">🏪 {storeName} 日次報告</h1>
+          <h1 className="text-lg font-bold">{storeName} 日次報告</h1>
           <p className="text-xs text-neutral-500">{userName}</p>
         </div>
         <button className="btn-outline" onClick={onLogout}>
-          ⎋ ログアウト
+          ログアウト
         </button>
       </div>
 
@@ -164,7 +164,7 @@ export function StoreReportClient({
                   className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-[10px] text-white"
                   onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}
                 >
-                  ✕
+                  ×
                 </button>
               </div>
             ))}
@@ -219,7 +219,7 @@ export function StoreReportClient({
                     {r.comment ?? "—"}
                   </td>
                   <td className="td">
-                    {JSON.parse(r.photos_json || "[]").length > 0 ? "📷" : "—"}
+                    {JSON.parse(r.photos_json || "[]").length > 0 ? "あり" : "—"}
                   </td>
                 </tr>
               ))}

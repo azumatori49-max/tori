@@ -1,4 +1,4 @@
-# CHIBIC 入金確認
+# 入金確認システム
 
 本部の入金確認担当者が、CSV取込・差額確認・店舗報告確認・レビュー・店舗/ユーザー管理を行うためのWebアプリです。
 
@@ -18,7 +18,7 @@
 
 - Next.js 14（App Router）+ TypeScript + Tailwind CSS
 - データベース（環境変数で自動切り替え）
-  - ローカル開発: SQLite（better-sqlite3、`data/chibic.db` に自動作成）
+  - ローカル開発: SQLite（better-sqlite3、`data/payment-check.db` に自動作成）
   - 本番/Vercel: PostgreSQL（`DATABASE_URL` を設定。Supabase / Neon / Vercel Postgres など）
 
 テーブルとデモデータ（店舗・ユーザー・2026年4月の照合データ）は初回アクセス時に自動作成されます。

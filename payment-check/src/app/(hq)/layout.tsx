@@ -37,7 +37,7 @@ export default function HqLayout({
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-neutral-900 text-xs text-white">
                 🏦
               </span>
-              <span className="text-sm">CHIBIC 入金確認</span>
+              <span className="text-sm">入金確認システム</span>
             </Link>
             <nav className="flex items-center gap-0.5 overflow-x-auto text-sm">
               {navItems.map((item) => (

@@ -2,11 +2,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { Role } from "./types";
 
-const COOKIE_NAME = "chibic_session";
+const COOKIE_NAME = "pc_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7日間
 
 function secret(): string {
-  return process.env.SESSION_SECRET ?? "chibic-dev-secret";
+  return process.env.SESSION_SECRET ?? "payment-check-dev-secret";
 }
 
 function sign(payload: string): string {

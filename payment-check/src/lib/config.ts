@@ -3,7 +3,7 @@ export const DEFAULT_ADMIN_EMAIL =
 export const DEFAULT_ADMIN_PASSWORD =
   process.env.ADMIN_PASSWORD ?? "toriyaro@1234";
 
-export const APP_NAME = "CHIBIC 入金確認";
+export const APP_NAME = "入金確認システム";
 
 export function nowString(): string {
   const d = new Date();

@@ -358,7 +358,7 @@ function AddUserDialog({
             <input
               className="input"
               type="email"
-              placeholder="tanaka@chibic.jp"
+              placeholder="tanaka@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />

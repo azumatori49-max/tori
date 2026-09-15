@@ -4,7 +4,7 @@ import path from "node:path";
 import type { DB } from "./db";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DATA_DIR, "chibic.db");
+const DB_PATH = path.join(DATA_DIR, "payment-check.db");
 
 export async function createSqliteDb(): Promise<DB> {
   fs.mkdirSync(DATA_DIR, { recursive: true });

@@ -62,7 +62,7 @@ export function LoginForm() {
           type="email"
           required
           autoComplete="email"
-          placeholder="your@chibic.jp"
+          placeholder="your@example.com"
           className="input"
         />
       </div>

@@ -39,7 +39,7 @@ http://localhost:3000 を開くとログイン画面が表示されます。
 
 | ユーザー | メールアドレス | パスワード | ロール |
 | --- | --- | --- | --- |
-| 管理者 | admin@toriyaro.com | toriyaro@1234 | hq（本部） |
+| 管理者 | toriyaro17@gmail.com | toriyaro1 | hq（本部） |
 | デモ本部担当者 | hq@example.test | demo1234 | hq（本部） |
 | デモ店舗スタッフ | store-st001@example.test | demo1234 | store_staff |
 | 初回変更デモスタッフ | first-login@example.test | demo1234 | store_staff（初回パスワード変更のデモ用） |

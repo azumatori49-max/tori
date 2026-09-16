@@ -1,7 +1,9 @@
 export const DEFAULT_ADMIN_EMAIL =
-  process.env.ADMIN_EMAIL ?? "admin@toriyaro.com";
+  process.env.ADMIN_EMAIL ?? "toriyaro17@gmail.com";
 export const DEFAULT_ADMIN_PASSWORD =
-  process.env.ADMIN_PASSWORD ?? "toriyaro@1234";
+  process.env.ADMIN_PASSWORD ?? "toriyaro1";
+// 以前の初期管理者。既存DBではこのアカウントを新しい管理者に付け替える
+export const LEGACY_ADMIN_EMAIL = "admin@toriyaro.com";
 
 export const APP_NAME = "入金確認システム";
 

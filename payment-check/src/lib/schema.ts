@@ -3,6 +3,7 @@ import { hashPassword } from "./password";
 import {
   DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_PASSWORD,
+  LEGACY_ADMIN_EMAIL,
   newId,
   nowString,
 } from "./config";
@@ -278,5 +279,34 @@ export async function initSchema(db: DB): Promise<void> {
 
   if (userCount === 0) {
     await seed(db);
+    return;
   }
+  await ensureAdmin(db);
+}
+
+// 既存DBでも設定どおりの管理者でログインできるようにする
+async function ensureAdmin(db: DB): Promise<void> {
+  const current = await db.get<{ id: string }>(
+    `SELECT id FROM users WHERE email = ?`,
+    [DEFAULT_ADMIN_EMAIL]
+  );
+  if (current) return;
+
+  const legacy = await db.get<{ id: string }>(
+    `SELECT id FROM users WHERE email = ?`,
+    [LEGACY_ADMIN_EMAIL]
+  );
+  if (legacy) {
+    await db.run(
+      `UPDATE users SET email = ?, password_hash = ?, must_change_password = 0, active = 1 WHERE id = ?`,
+      [DEFAULT_ADMIN_EMAIL, hashPassword(DEFAULT_ADMIN_PASSWORD), legacy.id]
+    );
+    return;
+  }
+
+  await db.run(
+    `INSERT INTO users (id, name, email, password_hash, role, store_id, active, must_change_password, created_at)
+     VALUES (?, ?, ?, ?, 'hq', NULL, 1, 0, ?)`,
+    [newId(), "管理者", DEFAULT_ADMIN_EMAIL, hashPassword(DEFAULT_ADMIN_PASSWORD), nowString()]
+  );
 }

@@ -919,9 +919,29 @@ function buildAssistantContext(){
   lines.push("【チェックデータ（CSV）】\n"+csv);
   return lines.join("\n");
 }
+// Claude API（ブラウザ直接呼び出し）。AIアシスタントの回答品質を上げるために使う
+async function claudeAsk(prompt){
+  const r=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key":deviceClaudeKey,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true",
+    },
+    body:JSON.stringify({model:CLAUDE_MODEL,max_tokens:2048,messages:[{role:"user",content:prompt}]}),
+  });
+  if(!r.ok){
+    let msg=""; try{ msg=((await r.json()).error||{}).message||""; }catch(e){}
+    const hint=r.status===401?"（APIキーが正しくありません）":r.status===400&&/credit/i.test(msg)?"（クレジット残高が不足しています）":r.status===429?"（回数上限。少し待ってください）":"";
+    throw new Error(`Claude APIエラー ${r.status}${hint}${msg?"："+msg.slice(0,120):""}`);
+  }
+  const j=await r.json();
+  return (j.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+}
 async function askAssistant(q){
   if(chatBusy||!String(q||"").trim()) return;
-  if(!aiConfigured()){ showToast("AIが未設定です。管理画面でAI設定を行ってください"); return; }
+  if(!aiConfigured()&&!deviceClaudeKey){ showToast("AIが未設定です。管理画面でAI設定を行ってください"); return; }
   state.chat.push({role:"user",text:String(q).trim()});
   chatBusy=true; renderChat();
   try{
@@ -942,7 +962,13 @@ ${buildAssistantContext()}
 これまでの会話：
 ${transcript}
 アシスタント：`;
-    const text=await aiGenerate(prompt);
+    let text=null;
+    if(deviceClaudeKey){
+      // Claude優先。失敗したらGemini設定があればそちらで続行
+      try{ text=await claudeAsk(prompt); }
+      catch(err){ if(!aiConfigured()) throw err; }
+    }
+    if(text==null) text=await aiGenerate(prompt);
     state.chat.push({role:"model",text:String(text||"").trim()||"（回答を生成できませんでした）"});
   }catch(err){
     state.chat.push({role:"model",text:"⚠ "+friendlyAIError(err)});
@@ -966,11 +992,11 @@ function viewAssistant(){
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
     <button class="back-btn" id="to-home">← 戻る</button>
-    <h1 style="flex:1">AIアシスタント</h1>
+    <h1 style="flex:1">AIアシスタント <span class="meta" style="font-weight:600">${deviceClaudeKey?"Claude":"Gemini"}</span></h1>
     <button class="back-btn" id="chat-clear" style="font-size:12px" ${state.chat.length?"":"disabled"}>履歴クリア</button>
   </div></header>
   <div class="wrap">
-    ${aiConfigured()?"":`<div class="miss no-print"><div class="ttl">AIが未設定のため利用できません。管理画面（URL末尾に ?admin=1）のAI設定を確認してください。</div></div>`}
+    ${aiConfigured()||deviceClaudeKey?"":`<div class="miss no-print"><div class="ttl">AIが未設定のため利用できません。管理画面（URL末尾に ?admin=1）のAI設定を確認してください。</div></div>`}
     <div class="card" style="padding:14px">
       <div id="chat-log" class="chat-log">
         ${msgs||`<p class="empty" style="padding:8px 4px">全店舗のチェック結果・ランキング・面談内容をもとに、AIがその場で答えます。<br>下の例をタップするか、自由に質問してください。</p>`}
@@ -1074,10 +1100,12 @@ const SHARED_GEMINI_KEY=null;
 let deviceGeminiKey=null;
 let deviceMcpUrl=null;   // MCP接続URL（この端末内にのみ保存）
 let deviceGptUrl=null;   // 分析用カスタムGPTのリンク（クラウドで全端末に共有）
+let deviceClaudeKey=null; // Claude APIキー（AIアシスタント強化・クラウドで全端末に共有）
+const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.46.0";
+const APP_VERSION="v7.47.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1732,6 +1760,19 @@ function viewAdmin(){
       <p class="note" id="gk-status"></p>
     </div>`:""}
     <div class="card">
+      <h3>AIアシスタント強化（Claude） <span class="badge ${deviceClaudeKey?"done":"todo"}">${deviceClaudeKey?"設定済み":"未設定"}</span></h3>
+      <p class="desc">Claude APIキーを設定すると、アプリ内の✦AIアシスタントが<b>Claude（${esc(CLAUDE_MODEL)}）</b>で回答するようになります。回答の質が上がり、無料枠の回数制限もなくなります（従量課金：1質問あたり数円）。キーは<b>全端末に自動共有</b>されます。<a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>でキーを発行し、クレジットをチャージしてください。</p>
+      <div class="field"><label>Claude APIキー</label>
+        <input id="ck-input" autocomplete="off" placeholder="sk-ant-… を貼り付け" value="${esc(deviceClaudeKey||"")}">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn sub" id="ck-save">保存</button>
+        <button class="btn ghost" id="ck-test">接続テスト</button>
+        ${deviceClaudeKey?`<button class="btn ghost" id="ck-clear" style="color:var(--bad)">削除</button>`:""}
+      </div>
+      <p class="note" id="ck-status">未設定の間はこれまで通りGemini（無料枠）で動きます。</p>
+    </div>
+    <div class="card">
       <h3>MCP連携（Claude・ChatGPTと接続） <span class="badge ${deviceMcpUrl?"done":"todo"}">${deviceMcpUrl?"設定済み":"未設定"}</span></h3>
       <p class="desc">MCPサーバー経由で、ClaudeやChatGPTのチャットから<b>チェックデータを直接参照</b>できます（サマリー・ランキング・面談内容・CSVなど。読み取り専用）。デプロイ済みの<b>接続URL</b>をここに保存しておくと、いつでもコピーしてAI側に登録できます。</p>
       <div class="field"><label>接続URL（https://….workers.dev/mcp/… の形式）</label>
@@ -1806,6 +1847,32 @@ function bindAdmin(){
     }catch(err){
       st.textContent="接続失敗："+friendlyAIError(err).slice(0,120)+(lastAIError?`　詳細：${lastAIError.slice(0,160)}`:"");
     }
+  });
+  $("#ck-save")?.addEventListener("click",async()=>{
+    const st=$("#ck-status"); const v=$("#ck-input").value.trim();
+    if(!v){st.textContent="キーを貼り付けてください。";return;}
+    if(!/^sk-ant-/.test(v)){st.textContent="キーの形式が違うようです（sk-ant- で始まるキーを貼り付けてください）。";return;}
+    deviceClaudeKey=v; await kvSet("claudeKey",v).catch(()=>{});
+    const shared=await cloudSaveClaudeKey(v);
+    render();
+    const s2=$("#ck-status");
+    if(s2) s2.textContent=shared?"保存しました（全端末に自動共有されます）。「接続テスト」で確認できます。":"この端末に保存しました（クラウド未接続のため共有は保留）。";
+  });
+  $("#ck-test")?.addEventListener("click",async()=>{
+    const st=$("#ck-status"); const v=$("#ck-input").value.trim();
+    if(v&&v!==deviceClaudeKey){ deviceClaudeKey=v; await kvSet("claudeKey",v).catch(()=>{}); }
+    if(!deviceClaudeKey){st.textContent="先にキーを貼り付けてください。";return;}
+    st.textContent="接続テスト中…（最大30秒）";
+    try{
+      const t=await withTimeout(claudeAsk("接続テストです。「OK」とだけ返してください。"),30000);
+      st.textContent="接続成功："+String(t).trim().slice(0,40);
+    }catch(err){ st.textContent="接続失敗："+String(err.message||err).slice(0,160); }
+  });
+  $("#ck-clear")?.addEventListener("click",async()=>{
+    if(!confirm("Claude APIキーを削除しますか？（全端末から消え、アシスタントはGeminiに戻ります）")) return;
+    deviceClaudeKey=null; await kvDel("claudeKey").catch(()=>{});
+    await cloudDeleteClaudeKey();
+    render();
   });
   $("#mcp-save")?.addEventListener("click",async()=>{
     const st=$("#mcp-status");
@@ -2014,6 +2081,7 @@ async function initCloud(){
     setTimeout(()=>syncOutbox(),0); // ログイン直後の自動再送
     setTimeout(()=>cloudFetchGeminiKey(),0); // 共有AIキーの取得
     setTimeout(()=>cloudFetchGptUrl(),0);    // 共有GPTリンクの取得
+    setTimeout(()=>cloudFetchClaudeKey(),0); // 共有Claudeキーの取得
     fsMods=fsMod;
     fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
     fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
@@ -2204,6 +2272,33 @@ async function cloudFetchGeminiKey(){
     if(k&&k!==deviceGeminiKey){
       deviceGeminiKey=k; aiModels={};
       kvSet("geminiKey",k).catch(()=>{});
+      if(state.view==="admin") render();
+    }
+  }catch(e){}
+}
+// Claude APIキーをクラウド（Firestore config/claude）で全端末に共有する
+async function cloudSaveClaudeKey(key){
+  if(!fsDb) return false;
+  try{
+    await fsMods.setDoc(fsMods.doc(fsDb,"config","claude"),{key,updatedAt:new Date().toISOString()});
+    return true;
+  }catch(e){ return false; }
+}
+async function cloudDeleteClaudeKey(){
+  if(!fsDb) return;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","claude")); }catch(e){}
+}
+async function cloudFetchClaudeKey(){
+  if(!fsDb||!fsMods.getDoc) return;
+  try{
+    const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","claude"));
+    const k=snap&&snap.exists&&snap.exists()?(snap.data()||{}).key:null;
+    if(k&&k!==deviceClaudeKey){
+      deviceClaudeKey=k;
+      kvSet("claudeKey",k).catch(()=>{});
+      if(state.view==="admin") render();
+    }else if(!k&&deviceClaudeKey){
+      deviceClaudeKey=null; kvDel("claudeKey").catch(()=>{});
       if(state.view==="admin") render();
     }
   }catch(e){}
@@ -2767,6 +2862,7 @@ document.addEventListener("input",e=>{
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
     deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
     deviceGptUrl=(await kvGet("gptUrl").catch(()=>null))||null;
+    deviceClaudeKey=(await kvGet("claudeKey").catch(()=>null))||null;
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{

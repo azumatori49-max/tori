@@ -1,195 +1,287 @@
-import { useRef, useState } from 'react';
-import type { StoreMap } from '../../hooks/useStores';
+import { useState, type FC } from 'react';
+import { useStores } from '../../hooks/useStores';
+import { INITIAL_STORES } from '../../data/stores';
+import type { Store, StoreKey } from '../../types';
 
 interface Props {
-  stores: StoreMap;
-  onAddStore: (name: string, password: string) => Promise<string>;
-  onDeleteStore: (key: string) => Promise<void>;
-  onBulkImport: (rows: Array<{ name: string; password: string }>) => Promise<void>;
-  onSeedInitial: () => Promise<void>;
+  stores: Record<StoreKey, Store>;
 }
 
-const parseCsv = (text: string): Array<{ name: string; password: string }> => {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const rows: Array<{ name: string; password: string }> = [];
-  for (const line of lines) {
-    const cells = line.split(',').map((c) => c.trim());
-    if (cells.length < 2) continue;
-    const [name, password] = cells;
-    if (name === '店舗名' || name === 'name') continue;
-    rows.push({ name, password });
-  }
-  return rows;
-};
+export const StoreManageTab: FC<Props> = ({ stores }) => {
+  const { addStore, addStoresBulk, updateStoreName, deleteStore, seedInitialStores } =
+    useStores();
 
-export const StoreManageTab = ({
-  stores,
-  onAddStore,
-  onDeleteStore,
-  onBulkImport,
-  onSeedInitial,
-}: Props) => {
   const [showAdd, setShowAdd] = useState(false);
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('Toriyaro1');
+  const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('Toriyaro1');
+  const [csv, setCsv] = useState('');
+  const [showCsv, setShowCsv] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<StoreKey | null>(null);
+  const [editingName, setEditingName] = useState('');
 
-  const entries = Object.entries(stores).sort(([, a], [, b]) =>
-    a.name.localeCompare(b.name, 'ja')
+  const sortedKeys = Object.keys(stores).sort((a, b) =>
+    stores[a].name.localeCompare(stores[b].name, 'ja'),
   );
 
-  const handleAdd = async () => {
-    if (!name.trim() || !password) return;
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newPassword.trim()) return;
     setBusy(true);
     try {
-      await onAddStore(name.trim(), password);
-      setName('');
-      setPassword('Toriyaro1');
+      await addStore(newName.trim(), newPassword.trim());
+      setNewName('');
       setShowAdd(false);
-      setMsg('追加しました');
+      setMessage('店舗を追加しました');
+    } catch {
+      setMessage('追加に失敗しました');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleCsv = async (file: File) => {
+  const handleCsv = async () => {
+    const lines = csv
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .filter((l) => !l.startsWith('店舗名,'));
+    const rows = lines
+      .map((l) => {
+        const [name, password] = l.split(',');
+        return name && password ? { name: name.trim(), password: password.trim() } : null;
+      })
+      .filter((r): r is { name: string; password: string } => !!r);
+    if (rows.length === 0) {
+      setMessage('CSVに有効な行がありません');
+      return;
+    }
     setBusy(true);
-    setMsg('');
     try {
-      const text = await file.text();
-      const rows = parseCsv(text);
-      if (rows.length === 0) {
-        setMsg('CSVに有効な行がありません');
-        return;
-      }
-      await onBulkImport(rows);
-      setMsg(`${rows.length}件を追加しました`);
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'インポート失敗');
+      await addStoresBulk(rows);
+      setCsv('');
+      setShowCsv(false);
+      setMessage(`${rows.length}店舗を追加しました`);
+    } catch {
+      setMessage('CSV追加に失敗しました');
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
   const handleSeed = async () => {
-    if (!confirm('Firebaseに初期51店舗を一括登録します。既存の店舗データは上書きされます。よろしいですか？')) return;
+    if (!confirm(`Firebaseに${Object.keys(INITIAL_STORES).length}店舗を一括登録しますか？`)) return;
     setBusy(true);
-    setMsg('');
     try {
-      await onSeedInitial();
-      setMsg('51店舗を登録しました');
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : '登録失敗');
+      await seedInitialStores();
+      setMessage('初期店舗を登録しました');
+    } catch {
+      setMessage('初期登録に失敗しました');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleDelete = async (key: string, label: string) => {
-    if (!confirm(`「${label}」を削除します。よろしいですか？`)) return;
-    await onDeleteStore(key);
+  const handleDelete = async (key: StoreKey, name: string) => {
+    if (!confirm(`「${name}」を削除しますか？`)) return;
+    setBusy(true);
+    try {
+      await deleteStore(key);
+      setMessage('削除しました');
+    } catch {
+      setMessage('削除に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startEdit = (key: StoreKey) => {
+    setEditingKey(key);
+    setEditingName(stores[key].name);
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditingName('');
+  };
+
+  const saveEdit = async () => {
+    if (!editingKey) return;
+    if (editingName.trim() === stores[editingKey].name) {
+      cancelEdit();
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateStoreName(editingKey, editingName);
+      setMessage('店舗名を更新しました');
+      cancelEdit();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : '更新に失敗しました');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="px-4 py-4 pb-8">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="rounded-full bg-surface px-3 py-1 text-xs font-bold text-text shadow-sm border border-border">
-          登録 {entries.length} 店舗
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-2 rounded-full bg-surface border border-border px-3 py-1 text-xs font-bold">
+          登録店舗 <span className="text-accent">{sortedKeys.length}</span>
         </span>
         <button
           type="button"
-          onClick={() => setShowAdd((v) => !v)}
-          className="rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-white"
+          onClick={() => setShowAdd((s) => !s)}
+          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white"
         >
-          ＋追加
+          ＋ 追加
         </button>
-      </div>
-
-      <div className="mb-3 grid gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-bold text-text active:bg-surface2"
-        >
-          CSVで追加インポート
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleCsv(f);
-          }}
-        />
-        {entries.length === 0 && (
-          <button
-            type="button"
-            onClick={handleSeed}
-            disabled={busy}
-            className="rounded-lg bg-accent px-3 py-2 text-sm font-bold text-white"
-          >
-            🔥 Firebaseに51店舗を一括登録
-          </button>
-        )}
       </div>
 
       {showAdd && (
-        <div className="mb-3 space-y-2 rounded-xl border border-border bg-surface p-3">
+        <form
+          onSubmit={handleAdd}
+          className="space-y-2 rounded-2xl border border-border bg-surface p-3"
+        >
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
             placeholder="店舗名"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
           />
           <input
             type="text"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             placeholder="パスワード"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
           />
           <button
-            type="button"
-            onClick={handleAdd}
-            disabled={busy || !name.trim() || !password}
+            type="submit"
+            disabled={busy}
             className="w-full rounded-lg bg-accent py-2 text-sm font-bold text-white disabled:opacity-50"
           >
             登録
           </button>
+        </form>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setShowCsv((s) => !s)}
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold"
+        >
+          CSVで追加インポート
+        </button>
+        {sortedKeys.length === 0 && (
+          <button
+            type="button"
+            onClick={handleSeed}
+            disabled={busy}
+            className="flex-1 rounded-lg bg-accent px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+          >
+            🔥 Firebaseに{Object.keys(INITIAL_STORES).length}店舗を一括登録
+          </button>
+        )}
+      </div>
+
+      {showCsv && (
+        <div className="space-y-2 rounded-2xl border border-border bg-surface p-3">
+          <p className="text-[11px] text-text-muted">
+            形式: <code className="font-mono">店舗名,パスワード</code> （1行1店舗、ヘッダー行は無視）
+          </p>
+          <textarea
+            value={csv}
+            onChange={(e) => setCsv(e.target.value)}
+            rows={6}
+            className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm font-mono"
+            placeholder="店舗名,パスワード&#10;新宿西口店,Toriyaro1"
+          />
+          <button
+            type="button"
+            onClick={handleCsv}
+            disabled={busy}
+            className="w-full rounded-lg bg-accent py-2 text-sm font-bold text-white disabled:opacity-50"
+          >
+            インポート実行
+          </button>
         </div>
       )}
 
-      {msg && (
-        <div className="mb-3 rounded-lg bg-ok-bg px-3 py-2 text-xs font-bold text-ok">{msg}</div>
+      {message && (
+        <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
+          {message}
+        </p>
       )}
 
-      <div className="space-y-1.5">
-        {entries.map(([k, v]) => (
-          <div
-            key={k}
-            className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2"
-          >
-            <div className="min-w-0">
-              <div className="truncate text-sm font-bold text-text">{v.name}</div>
-              <div className="truncate text-[10px] text-text-muted">{k}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleDelete(k, v.name)}
-              className="shrink-0 rounded-md border border-ng/30 px-2 py-1 text-xs font-bold text-ng active:bg-ng-bg"
+      <ul className="space-y-2">
+        {sortedKeys.map((k) => {
+          const isEditing = editingKey === k;
+          return (
+            <li
+              key={k}
+              className="rounded-xl border border-border bg-surface px-3 py-2.5"
             >
-              削除
-            </button>
-          </div>
-        ))}
-      </div>
+              {isEditing ? (
+                <div className="space-y-2">
+                  <p className="truncate font-mono text-[10px] text-text-muted">{k}</p>
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={busy || !editingName.trim()}
+                      className="flex-1 rounded-md bg-accent py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                      保存
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={busy}
+                      className="flex-1 rounded-md border border-border bg-surface px-2 py-1.5 text-xs font-bold text-text-muted"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{stores[k].name}</p>
+                    <p className="truncate font-mono text-[10px] text-text-muted">{k}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(k)}
+                    disabled={busy}
+                    className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-bold text-text-muted disabled:opacity-50"
+                  >
+                    編集
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(k, stores[k].name)}
+                    disabled={busy}
+                    className="rounded-md bg-ng-bg px-2 py-1 text-[11px] font-bold text-ng disabled:opacity-50"
+                  >
+                    削除
+                  </button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };

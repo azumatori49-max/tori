@@ -1,12 +1,47 @@
 node_modules
 dist
 dist-ssr
-.DS_Store
 *.local
+*.tsbuildinfo
+*.log
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Env
 .env
 .env.local
-.vite
-*.log
-*.tsbuildinfo
-vite.config.d.ts
-vite.config.js
+.env.*.local
+
+# MCP: Firebase Admin のサービスアカウント鍵は絶対にコミットしない
+mcp/serviceAccountKey.json
+mcp/*.pem
+mcp/*.key.json
+
+# Firebase local cache
+.firebase/
+
+# 個別データ・機密（顧客テンプレートとしてはコミット対象外）
+backup-*.json
+stores-backup.json
+submissions-backup.json
+password-patch.json
+migration-patch.json
+
+# 過去のワンショット移行スクリプト（環境依存）
+migrate*.cjs
+overwrite-*.cjs
+
+# 別プロジェクト（このリポジトリの管理対象外）
+tori/
+
+# npm と混在しないよう pnpm ロックは除外
+pnpm-lock.yaml

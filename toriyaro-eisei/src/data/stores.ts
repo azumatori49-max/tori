@@ -1,3 +1,4 @@
+/** Seed data — passwords are plaintext here and hashed at write-time. */
 export const INITIAL_STORES: Record<string, { name: string; password: string }> = {
   store_2e97ebfc: { name: '新宿西口店', password: 'Toriyaro1' },
   store_bcfcdf5a: { name: '京都三条店', password: 'Toriyaro1' },
@@ -51,5 +52,3 @@ export const INITIAL_STORES: Record<string, { name: string; password: string }> 
   store_7c565cf0: { name: '藤沢店', password: 'Toriyaro1' },
   store_c2b9cb8e: { name: '梅田茶屋町店', password: 'Toriyaro1' },
 };
-
-export const ADMIN_PASSWORD = 'toriyaro2026';

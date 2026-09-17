@@ -1,66 +1,103 @@
-import { onValue, ref, remove, set, update } from 'firebase/database';
 import { useCallback, useEffect, useState } from 'react';
+import { onValue, ref, remove, set, update } from 'firebase/database';
 import { db } from '../lib/firebase';
+import { hashPassword } from '../lib/crypto';
 import { INITIAL_STORES } from '../data/stores';
 import type { Store, StoreKey } from '../types';
 
-export type StoreMap = Record<StoreKey, Store>;
+const generateStoreKey = (): StoreKey => {
+  const random = Math.random().toString(16).slice(2, 10).padEnd(8, '0');
+  return `store_${random}`;
+};
 
 export const useStores = () => {
-  const [stores, setStores] = useState<StoreMap>({});
+  const [stores, setStores] = useState<Record<StoreKey, Store>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const r = ref(db, 'stores');
-    const unsub = onValue(r, (snap) => {
-      const v = snap.val() as StoreMap | null;
-      setStores(v ?? {});
+    const storesRef = ref(db, 'stores');
+    const timeout = window.setTimeout(() => {
       setLoading(false);
-    });
-    return () => unsub();
+      setError('店舗データの取得に時間がかかっています。通信状況を確認してください。');
+    }, 10_000);
+    const unsub = onValue(
+      storesRef,
+      (snap) => {
+        window.clearTimeout(timeout);
+        const value = snap.val() as Record<StoreKey, Store> | null;
+        setStores(value ?? {});
+        setError(null);
+        setLoading(false);
+      },
+      (err) => {
+        window.clearTimeout(timeout);
+        setError(err.message ?? '店舗データの取得に失敗しました。');
+        setLoading(false);
+      },
+    );
+    return () => {
+      window.clearTimeout(timeout);
+      unsub();
+    };
   }, []);
 
   const seedInitialStores = useCallback(async () => {
-    await set(ref(db, 'stores'), INITIAL_STORES);
+    const entries = await Promise.all(
+      Object.entries(INITIAL_STORES).map(async ([key, { name, password }]) => {
+        const passwordHash = await hashPassword(password, key);
+        return [key, { name, passwordHash }] as const;
+      }),
+    );
+    const payload: Record<StoreKey, Store> = Object.fromEntries(entries);
+    await set(ref(db, 'stores'), payload);
   }, []);
 
   const addStore = useCallback(async (name: string, password: string) => {
-    const key = `store_${Math.random().toString(16).slice(2, 10)}`;
-    await set(ref(db, `stores/${key}`), { name, password });
+    const key = generateStoreKey();
+    const passwordHash = await hashPassword(password, key);
+    await update(ref(db, `stores/${key}`), { name, passwordHash });
     return key;
   }, []);
 
-  const updateStore = useCallback(
-    async (key: StoreKey, patch: Partial<Store>) => {
-      await update(ref(db, `stores/${key}`), patch);
+    const addStoresBulk = useCallback(
+    async (rows: Array<{ name: string; password: string }>) => {
+      const updates: Record<string, Store> = {};
+      await Promise.all(
+        rows.map(async (row) => {
+          const key = generateStoreKey();
+          const passwordHash = await hashPassword(row.password, key);
+          updates[`stores/${key}`] = {
+            name: row.name,
+            passwordHash,
+            createdAt: new Date().toISOString(),
+          };
+        }),
+      );
+      await update(ref(db), updates);
     },
-    []
+    [],
   );
+
+    const updateStoreName = useCallback(async (key: StoreKey, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('店舗名を入力してください');
+    if (trimmed.length >= 80) throw new Error('店舗名が長すぎます（80文字未満）');
+    await update(ref(db, `stores/${key}`), { name: trimmed });
+  }, []);
 
   const deleteStore = useCallback(async (key: StoreKey) => {
     await remove(ref(db, `stores/${key}`));
   }, []);
 
-  const bulkImport = useCallback(
-    async (rows: Array<{ name: string; password: string }>) => {
-      const updates: Record<string, Store> = {};
-      for (const row of rows) {
-        const key = `store_${Math.random().toString(16).slice(2, 10)}`;
-        updates[key] = row;
-      }
-      const current = stores;
-      await set(ref(db, 'stores'), { ...current, ...updates });
-    },
-    [stores]
-  );
-
   return {
     stores,
     loading,
+    error,
     seedInitialStores,
     addStore,
-    updateStore,
+    addStoresBulk,
+    updateStoreName,
     deleteStore,
-    bulkImport,
   };
 };

@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  /* モバイル向けデザイントークン。透過はやめて不透明面に統一。
+     背景の淡いグラデ・角丸・柔らかい影・薄いボーダーの雰囲気のみ残す */
+  --surface-cool: #ffffff;   /* カード・ヘッダー・下部バー・モーダル本体 */
+  --surface2-cool: #eef1f9;  /* サブ面（入力欄・チップ内側・ハイライト） */
+  --border-cool: #d9def0;    /* 細い青みボーダー */
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* PC 既定（Liquid Glass 導入前）の白ベース配色。
+     モバイル・タブレット時のみ html.liquid で上書きされる */
+  background-color: #f5f4f0;
+  color: #1a1a1a;
+  font-family: 'Yu Gothic', YuGothic, '游ゴシック', '游ゴシック体',
+    'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', 'Meiryo', system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100%;
+}
+
+button {
+  font-family: inherit;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Hide scrollbars on horizontal photo strips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==============================================================
+   モバイル・タブレット向け配色（html.liquid スコープ限定）
+   -------------------------------------------------------------
+   透過をやめ、面はすべて不透明。角丸・柔らかい影・薄い青みボーダー
+   と背景の淡いグラデーションで雰囲気は維持する。
+   ============================================================== */
+
+html.liquid body {
+  /* 淡青〜淡紫の柔らかいグラデーションを固定表示 */
+  background-color: #eaf0ff;
+  color: #0f172a;
+  background-image:
+    radial-gradient(1200px 700px at 8% -10%, rgba(196, 214, 255, 0.75) 0%, rgba(196, 214, 255, 0) 60%),
+    radial-gradient(900px 600px at 110% 10%, rgba(220, 202, 255, 0.75) 0%, rgba(220, 202, 255, 0) 55%),
+    radial-gradient(1000px 700px at 50% 110%, rgba(210, 225, 255, 0.85) 0%, rgba(210, 225, 255, 0) 60%),
+    linear-gradient(180deg, #eaf0ff 0%, #efe9ff 55%, #eaefff 100%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+@layer utilities {
+  /* ページ背景トークン: 実描画は body のグラデーションに任せ、
+     bg-bg 自体は透明にして下地を透過させる */
+  html.liquid .bg-bg {
+    background-color: transparent !important;
+  }
+
+  /* カード・ヘッダー・下部バー・モーダル本体はすべて不透明の白 */
+  html.liquid .bg-surface,
+  html.liquid :is(.bg-surface\/95, .bg-surface\/90, .bg-surface\/80) {
+    background-color: var(--surface-cool) !important;
+  }
+
+  /* サブ面（入力欄・チップ内側・ハイライト背景） */
+  html.liquid .bg-surface2 {
+    background-color: var(--surface2-cool) !important;
+  }
+
+  /* 主ボタン: 不透明のアクセント色＋押下ハイライト */
+  html.liquid .bg-accent {
+    background-color: #d4500a !important;
+    box-shadow: 0 6px 18px -6px rgba(212, 80, 10, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+  html.liquid button.bg-accent:hover:not(:disabled) {
+    background-color: #c04607 !important;
+    box-shadow: 0 10px 26px -8px rgba(212, 80, 10, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  html.liquid button.bg-accent:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  /* ステータス背景 (ok/warn/ng): 不透明で意味を保つ */
+  html.liquid :is(.bg-ok-bg, .bg-ok-bg\/60) {
+    background-color: #dcf3e4 !important;
+  }
+  html.liquid .bg-warn-bg {
+    background-color: #fff3d1 !important;
+  }
+  html.liquid .bg-ng-bg {
+    background-color: #fddede !important;
+  }
+
+  /* ボーダー: 青みの薄いラインで面の縁を表現（不透明ながら細く柔らかく） */
+  html.liquid .border-border {
+    border-color: var(--border-cool) !important;
+  }
+
+  /* シャドウ: 柔らかいガラス影は維持（青みのある暖かい影） */
+  html.liquid .shadow-sm {
+    box-shadow:
+      0 1px 2px rgba(52, 62, 120, 0.06),
+      0 4px 12px -4px rgba(52, 62, 120, 0.10) !important;
+  }
+  html.liquid :is(.shadow, .shadow-md) {
+    box-shadow:
+      0 4px 12px -2px rgba(52, 62, 120, 0.14),
+      0 12px 30px -12px rgba(52, 62, 120, 0.22) !important;
+  }
+  html.liquid .shadow-lg {
+    box-shadow:
+      0 12px 32px -8px rgba(52, 62, 120, 0.24),
+      0 20px 60px -16px rgba(52, 62, 120, 0.30) !important;
+  }
+}

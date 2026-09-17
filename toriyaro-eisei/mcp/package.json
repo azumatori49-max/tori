@@ -1,0 +1,20 @@
+{
+  "name": "eisei-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "らくらく衛生管理 の管理者用 read-only MCP サーバー (stdio + Streamable HTTP)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server-http.js",
+    "start:stdio": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.19.1",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.7.0"
+  }
+}

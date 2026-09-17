@@ -1,17 +1,20 @@
+import type { FC } from 'react';
+
 interface Props {
-  visible: boolean;
+  open: boolean;
   message?: string;
 }
 
-export const SuccessOverlay = ({ visible, message = '提出しました' }: Props) => {
-  if (!visible) return null;
+export const SuccessOverlay: FC<Props> = ({ open, message = '提出完了' }) => {
+  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
-      <div className="flex flex-col items-center gap-3 rounded-2xl bg-white px-10 py-8 shadow-2xl">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-ok text-white text-3xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fadeIn">
+      <div className="mx-6 max-w-sm rounded-3xl bg-white p-8 text-center shadow-xl">
+        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-ok-bg text-4xl text-ok">
           ✓
         </div>
-        <p className="text-base font-bold text-text">{message}</p>
+        <p className="text-lg font-bold">{message}</p>
+        <p className="mt-1 text-sm text-text-muted">ありがとうございました</p>
       </div>
     </div>
   );

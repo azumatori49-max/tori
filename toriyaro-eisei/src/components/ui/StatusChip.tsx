@@ -1,29 +1,43 @@
-import type { SubmissionStatus } from '../../types';
+import type { FC } from 'react';
+
+export type StatusKind = 'ok' | 'warn' | 'ng' | 'muted';
+
+const STYLES: Record<StatusKind, string> = {
+  ok: 'bg-ok-bg text-ok',
+  warn: 'bg-warn-bg text-warn',
+  ng: 'bg-ng-bg text-ng',
+  muted: 'bg-surface2 text-text-muted',
+};
 
 interface Props {
-  status: SubmissionStatus;
-  count?: number;
+  kind: StatusKind;
+  children: React.ReactNode;
+  className?: string;
 }
 
-const LABELS: Record<SubmissionStatus, string> = {
-  submitted: '提出済み',
-  partial: '一部提出',
-  none: '未提出',
-};
-
-const CLASSES: Record<SubmissionStatus, string> = {
-  submitted: 'bg-ok-bg text-ok',
-  partial: 'bg-warn-bg text-warn',
-  none: 'bg-ng-bg text-ng',
-};
-
-export const StatusChip = ({ status, count }: Props) => (
+export const StatusChip: FC<Props> = ({ kind, children, className = '' }) => (
   <span
-    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${CLASSES[status]}`}
+    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${STYLES[kind]} ${className}`}
   >
-    {LABELS[status]}
-    {typeof count === 'number' && status !== 'submitted' && status !== 'none' && (
-      <span className="opacity-70"> {count}/7</span>
-    )}
+    {children}
   </span>
 );
+
+export const statusFromCount = (count: number, target = 7): StatusKind => {
+  if (count >= target) return 'ok';
+  if (count > 0) return 'warn';
+  return 'ng';
+};
+
+export const statusLabel = (kind: StatusKind): string => {
+  switch (kind) {
+    case 'ok':
+      return '提出済み';
+    case 'warn':
+      return '一部提出';
+    case 'ng':
+      return '未提出';
+    case 'muted':
+      return '—';
+  }
+};

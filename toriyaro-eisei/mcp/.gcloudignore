@@ -1,0 +1,18 @@
+# Cloud Run のソースデプロイ時に除外するファイル。
+# サービスアカウント鍵は絶対にアップロードしない（Cloud Run では ADC を使う）
+serviceAccountKey.json
+*.pem
+*.key.json
+
+# ローカル依存ツリー・ロック等（Cloud Build 側で npm install される）
+node_modules/
+npm-debug.log*
+
+# エディタ・OS
+.DS_Store
+.vscode/
+.idea/
+
+# git 自体
+.git/
+.gitignore

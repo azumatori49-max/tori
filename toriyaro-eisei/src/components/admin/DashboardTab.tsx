@@ -1,196 +1,242 @@
-import { useMemo, useState } from 'react';
-import { useAllSubmissions } from '../../hooks/useSubmissions';
-import type { StoreMap } from '../../hooks/useStores';
-import {
-  formatDateJa,
-  getDateKeyFromDate,
-  getWeekKeyFromDate,
-  isFuture,
-} from '../../lib/dateUtils';
-import type { FilterMode, ReportTab, StoreKey } from '../../types';
-import { getStatus } from '../../types';
+import { useMemo, useState, type FC } from 'react';
 import { StoreRow } from './StoreRow';
 import { StoreDetailModal } from './StoreDetailModal';
+import { useSubmissionsBulk } from '../../hooks/useSubmissions';
+import { targetForType } from '../../data/checkItems';
+import {
+  dateKeyToDate,
+  formatDateKeyJa,
+  formatMonthKeyJa,
+  getDateKey,
+  getMonthKey,
+  getWeekKey,
+  isFutureDate,
+  isFutureMonth,
+  isFutureWeek,
+  monthKeyToDate,
+  weekKeyToDate,
+} from '../../lib/dateUtils';
+import type { FilterMode, ReportTab, Store, StoreKey } from '../../types';
 
 interface Props {
-  stores: StoreMap;
+  stores: Record<StoreKey, Store>;
 }
 
-export const DashboardTab = ({ stores }: Props) => {
+export const DashboardTab: FC<Props> = ({ stores }) => {
   const [reportTab, setReportTab] = useState<ReportTab>('daily');
-  const [cursorDate, setCursorDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
-  const [search, setSearch] = useState('');
+  const [dateKey, setDateKey] = useState<string>(() => getDateKey());
+  const [weekKey, setWeekKey] = useState<string>(() => getWeekKey());
+  const [monthKey, setMonthKey] = useState<string>(() => getMonthKey());
   const [filter, setFilter] = useState<FilterMode>('ng');
-  const [openStore, setOpenStore] = useState<StoreKey | null>(null);
+  const [search, setSearch] = useState('');
+  const [openStoreKey, setOpenStoreKey] = useState<StoreKey | null>(null);
 
-  const storeEntries = useMemo(
+  const currentKey =
+    reportTab === 'daily' ? dateKey : reportTab === 'weekly' ? weekKey : monthKey;
+
+  const sortedKeys = useMemo(
     () =>
-      Object.entries(stores).sort(([, a], [, b]) =>
-        a.name.localeCompare(b.name, 'ja')
+      Object.keys(stores).sort((a, b) =>
+        stores[a].name.localeCompare(stores[b].name, 'ja'),
       ),
-    [stores]
+    [stores],
   );
-  const storeKeys = useMemo(() => storeEntries.map(([k]) => k), [storeEntries]);
 
-  const selectedKey = useMemo(() => {
-    return reportTab === 'daily'
-      ? getDateKeyFromDate(cursorDate)
-      : getWeekKeyFromDate(cursorDate);
-  }, [reportTab, cursorDate]);
-
-  const { submissions, loading } = useAllSubmissions(storeKeys, reportTab, selectedKey);
+  const { data, loading, reload } = useSubmissionsBulk(sortedKeys, reportTab, currentKey);
 
   const summary = useMemo(() => {
-    let submitted = 0;
-    let partial = 0;
-    let none = 0;
-    for (const k of storeKeys) {
-      const s = getStatus(submissions[k]?.count ?? 0);
-      if (s === 'submitted') submitted++;
-      else if (s === 'partial') partial++;
-      else none++;
-    }
-    return { submitted, partial, none };
-  }, [storeKeys, submissions]);
+    let ok = 0;
+    let warn = 0;
+    let ng = 0;
+    sortedKeys.forEach((k) => {
+      const c = data[k]?.count ?? 0;
+      const t = targetForType(reportTab, k, currentKey);
+      if (c >= t) ok += 1;
+      else if (c > 0) warn += 1;
+      else ng += 1;
+    });
+    return { ok, warn, ng };
+  }, [data, sortedKeys, reportTab, currentKey]);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return storeEntries.filter(([k, v]) => {
-      if (term && !v.name.toLowerCase().includes(term)) return false;
+  const filteredKeys = useMemo(() => {
+    return sortedKeys.filter((k) => {
+      const store = stores[k];
+      if (search && !store.name.toLowerCase().includes(search.toLowerCase())) {
+        return false;
+      }
       if (filter === 'ng') {
-        const s = getStatus(submissions[k]?.count ?? 0);
-        if (s === 'submitted') return false;
+        const c = data[k]?.count ?? 0;
+        const t = targetForType(reportTab, k, currentKey);
+        if (c >= t) return false;
       }
       return true;
     });
-  }, [storeEntries, search, filter, submissions]);
+  }, [sortedKeys, stores, data, search, filter, reportTab, currentKey]);
 
-  const shiftDate = (days: number) => {
-    const step = reportTab === 'daily' ? days : days * 7;
-    const next = new Date(cursorDate);
-    next.setDate(next.getDate() + step);
-    if (isFuture(next)) return;
-    setCursorDate(next);
+  const shiftDate = (delta: number) => {
+    if (reportTab === 'daily') {
+      const d = dateKeyToDate(dateKey);
+      d.setDate(d.getDate() + delta);
+      const next = getDateKey(0, d);
+      if (delta > 0 && isFutureDate(next)) return;
+      setDateKey(next);
+    } else if (reportTab === 'weekly') {
+      const d = weekKeyToDate(weekKey);
+      d.setDate(d.getDate() + delta * 7);
+      const next = getWeekKey(0, d);
+      if (delta > 0 && isFutureWeek(next)) return;
+      setWeekKey(next);
+    } else {
+      const d = monthKeyToDate(monthKey);
+      d.setMonth(d.getMonth() + delta);
+      const next = getMonthKey(0, d);
+      if (delta > 0 && isFutureMonth(next)) return;
+      setMonthKey(next);
+    }
   };
 
+  const canForward =
+    reportTab === 'daily'
+      ? dateKey < getDateKey()
+      : reportTab === 'weekly'
+        ? weekKey < getWeekKey()
+        : monthKey < getMonthKey();
+
   const dateLabel =
-    reportTab === 'daily' ? formatDateJa(cursorDate) : `週: ${getWeekKeyFromDate(cursorDate).slice(1)}`;
+    reportTab === 'daily'
+      ? formatDateKeyJa(dateKey)
+      : reportTab === 'weekly'
+        ? `週: ${weekKey.slice(1)}`
+        : formatMonthKeyJa(monthKey);
+
+  const anchorDateKey =
+    reportTab === 'daily'
+      ? dateKey
+      : reportTab === 'weekly'
+        ? getDateKey(0, weekKeyToDate(weekKey))
+        : getDateKey(0, monthKeyToDate(monthKey));
 
   return (
-    <div className="px-4 py-4">
-      <div className="mb-3 flex rounded-full bg-surface2 p-1 text-sm font-bold">
-        {(['daily', 'weekly'] as ReportTab[]).map((t) => (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-surface p-1 border border-border shadow-sm flex">
+        {(['daily', 'weekly', 'monthly'] as const).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setReportTab(t)}
-            className={`flex-1 rounded-full py-2 transition ${
-              reportTab === t ? 'bg-surface text-text shadow-sm' : 'text-text-muted'
+            className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
+              reportTab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
             }`}
           >
-            {t === 'daily' ? 'デイリー' : 'ウィークリー'}
+            {t === 'daily' ? 'デイリー' : t === 'weekly' ? 'ウィークリー' : 'マンスリー'}
           </button>
         ))}
       </div>
 
-      <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-surface px-2 py-2">
+      <div className="flex items-center justify-between rounded-2xl border border-border bg-surface px-3 py-2 shadow-sm">
         <button
           type="button"
           onClick={() => shiftDate(-1)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface2 text-lg"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
           aria-label="前へ"
         >
           ←
         </button>
-        <div className="text-sm font-bold text-text">{dateLabel}</div>
+        <div className="text-sm font-bold">{dateLabel}</div>
         <button
           type="button"
           onClick={() => shiftDate(1)}
-          disabled={isFuture(new Date(cursorDate.getTime() + (reportTab === 'daily' ? 1 : 7) * 86400000))}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface2 text-lg disabled:opacity-30"
+          disabled={!canForward}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
           aria-label="次へ"
         >
           →
         </button>
       </div>
 
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        <SummaryCard label="提出済み" value={summary.submitted} cls="bg-ok-bg text-ok" />
-        <SummaryCard label="一部提出" value={summary.partial} cls="bg-warn-bg text-warn" />
-        <SummaryCard label="未提出" value={summary.none} cls="bg-ng-bg text-ng" />
+      <div className="grid grid-cols-3 gap-2">
+        <SummaryCard label="提出済み" count={summary.ok} tone="ok" />
+        <SummaryCard label="一部提出" count={summary.warn} tone="warn" />
+        <SummaryCard label="未提出" count={summary.ng} tone="ng" />
       </div>
 
-      <div className="mb-3 space-y-2">
+      <div className="space-y-2">
         <input
           type="search"
+          placeholder="店舗名で検索"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="店舗名で検索"
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm focus:border-accent focus:outline-none"
         />
-        <div className="flex gap-2">
-          <FilterChip active={filter === 'ng'} onClick={() => setFilter('ng')} label="未提出のみ" />
-          <FilterChip active={filter === 'all'} onClick={() => setFilter('all')} label="全店舗" />
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setFilter(filter === 'ng' ? 'all' : 'ng')}
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+              filter === 'ng'
+                ? 'bg-accent text-white'
+                : 'bg-surface text-text-muted border border-border'
+            }`}
+          >
+            {filter === 'ng' ? '✓ 未提出のみ' : '未提出のみ'}
+          </button>
+          <button
+            type="button"
+            onClick={reload}
+            className="text-[11px] font-bold text-text-muted hover:text-accent"
+          >
+            ↻ 更新
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-text-muted">読み込み中…</div>
-      ) : filtered.length === 0 ? (
-        <div className="py-8 text-center text-sm text-text-muted">該当する店舗はありません</div>
+        <p className="py-8 text-center text-sm text-text-muted">読み込み中…</p>
+      ) : filteredKeys.length === 0 ? (
+        <p className="py-8 text-center text-sm text-text-muted">
+          {filter === 'ng' ? '未提出の店舗はありません' : '該当する店舗がありません'}
+        </p>
       ) : (
-        <div className="space-y-2 pb-4">
-          {filtered.map(([k, v]) => (
+        <div className="space-y-2">
+          {filteredKeys.map((k) => (
             <StoreRow
               key={k}
-              storeName={v.name}
-              submission={submissions[k] ?? null}
-              onClick={() => setOpenStore(k)}
+              storeKey={k}
+              storeName={stores[k].name}
+              type={reportTab}
+              dateOrWeekKey={currentKey}
+              submission={data[k] ?? null}
+              onClick={() => setOpenStoreKey(k)}
+              onReload={reload}
             />
           ))}
         </div>
       )}
 
-      {openStore && (
-        <StoreDetailModal
-          storeKey={openStore}
-          storeName={stores[openStore]?.name ?? ''}
-          reportTab={reportTab}
-          selectedKey={selectedKey}
-          onClose={() => setOpenStore(null)}
-        />
-      )}
+      <StoreDetailModal
+        open={!!openStoreKey}
+        storeKey={openStoreKey}
+        storeName={openStoreKey ? stores[openStoreKey]?.name ?? '' : ''}
+        anchorDateKey={anchorDateKey}
+        onClose={() => setOpenStoreKey(null)}
+      />
     </div>
   );
 };
 
-const SummaryCard = ({ label, value, cls }: { label: string; value: number; cls: string }) => (
-  <div className={`rounded-xl px-3 py-2.5 ${cls}`}>
-    <div className="text-[10px] font-bold opacity-80">{label}</div>
-    <div className="text-xl font-black">{value}</div>
-  </div>
-);
-
-const FilterChip = ({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
+interface SummaryProps {
   label: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-      active ? 'bg-accent text-white' : 'bg-surface text-text-muted border border-border'
-    }`}
-  >
-    {label}
-  </button>
+  count: number;
+  tone: 'ok' | 'warn' | 'ng';
+}
+const TONE: Record<SummaryProps['tone'], string> = {
+  ok: 'bg-ok-bg text-ok',
+  warn: 'bg-warn-bg text-warn',
+  ng: 'bg-ng-bg text-ng',
+};
+const SummaryCard: FC<SummaryProps> = ({ label, count, tone }) => (
+  <div className={`rounded-2xl px-3 py-3 text-center ${TONE[tone]}`}>
+    <div className="text-2xl font-black leading-none">{count}</div>
+    <div className="mt-1 text-[10px] font-bold">{label}</div>
+  </div>
 );

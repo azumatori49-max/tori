@@ -1,6 +1,58 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "stores": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$storeKey": {
+        ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/) && (!newData.exists() || newData.hasChildren(['name', 'passwordHash']))",
+        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
+             "passwordHash": { ".validate": "newData.isString() && newData.val().length === 64" },
+        "createdAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "$other": { ".validate": false }
+      }
+    },
+    "submissions": {
+      ".read": "auth != null",
+      "$storeKey": {
+        ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/)",
+        "$type": {
+                   ".validate": "$type === 'daily' || $type === 'weekly' || $type === 'monthly'",
+          "$key": {
+            ".write": "auth != null",
+            ".validate": "newData.hasChildren(['count', 'submittedAt', 'storeName'])",
+            "count": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+            "submittedAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "storeName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 80" },
+            "viaLine": { ".validate": "newData.isBoolean()" },
+            "photoMeta": {
+              "$idx": {
+                "uploadedAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+                "$other": { ".validate": false }
+              }
+            },
+            "photos": {
+              "$idx": { ".validate": "newData.isString() && newData.val().length < 1024" }
+            }
+          }
+        }
+      }
+    },
+    "feedback": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "errorLogs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "referralRequests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["normalizedReferredName", "storeKey", "status", "appliedAt"]
+    },
+    "referralDrafts": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
   }
 }

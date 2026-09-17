@@ -1,41 +1,68 @@
-import { useMemo, useState } from 'react';
-import { ADMIN_PASSWORD, INITIAL_STORES } from '../../data/stores';
-import { useStores } from '../../hooks/useStores';
-import type { StoreKey } from '../../types';
+import { useMemo, useState, type FC } from 'react';
+import { ADMIN_PASSWORD } from '../../lib/firebase';
+import { verifyPassword } from '../../lib/crypto';
+import { isMobileDevice } from '../../lib/device';
+import type { Store, StoreKey } from '../../types';
 
 interface Props {
+  stores: Record<StoreKey, Store>;
+  loading: boolean;
+  loadError?: string | null;
   onLoginStore: (storeKey: StoreKey) => void;
   onLoginAdmin: () => void;
+  onOpenViewer: () => void;
 }
 
-export const LoginScreen = ({ onLoginStore, onLoginAdmin }: Props) => {
-  const { stores, loading } = useStores();
-  const [storeKey, setStoreKey] = useState('');
+export const LoginScreen: FC<Props> = ({
+  stores,
+  loading,
+  loadError,
+  onLoginStore,
+  onLoginAdmin,
+  onOpenViewer,
+}) => {
+  const isPC = !isMobileDevice();
+  const [selected, setSelected] = useState<string>(isPC ? '__admin__' : '');
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const effectiveStores = useMemo(() => {
-    const keys = Object.keys(stores);
-    if (keys.length > 0) return stores;
-    return INITIAL_STORES;
+  const sortedStoreKeys = useMemo(() => {
+    return Object.keys(stores).sort((a, b) =>
+      stores[a].name.localeCompare(stores[b].name, 'ja'),
+    );
   }, [stores]);
 
-  const sortedStoreEntries = useMemo(
-    () =>
-      Object.entries(effectiveStores).sort(([, a], [, b]) =>
-        a.name.localeCompare(b.name, 'ja')
-      ),
-    [effectiveStores]
-  );
+  const filteredKeys = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sortedStoreKeys;
+    return sortedStoreKeys.filter((k) => stores[k].name.toLowerCase().includes(q));
+  }, [sortedStoreKeys, stores, query]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const selectedLabel =
+    selected === '__admin__'
+      ? '＊ 管理者'
+      : selected
+        ? (stores[selected]?.name ?? '')
+        : '';
+
+  const pickStore = (key: string) => {
+    setSelected(key);
+    setQuery('');
+    setOpen(false);
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!storeKey) {
+    setError(null);
+    if (!selected) {
       setError('店舗を選択してください');
       return;
     }
-    if (storeKey === '__admin__') {
+    if (selected === '__admin__') {
       if (password === ADMIN_PASSWORD) {
         onLoginAdmin();
       } else {
@@ -43,72 +70,164 @@ export const LoginScreen = ({ onLoginStore, onLoginAdmin }: Props) => {
       }
       return;
     }
-    const store = effectiveStores[storeKey];
-    if (!store) {
-      setError('店舗が見つかりません');
+    const store = stores[selected];
+    if (!store || !store.passwordHash) {
+      setError('店舗情報が不正です');
       return;
     }
-    if (store.password === password) {
-      onLoginStore(storeKey);
-    } else {
-      setError('パスワードが違います');
+    setBusy(true);
+    try {
+      const ok = await verifyPassword(password, selected, store.passwordHash);
+      if (ok) onLoginStore(selected);
+      else setError('パスワードが違います');
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center px-4 py-8">
-      <div className="mx-auto w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="mb-2 text-5xl">🐔</div>
-          <h1 className="text-xl font-black text-text">鶏ヤロー 衛生管理</h1>
-          <p className="mt-1 text-xs text-text-muted">店舗ログイン</p>
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-10 bg-bg">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <img
+            src="/rakuraku.png"
+            alt="らくらく衛生管理"
+            className="h-28 w-28 rounded-full object-cover shadow-md"
+          />
+          <h1 className="mt-4 text-xl font-black tracking-tight">らくらく衛生管理</h1>
+          <p className="mt-1 text-sm text-text-muted">
+            店舗の毎日・毎週の衛生チェック写真を投稿し、本部がまとめて確認できる業務アプリ。
+          </p>
         </div>
+
         <form
           onSubmit={handleSubmit}
-          className="space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-sm"
+          className="space-y-4 rounded-3xl bg-surface p-6 shadow-sm border border-border"
         >
-          <div>
-            <label className="mb-1 block text-xs font-bold text-text-muted">店舗</label>
-            <select
-              value={storeKey}
-              onChange={(e) => setStoreKey(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface2 px-3 py-2.5 text-sm"
-              disabled={loading}
-            >
-              <option value="">店舗を選択...</option>
-              <option value="__admin__">＊ 管理者</option>
-              {sortedStoreEntries.map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {isPC ? (
+            <div>
+              <label className="mb-1 block text-xs font-bold text-text-muted">ログイン</label>
+              <div className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm font-bold">
+                ＊ 管理者
+              </div>
+              <p className="mt-2 text-[11px] text-text-muted">
+                PCでは管理者のみ利用できます。店舗の衛生チェック提出はスマートフォンから行ってください。
+              </p>
+            </div>
+          ) : (
+            <div className="relative">
+              <label className="mb-1 block text-xs font-bold text-text-muted">店舗</label>
+              <input
+                type="text"
+                value={open ? query : selectedLabel}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setOpen(true);
+                  if (selected) setSelected('');
+                }}
+                onFocus={() => {
+                  setQuery('');
+                  setOpen(true);
+                }}
+                placeholder={
+                  loading
+                    ? '店舗を読み込み中…（管理者は選択できます）'
+                    : '店舗名で検索 / 選択'
+                }
+                className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
+                autoComplete="off"
+              />
+              {open && (
+                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => pickStore('__admin__')}
+                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-bold text-accent hover:bg-surface2"
+                  >
+                    ＊ 管理者
+                  </button>
+                  <div className="border-t border-border" />
+                  {loading && (
+                    <div className="px-3 py-3 text-xs text-text-muted">店舗を読み込み中…</div>
+                  )}
+                  {!loading && sortedStoreKeys.length === 0 && (
+                    <div className="px-3 py-3 text-xs text-text-muted">
+                      店舗がまだ登録されていません。
+                    </div>
+                  )}
+                  {!loading && sortedStoreKeys.length > 0 && filteredKeys.length === 0 && (
+                    <div className="px-3 py-3 text-xs text-text-muted">該当する店舗がありません</div>
+                  )}
+                  {!loading &&
+                    filteredKeys.map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => pickStore(k)}
+                        className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-surface2"
+                      >
+                        {stores[k].name}
+                      </button>
+                    ))}
+                </div>
+              )}
+              {open && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="閉じる"
+                  className="fixed inset-0 z-10 cursor-default"
+                />
+              )}
+            </div>
+          )}
+
+          {loadError && (
+            <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+              {loadError}
+            </p>
+          )}
+
           <div>
             <label className="mb-1 block text-xs font-bold text-text-muted">パスワード</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface2 px-3 py-2.5 text-sm"
+              className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
               autoComplete="current-password"
             />
           </div>
+
           {error && (
-            <div className="rounded-lg bg-ng-bg px-3 py-2 text-xs font-bold text-ng">
-              {error}
-            </div>
+            <p className="rounded-lg bg-ng-bg px-3 py-2 text-xs font-bold text-ng">{error}</p>
           )}
+
           <button
             type="submit"
-            className="w-full rounded-lg bg-accent py-3 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
+            className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
+            disabled={busy}
           >
-            ログイン
+            {busy ? '確認中…' : 'ログイン'}
           </button>
+
+          {!isPC && (
+            <p className="text-center text-[11px] text-text-muted">
+              一度ログインするとパスワードはこの端末に保存され、次回から自動でログインされます。
+            </p>
+          )}
         </form>
-        <p className="mt-4 text-center text-[11px] text-text-muted">
-          スタッフ用：店舗を選択しパスワードを入力してください
-        </p>
+
+        {!isPC && (
+          <button
+            type="button"
+            onClick={onOpenViewer}
+            disabled={loading}
+            className="mt-4 w-full rounded-2xl border border-border bg-surface py-3 text-sm font-bold text-text-muted shadow-sm transition hover:text-accent active:scale-[0.98] disabled:opacity-50"
+          >
+            閲覧モードで見る（パスワード不要）
+          </button>
+        )}
       </div>
     </div>
   );

@@ -1,74 +1,85 @@
-import type { ReportType, Submission } from '../../types';
-import { getStatus } from '../../types';
-import { StatusChip } from '../ui/StatusChip';
-import { formatSubmittedAt } from '../../lib/dateUtils';
+import type { FC } from 'react';
+import { StatusChip, statusFromCount, statusLabel } from '../ui/StatusChip';
+import { formatDateTimeJa } from '../../lib/dateUtils';
+import { targetForType } from '../../data/checkItems';
+import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
-  type: ReportType;
+  variant: ReportType;
+  storeKey: StoreKey;
+  title: string;
+  description: string;
   submission: Submission | null;
-  onStart: () => void;
+  onOpen: () => void;
 }
 
-const META: Record<ReportType, { label: string; title: string; desc: string; ring: string; chipBg: string; chipColor: string }> = {
+const VARIANT: Record<ReportType, { label: string; border: string; chip: string }> = {
   daily: {
     label: 'DAILY',
-    title: '毎日の衛生チェック',
-    desc: '指定の7箇所を撮影して提出',
-    ring: 'border-l-accent',
-    chipBg: 'bg-accent/10',
-    chipColor: 'text-accent',
+    border: 'border-l-accent',
+    chip: 'bg-accent/10 text-accent',
   },
   weekly: {
     label: 'WEEKLY',
-    title: '週1回の衛生チェック',
-    desc: '今週中に7箇所を撮影して提出',
-    ring: 'border-l-blue-600',
-    chipBg: 'bg-blue-50',
-    chipColor: 'text-blue-700',
+    border: 'border-l-blue-500',
+    chip: 'bg-blue-50 text-blue-600',
+  },
+  monthly: {
+    label: 'MONTHLY',
+    border: 'border-l-violet-500',
+    chip: 'bg-violet-50 text-violet-600',
   },
 };
 
-export const ReportCard = ({ type, submission, onStart }: Props) => {
-  const meta = META[type];
+export const ReportCard: FC<Props> = ({
+  variant,
+  storeKey,
+  title,
+  description,
+  submission,
+  onOpen,
+}) => {
+  const v = VARIANT[variant];
+  const target = targetForType(variant, storeKey);
   const count = submission?.count ?? 0;
-  const status = getStatus(count);
-  const pct = Math.min(100, (count / 7) * 100);
-  const barColor =
-    status === 'submitted' ? 'bg-ok' : status === 'partial' ? 'bg-warn' : 'bg-ng';
+  const status = statusFromCount(count, target);
+  const pct = Math.min(100, (count / target) * 100);
 
   return (
     <button
       type="button"
-      onClick={onStart}
-      className={`w-full rounded-2xl border border-border border-l-[6px] ${meta.ring} bg-surface p-4 text-left shadow-sm transition active:scale-[0.99]`}
+      onClick={onOpen}
+      className={`block w-full rounded-2xl border border-border bg-surface p-5 text-left shadow-sm transition active:scale-[0.99] border-l-4 ${v.border}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span
-            className={`inline-block rounded-full ${meta.chipBg} ${meta.chipColor} px-2 py-0.5 text-[10px] font-black tracking-widest`}
-          >
-            {meta.label}
-          </span>
-          <h2 className="mt-2 text-base font-bold text-text">{meta.title}</h2>
-          <p className="mt-0.5 text-xs text-text-muted">{meta.desc}</p>
-        </div>
-        <StatusChip status={status} count={count} />
+      <div className="flex items-center justify-between">
+        <span
+          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-black tracking-widest font-display ${v.chip}`}
+        >
+          {v.label}
+        </span>
+        <StatusChip kind={status}>{statusLabel(status)}</StatusChip>
       </div>
+      <h3 className="mt-3 text-base font-bold">{title}</h3>
+      <p className="mt-1 text-xs text-text-muted">{description}</p>
 
       <div className="mt-4">
-        <div className="mb-1 flex items-center justify-between text-xs text-text-muted">
-          <span>進捗</span>
-          <span className="font-bold text-text">{count} / 7枚</span>
+        <div className="flex items-center justify-between text-xs font-bold">
+          <span className="text-text-muted">提出枚数</span>
+          <span>
+            <span className="text-base">{count}</span> / {target} 枚
+          </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-surface2">
+        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface2">
           <div
-            className={`h-full ${barColor} transition-all`}
+            className={`h-full rounded-full transition-all ${
+              status === 'ok' ? 'bg-ok' : status === 'warn' ? 'bg-warn' : 'bg-border'
+            }`}
             style={{ width: `${pct}%` }}
           />
         </div>
         {submission && (
           <p className="mt-2 text-[11px] text-text-muted">
-            最終提出: {formatSubmittedAt(submission.submittedAt)}
+            最終提出: {formatDateTimeJa(submission.submittedAt)}
           </p>
         )}
       </div>

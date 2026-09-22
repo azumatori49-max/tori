@@ -56,19 +56,6 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .hd h1{font-size:16px;font-weight:700}
 .hd .meta{font-size:12px;color:var(--sub)}
 .item-alert{margin-top:10px;background:var(--bad-bg);color:var(--bad);font-size:12px;font-weight:700;border-radius:8px;padding:8px 10px}
-.trend-bars{display:flex;gap:3px;align-items:flex-end;height:48px;margin-top:8px}
-.tb{width:12px;border-radius:4px 4px 0 0;background:var(--line);min-height:4px}
-.tb.lv5,.tb.lv4{background:var(--good)}
-.tb.lv3{background:var(--warn)}
-.tb.lv2,.tb.lv1{background:var(--bad)}
-.month-row{display:flex;gap:8px;margin-top:10px;overflow-x:auto;padding-bottom:2px}
-.mcell{text-align:center;min-width:48px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;flex:0 0 auto}
-.mcell .mk{font-size:10px;color:var(--sub);white-space:nowrap}
-.mcell .mv{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
-.mcell .mb{height:3px;border-radius:2px;margin-top:3px;background:var(--line)}
-.mcell .mb.lv5,.mcell .mb.lv4{background:var(--good)}
-.mcell .mb.lv3{background:var(--warn)}
-.mcell .mb.lv2,.mcell .mb.lv1{background:var(--bad)}
 .sync-bar{
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;
   font-size:12px;color:var(--sub);background:var(--card);
@@ -283,10 +270,6 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .rep-item .fx{font-size:12px;margin-top:6px;color:var(--sub)}
 .rep-item .fx b{color:var(--ink)}
 .rep-item .photos .ph{width:56px;height:56px}
-.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.kv .cell{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
-.kv .cell .k{font-size:11px;color:var(--sub)}
-.kv .cell .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
 .txt-block{margin-top:10px}
 .txt-block .k{font-size:12px;font-weight:700;color:var(--sub)}
 .txt-block .v{font-size:13px;white-space:pre-wrap}
@@ -355,7 +338,7 @@ body{
 input,select,textarea{background:rgba(255,255,255,.6);border-color:rgba(255,255,255,.8);border-radius:12px}
 .scale button{background:rgba(255,255,255,.45);border-color:rgba(255,255,255,.7);border-radius:14px}
 .photo-add{background:rgba(255,255,255,.4);border-radius:14px}
-.hw-row,.mcell,.miss{border-radius:14px}
+.hw-row,.miss{border-radius:14px}
 .miss{background:rgba(251,240,216,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .msg.ai{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.75)}
 .upd-bar{background:rgba(24,155,139,.85);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
@@ -1105,7 +1088,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.47.0";
+const APP_VERSION="v7.47.1";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -1265,13 +1248,7 @@ function shrinkForAI(dataUrl){
     img.src=dataUrl;
   });
 }
-// 写真追加のたびに即判定せず、追加が落ち着いてから1回だけ判定する
-const autoJudgeTimers={};
 let aiGen=0;  // まとめて判定の後に古い単体判定が上書きしないようにする世代番号
-function scheduleAutoJudge(id){
-  clearTimeout(autoJudgeTimers[id]);
-  autoJudgeTimers[id]=setTimeout(()=>{ if(state.draft&&!aiBusy.has(id)) judgeItem(id); },2000);
-}
 // 写真のある全項目を、API呼び出し1回でまとめて判定する（利用制限の節約）
 let batchBusy=false, batchErr="";
 async function judgeAllItems(){
@@ -1294,7 +1271,6 @@ async function autoJudgeCategory(ci){
 async function judgeBatch(targets,silent){
   const d=state.draft; if(!d||batchBusy) return;
   aiGen++;
-  for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
   batchBusy=true; batchErr=""; if(!silent) render();
   try{
     const parts=["あなたは飲食店の店舗巡回チェックの検査員です。以下の各チェック項目について、直後に添付された写真を確認して判定してください。"];
@@ -2777,7 +2753,6 @@ document.addEventListener("click",async e=>{
     const missing=collectMissing();
     if(!partial&&missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     if(partial&&!confirm("入力途中のまま「一時保存」として提出します。続きは報告書画面の「続きを入力する」から再開できます。よろしいですか？")) return;
-    for(const k of Object.keys(autoJudgeTimers)) clearTimeout(autoJudgeTimers[k]);
     const insp=buildInspection(state.draft,false,partial);
     await putInspection(insp).catch(()=>{});
     await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});

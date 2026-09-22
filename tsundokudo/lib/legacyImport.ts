@@ -18,7 +18,7 @@ const LEGACY_KEY = String(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '');
 export const canImportLegacy = Boolean(LEGACY_URL && LEGACY_KEY);
 
 /** 貼り付けられた閲覧用リンク（またはトークンそのもの）からトークンを抜き出す */
-export function extractLegacyToken(input: string): string {
+function extractLegacyToken(input: string): string {
   const s = input.trim();
   const m = s.match(/\/v\/([0-9a-f]+)/i);
   if (m?.[1]) return m[1];

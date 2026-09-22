@@ -15,7 +15,3 @@ export function formatWorkDate(value: string): string {
   return value;
 }
 
-/** 入力欄向け: 自由入力された日付文字列をそのまま保持（バリデーションは緩め） */
-export function normalizeDateInput(value: string): string {
-  return value.trim();
-}

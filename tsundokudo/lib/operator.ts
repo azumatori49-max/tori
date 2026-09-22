@@ -16,7 +16,7 @@ import type { User } from 'firebase/auth';
 import { fbDb } from '@/lib/firebase';
 
 /** 運営者のメールアドレス（rules側と揃えること） */
-export const OPERATOR_EMAILS = ['azumatori49@gmail.com'];
+const OPERATOR_EMAILS = ['azumatori49@gmail.com'];
 
 /** このユーザーが運営者か */
 export function isOperatorUser(user: User | null): boolean {

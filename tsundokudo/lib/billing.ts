@@ -10,7 +10,6 @@
 import type {
   AnnualSchedule,
   DiyItem,
-  MaintenanceReport,
   RatControl,
   SupplyLine,
   ToppingItem,
@@ -22,19 +21,19 @@ export function supplyAmount(line: SupplyLine): number {
 }
 
 /** 備品資材の合計（円・税抜） */
-export function suppliesTotal(supplies: SupplyLine[]): number {
+function suppliesTotal(supplies: SupplyLine[]): number {
   return supplies.reduce((sum, l) => sum + supplyAmount(l), 0);
 }
 
 /** チェックされたトッピングの追加費用合計（円・税抜） */
-export function toppingsTotal(toppings: ToppingItem[]): number {
+function toppingsTotal(toppings: ToppingItem[]): number {
   return toppings
     .filter((t) => t.checked)
     .reduce((sum, t) => sum + (t.fee || 0), 0);
 }
 
 /** チェックされたプチDIYの追加費用合計（円・税抜） */
-export function diyTotal(diy: DiyItem[]): number {
+function diyTotal(diy: DiyItem[]): number {
   return diy.filter((d) => d.checked).reduce((sum, d) => sum + (d.fee || 0), 0);
 }
 
@@ -88,4 +87,3 @@ export function yen(n: number): string {
   return (n || 0).toLocaleString('ja-JP');
 }
 
-export type { MaintenanceReport };

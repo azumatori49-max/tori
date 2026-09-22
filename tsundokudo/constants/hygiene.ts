@@ -28,15 +28,15 @@ export const OPTIONAL_PHOTO_CHECK_NAMES: string[] = [
 ];
 
 /** まとめ項目「各種フィルター清掃」の内訳（1枚の写真にまとめて撮影する運用） */
-export const FILTER_GROUP_NAME = '各種フィルター清掃';
-export const FILTER_SUB_CHECKS: string[] = [
+const FILTER_GROUP_NAME = '各種フィルター清掃';
+const FILTER_SUB_CHECKS: string[] = [
   '冷蔵庫フィルター清掃',
   '冷凍庫フィルター清掃',
   '製氷機フィルター清掃',
 ];
 
 /** 定期点検チェックリストの定型項目 */
-export const DEFAULT_CHECKLIST_NAMES: string[] = [
+const DEFAULT_CHECKLIST_NAMES: string[] = [
   'グリストラップ洗浄',
   'エアコンフィルター洗浄',
   '看板電飾点検',
@@ -59,7 +59,7 @@ export const DEFAULT_TOPPING_NAMES: string[] = [
 /** 害虫の状況（いるかいないか）の選択肢 */
 export const PEST_PRESENCE_OPTIONS = ['多い', '少ない', '見ない'] as const;
 
-export function makeDefaultChecklist(): ChecklistItem[] {
+function makeDefaultChecklist(): ChecklistItem[] {
   return DEFAULT_CHECKLIST_NAMES.map((name) => ({
     name,
     checked: false,
@@ -72,7 +72,7 @@ export function makeDefaultChecklist(): ChecklistItem[] {
   }));
 }
 
-export function makeDefaultToppings(): ToppingItem[] {
+function makeDefaultToppings(): ToppingItem[] {
   return DEFAULT_TOPPING_NAMES.map((name) => ({
     name,
     checked: false,
@@ -82,7 +82,7 @@ export function makeDefaultToppings(): ToppingItem[] {
 }
 
 /** プチDIYは自分で追加する方式のため初期は空 */
-export function makeDefaultDiy(): DiyItem[] {
+function makeDefaultDiy(): DiyItem[] {
   return [];
 }
 

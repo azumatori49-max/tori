@@ -34,13 +34,6 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
         filePath: path.resolve(__dirname, 'lib/emptyModule.js'),
       };
     }
-    // @shopify/flash-list は Web 非対応 → FlatList シムに差し替え
-    if (moduleName === '@shopify/flash-list') {
-      return {
-        type: 'sourceFile',
-        filePath: path.resolve(__dirname, 'lib/flashlist-web-shim.tsx'),
-      };
-    }
   }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);

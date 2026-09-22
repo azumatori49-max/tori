@@ -54,7 +54,7 @@ async function uploadPhotoList(
 }
 
 /** レポート内の全写真（各セクション）をアップロード済みURLへ変換 */
-export async function uploadReportPhotos(
+async function uploadReportPhotos(
   report: MaintenanceReport,
   orgId: string,
 ): Promise<MaintenanceReport> {

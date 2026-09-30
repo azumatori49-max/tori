@@ -152,6 +152,21 @@ input[type=number]{font-variant-numeric:tabular-nums}
   box-shadow:0 4px 14px rgba(24,155,139,.35);
 }
 .ai-hbtn:active{transform:scale(.96)}
+/* 経営指標（KPI・売上・FL） */
+.mx-card h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.mx-t{border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:rgba(255,255,255,.5);min-width:0}
+.mx-l{font-size:11px;color:var(--sub);font-weight:700}
+.mx-v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.3;overflow-wrap:anywhere}
+.mx-v small{font-size:11.5px;font-weight:700;margin-left:2px;color:var(--sub)}
+.mx-s{font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.55;font-variant-numeric:tabular-nums}
+.mx-note{font-size:11.5px;color:var(--sub);margin-top:10px;line-height:1.6}
+.mxrow{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.mxrow:empty{display:none}
+.mx-chip{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--accent-soft);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mx-list{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.mx-list .mx-i{font-size:12.5px;line-height:1.55;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:rgba(255,255,255,.5);overflow-wrap:anywhere}
+@media (min-width:1000px){.mx-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 /* MCP連携（外部AIへジャンプ） */
 .mcp-hbtn{
   flex:0 0 auto;border:none;border-radius:999px;padding:7px 14px;
@@ -660,7 +675,7 @@ const INTERVIEW_QS=[
 
 /* ================= 状態・保存 ================= */
 let db=null;
-const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null, chat:[] };
+const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null, chat:[], metrics:null };
 
 function openDB(){return new Promise((res,rej)=>{
   const r=indexedDB.open("rakuraku-check",2);
@@ -806,12 +821,285 @@ function storeRanking(month){
     .sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
 }
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
+/* ---------- 経営指標（KPI・売上・FL） ----------
+   実データはリポジトリに置かず、実行時に取得する。
+   取得元：Cloudflare Worker の /metrics（売上・FL＝日報API、KPI＝KPIスプレッドシート）。
+   取得先URLと閲覧キーは管理画面で1回設定し、Firestore（config/metrics）で全端末に共有する。
+   FL率 ＝ 原価率(F) ＋ 人件費率(L)。売上・FLは当月の累計（日報の参照日時点）。 */
+/*__MATCHER__*/
+let metricsCfg=null, metricsAliases={}, metricsBusy=false, metricsAt=0, metricsErr="", metricsSnapAt=0;
+let livePackCache=null;
+const metricsMonths={}, metricsSnapPacks={};
+const METRICS_STALE_MS=10*60*1000;
+const metricsOn=()=>!!(metricsCfg&&metricsCfg.url&&metricsCfg.key);
+const isFin=v=>typeof v==="number"&&Number.isFinite(v);
+const fmtPct=(v,d=1)=>isFin(v)?(v*100).toFixed(d)+"%":"—";
+const fmtYen=v=>isFin(v)?"¥"+Math.round(v).toLocaleString("ja-JP"):"—";
+const fmtPt=v=>!isFin(v)?"—":Math.abs(v)<0.0005?"±0.0pt":(v>0?"+":"−")+Math.abs(v*100).toFixed(1)+"pt";
+const fmtMD=s=>{const m=/^(\d{1,2})\/(\d{1,2})$/.exec(String(s||""));return m?`${+m[1]}/${+m[2]}`:String(s||"");};
+function metricsClearMemo(){livePackCache=null;for(const k of Object.keys(metricsSnapPacks))delete metricsSnapPacks[k];}
+function mkPack(m){
+  if(!m) return null;
+  return {rows:(m.daily&&m.daily.rows)||m.rows||[],kpi:m.kpi||{},month:m.month||"",fetchedAt:m.fetchedAt||"",ix:null,memo:new Map()};
+}
+function livePack(){
+  if(!state.metrics) return null;
+  if(!livePackCache||livePackCache.src!==state.metrics) livePackCache={src:state.metrics,pack:mkPack(state.metrics)};
+  return livePackCache.pack;
+}
+function snapPack(ym){
+  if(!metricsMonths[ym]) return null;
+  return metricsSnapPacks[ym]||(metricsSnapPacks[ym]=mkPack(metricsMonths[ym]));
+}
+function packIndexes(p){
+  if(!p.ix){
+    const names=new Map();
+    for(const m of Object.keys(p.kpi)) for(const r of p.kpi[m]||[]) if(r&&r.store&&!names.has(r.store)) names.set(r.store,{store:r.store});
+    p.ix={daily:buildIndex(p.rows),kpi:buildIndex([...names.values()])};
+  }
+  return p.ix;
+}
+// アプリの店名（自由入力）から、日報の行とKPIの月別点数を探す。曖昧なときは紐づけない
+function packLookup(p,store,brand){
+  const key=store+"|"+(brand||"");
+  if(p.memo.has(key)) return p.memo.get(key);
+  const b=brand==="イザカラ"?"鶏ヤロー":(brand||"");
+  const ix=packIndexes(p);
+  const md=matchStore(store,b,ix.daily,metricsAliases);
+  const mk=matchStore(store,b,ix.kpi,metricsAliases);
+  const kpi={};
+  if(mk.row){
+    const kk=metricKey(mk.row.store), kb=brandOf(mk.row.store);
+    for(const m of Object.keys(p.kpi)){
+      const hit=(p.kpi[m]||[]).find(r=>r&&isFin(r.score)&&metricKey(r.store)===kk&&(!kb||!brandOf(r.store)||brandOf(r.store)===kb));
+      if(hit) kpi[m]=hit.score;
+    }
+  }
+  const out={daily:md.row||null,dailyHow:md.how,kpi,kpiName:mk.row?mk.row.store:"",kpiHow:mk.how};
+  p.memo.set(key,out);
+  return out;
+}
+function metricsFor(store,brand){const p=livePack();return p?packLookup(p,store,brand):null;}
+// 同業態の平均（TEAM NOTEと同じ算出：原価率は店舗の単純平均、人件費率は売上で加重）
+function metricsBrandAvg(p,brand){
+  const rows=p.rows.filter(r=>r.brand===brand);
+  const mean=k=>{const v=rows.map(r=>r[k]).filter(isFin);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
+  const el=rows.filter(r=>isFin(r.laborAmount)&&isFin(r.sales)&&r.sales>=0);
+  const lab=el.reduce((s,r)=>s+r.laborAmount,0), sal=el.reduce((s,r)=>s+r.sales,0);
+  const cost=mean("costRate"), labor=sal>0?lab/sal:null;
+  return {n:rows.length,costRate:cost,laborRate:labor,fl:isFin(cost)&&isFin(labor)?cost+labor:null,achievement:mean("achievement")};
+}
+async function metricsRequest(url,key){
+  const base=String(url||"").trim().replace(/\/+$/,"");
+  if(!/^https:\/\//.test(base)) throw new Error("取得先URLは https:// で始まる形式にしてください");
+  const r=await withTimeout(fetch(base+"/metrics",{headers:{Authorization:"Bearer "+String(key||"").trim()},cache:"no-store"}),25000);
+  if(r.status===401) throw new Error("閲覧キーが正しくありません");
+  if(!r.ok) throw new Error(`取得に失敗しました (${r.status})`);
+  const j=await r.json();
+  if(!j||typeof j!=="object") throw new Error("応答の形式が想定と異なります");
+  return j;
+}
+async function fetchMetrics(force){
+  if(!metricsOn()||metricsBusy) return;
+  if(!force&&Date.now()-metricsAt<METRICS_STALE_MS) return;
+  metricsBusy=true;
+  try{
+    const j=await metricsRequest(metricsCfg.url,metricsCfg.key);
+    state.metrics=j; metricsAt=Date.now(); metricsErr="";
+    metricsClearMemo();
+    kvSet("metrics",j).catch(()=>{});
+    cloudSaveMetricsSnapshot(j);
+  }catch(e){
+    metricsErr=String(e&&e.message||e).slice(0,140);
+    metricsAt=Date.now()-METRICS_STALE_MS+60*1000;   // 失敗時は1分後まで再試行しない
+  }finally{
+    metricsBusy=false;
+    refreshMetricSlots();
+  }
+}
+// 月ごとの記録をクラウドに残す（過去月のCSV・AI分析用）。取得のたびではなく数時間おきに1回
+async function cloudSaveMetricsSnapshot(j){
+  if(!fsDb||!j||!j.month||!(j.daily&&j.daily.rows&&j.daily.rows.length)) return;
+  if(Date.now()-metricsSnapAt<3*3600*1000) return;
+  metricsSnapAt=Date.now();
+  try{
+    const doc={month:j.month,fetchedAt:j.fetchedAt||new Date().toISOString(),rows:j.daily.rows};
+    if(j.kpi) doc.kpi=j.kpi;
+    await fsMods.setDoc(fsMods.doc(fsDb,"config","metrics-"+j.month),doc,{merge:true});
+  }catch(e){ metricsSnapAt=0; }
+}
+async function preloadMetricMonths(list){
+  if(!fsDb||!fsMods||!fsMods.getDoc) return;
+  const live=state.metrics&&state.metrics.month;
+  await Promise.all([...new Set(list)].filter(ym=>/^\d{4}-\d{2}$/.test(ym||"")&&ym!==live&&!(ym in metricsMonths)).map(async ym=>{
+    try{
+      const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","metrics-"+ym));
+      metricsMonths[ym]=snap&&snap.exists&&snap.exists()?snap.data():null;
+    }catch(e){ /* 取得できなければ次回また試す */ }
+  }));
+}
+async function cloudSaveMetricsCfg(cfg,aliases){
+  if(!fsDb) return false;
+  try{
+    if(cfg) await fsMods.setDoc(fsMods.doc(fsDb,"config","metrics"),{url:cfg.url,key:cfg.key,updatedAt:new Date().toISOString()});
+    if(aliases) await fsMods.setDoc(fsMods.doc(fsDb,"config","storeAliases"),{map:aliases,updatedAt:new Date().toISOString()});
+    return true;
+  }catch(e){ return false; }
+}
+async function cloudDeleteMetricsCfg(){
+  if(!fsDb) return;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","metrics")); }catch(e){}
+}
+async function cloudFetchMetricsCfg(){
+  if(!fsDb||!fsMods.getDoc) return;
+  try{
+    const c=await fsMods.getDoc(fsMods.doc(fsDb,"config","metrics"));
+    const d=c&&c.exists&&c.exists()?c.data():null;
+    const a=await fsMods.getDoc(fsMods.doc(fsDb,"config","storeAliases"));
+    const map=a&&a.exists&&a.exists()?((a.data()||{}).map||{}):null;
+    let changed=false;
+    if(d&&d.url&&d.key&&(!metricsCfg||metricsCfg.url!==d.url||metricsCfg.key!==d.key)){
+      metricsCfg={url:d.url,key:d.key}; kvSet("metricsCfg",metricsCfg).catch(()=>{}); changed=true;
+    }else if(!d&&metricsCfg){
+      metricsCfg=null; state.metrics=null; kvDel("metricsCfg").catch(()=>{}); kvDel("metrics").catch(()=>{}); changed=true;
+    }
+    if(map&&JSON.stringify(map)!==JSON.stringify(metricsAliases)){
+      metricsAliases=map; kvSet("metricsAliases",map).catch(()=>{}); changed=true;
+    }
+    if(changed){ metricsClearMemo(); if(state.view==="admin") render(); }
+    if(metricsOn()) fetchMetrics(true);
+  }catch(e){}
+}
+function metricsSummaryText(m){
+  const rows=(m.daily&&m.daily.rows)||[], km=m.kpi?Object.keys(m.kpi).sort():[];
+  const t=m.fetchedAt?new Date(m.fetchedAt):null;
+  const at=t&&!isNaN(t)?`${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}取得`:"";
+  const parts=[m.daily?`日報 ${rows.length}店（${m.month||"月不明"}）`:"日報 取得できず",km.length?`KPI ${km.map(x=>+x.slice(5)+"月").join("・")}`:"KPI 取得できず"];
+  if(at) parts.push(at);
+  return parts.join(" ／ ")+((m.errors&&m.errors.length)?`　⚠ ${m.errors.join(" / ")}`:"");
+}
+function parseAliases(text){
+  const o={};
+  for(const line of String(text||"").split(/\r?\n/)){
+    const m=/^\s*(.+?)\s*(?:=|＝|→|->)\s*(.+?)\s*$/.exec(line);
+    if(m) o[m[1]]=m[2];
+  }
+  return o;
+}
+const aliasesToText=o=>Object.entries(o||{}).map(([a,b])=>`${a}=${b}`).join("\n");
+
+/* --- 表示 --- */
+function metricsCardHtml(store,brand){
+  if(!metricsOn()) return "";
+  const head=`<h3>経営指標（KPI・売上・FL）</h3>`;
+  const p=livePack();
+  if(!p) return `<section class="card mx-card no-print">${head}<p class="desc">${metricsBusy?"取得しています…":esc(metricsErr||"まだ取得できていません。")}</p></section>`;
+  const f=packLookup(p,store,brand);
+  const d=f.daily;
+  const km=Object.keys(f.kpi).sort();
+  if(!d&&!km.length) return `<section class="card mx-card no-print">${head}<p class="desc">この店舗に対応する日報・KPIの行が見つかりませんでした。店名の表記が違う可能性があります（管理画面の「経営指標」で店名の対応を設定できます）。</p></section>`;
+  const tile=(l,v,s)=>`<div class="mx-t"><div class="mx-l">${l}</div><div class="mx-v">${v}</div>${s?`<div class="mx-s">${s}</div>`:""}</div>`;
+  const tiles=[];
+  // KPI
+  if(km.length){
+    const cur=km[km.length-1], prev=km.length>1?km[km.length-2]:null;
+    const delta=prev!=null?f.kpi[cur]-f.kpi[prev]:null;
+    const dl=delta==null?"":Math.abs(delta)<0.0005?`${+prev.slice(5)}月から変わらず`:`${+prev.slice(5)}月比 ${delta>0?"▲ +":"▼ −"}${Math.abs(delta).toFixed(3)}`;
+    tiles.push(tile(`KPI（${+cur.slice(5)}月）`,`${+f.kpi[cur].toFixed(3)}<small>点</small>`,dl));
+  }else tiles.push(tile("KPI","—","KPIの行が見つかりません"));
+  if(d){
+    const avg=metricsBrandAvg(p,d.brand);
+    const vs=(v,a)=>isFin(v)&&isFin(a)&&avg.n>1?`同業態平均（${fmtPct(a)}）より ${fmtPt(v-a)}${Math.abs(v-a)<0.0005?"":v>a?"（高い）":"（低い）"}`:"";
+    tiles.push(tile("売上実績（月累計）",fmtYen(d.sales),`予算達成率 ${fmtPct(d.achievement)}${isFin(d.pace)?`<br>着地ペース ${fmtYen(d.pace)}`:""}`));
+    tiles.push(tile("原価率（F）",fmtPct(d.costRate),`${vs(d.costRate,avg.costRate)}${isFin(d.costForecast)?`<br>着地予想 ${fmtPct(d.costForecast)}`:""}`));
+    const lt=d.brand==="鶏ヤロー"&&isFin(d.laborRate)?`<br>目標基準26.5%との差 ${fmtPt(d.laborRate-0.265)}`:"";
+    tiles.push(tile("人件費率（L）",fmtPct(d.laborRate),`${vs(d.laborRate,avg.laborRate)}${isFin(d.laborForecast)?`<br>着地予想 ${fmtPct(d.laborForecast)}`:""}${lt}`));
+    tiles.push(tile("FL率（F＋L）",fmtPct(d.fl),`${vs(d.fl,avg.fl)}${isFin(d.flForecast)?`<br>着地予想 ${fmtPct(d.flForecast)}`:""}`));
+  }
+  const how=[];
+  if(d) how.push(`日報：${esc(d.store)}${f.dailyHow==="fuzzy"?"（自動判定）":f.dailyHow==="alias"?"（手動設定）":""}`);
+  if(km.length&&f.kpiName) how.push(`KPI：${esc(f.kpiName)}${f.kpiHow==="fuzzy"?"（自動判定）":f.kpiHow==="alias"?"（手動設定）":""}`);
+  const notes=[];
+  if(d) notes.push(`${fmtMD(d.asOf)}参照の月初からの累計。${d.error?"最新の取得に失敗したため前回の値です。":""}`);
+  notes.push("FL率＝原価率＋人件費率。");
+  return `<section class="card mx-card no-print">${head}
+    <div class="mx-grid">${tiles.join("")}</div>
+    <p class="mx-note">${notes.join(" ")}<br>紐づけ先 → ${how.join(" ／ ")||"—"}<br>違う店に紐づいている場合は、管理画面の「経営指標」で店名の対応を直せます。</p>
+  </section>`;
+}
+function metricsChipsHtml(store,brand){
+  if(!metricsOn()) return "";
+  const p=livePack(); if(!p) return "";
+  const f=packLookup(p,store,brand), d=f.daily, km=Object.keys(f.kpi).sort();
+  const chips=[];
+  if(d&&isFin(d.fl)) chips.push(`FL ${fmtPct(d.fl)}`);
+  if(d&&isFin(d.achievement)) chips.push(`達成 ${fmtPct(d.achievement,0)}`);
+  if(km.length) chips.push(`KPI ${+f.kpi[km[km.length-1]].toFixed(2)}`);
+  return chips.map(c=>`<span class="mx-chip">${esc(c)}</span>`).join("");
+}
+// 管理画面：アプリの店名がどの日報・KPIの行に紐づいたかの確認
+function metricsMatchReportHtml(){
+  if(!metricsOn()) return "";
+  const p=livePack();
+  if(!p) return `<p class="note">${metricsBusy?"取得しています…":esc(metricsErr||"まだ取得できていません。「接続テスト」を押してください。")}</p>`;
+  const seen=new Map();
+  for(const i of state.inspections) if(i.store&&!seen.has(i.store+"|"+(i.brand||""))) seen.set(i.store+"|"+(i.brand||""),{store:i.store,brand:i.brand||""});
+  const items=[...seen.values()].map(s=>({...s,f:packLookup(p,s.store,s.brand)}));
+  if(!items.length) return `<p class="note">チェックの記録がまだありません。</p>`;
+  const none=items.filter(x=>!x.f.daily&&!Object.keys(x.f.kpi).length);
+  const fuzzy=items.filter(x=>(x.f.dailyHow==="fuzzy"||x.f.kpiHow==="fuzzy")&&!none.includes(x));
+  const ok=items.length-none.length-fuzzy.length;
+  const line=x=>`<div class="mx-i"><b>${esc(x.store)}</b>${x.brand?`（${esc(x.brand)}）`:""}<br>日報：${x.f.daily?esc(x.f.daily.store):"なし"} ／ KPI：${x.f.kpiName?esc(x.f.kpiName):"なし"}</div>`;
+  return `<p class="note" style="border:none;padding-top:6px">紐づけ結果：✓ 確実 ${ok}店 ／ ⚠ 自動判定（要確認）${fuzzy.length}店 ／ ✕ 未紐づけ ${none.length}店</p>
+    ${none.length?`<div class="sec-label">✕ 未紐づけ（下の対応表に「アプリの店名=シート側の店名」を追加）</div><div class="mx-list">${none.map(line).join("")}</div>`:""}
+    ${fuzzy.length?`<div class="sec-label" style="margin-top:10px">⚠ 自動判定（合っているか確認）</div><div class="mx-list">${fuzzy.map(line).join("")}</div>`:""}`;
+}
+// 画面に埋め込んだスロットだけを更新する（入力中の欄を消さないため、画面全体は描き直さない）
+function refreshMetricSlots(){
+  document.querySelectorAll("[data-mkind]").forEach(el=>{
+    const k=el.dataset.mkind, s=el.dataset.mstore||"", b=el.dataset.mbrand||"";
+    el.innerHTML=k==="card"?metricsCardHtml(s,b):k==="chips"?metricsChipsHtml(s,b):k==="matchreport"?metricsMatchReportHtml():"";
+  });
+}
+const metricsSlot=(kind,store,brand,tag)=>`<${tag||"div"} ${kind==="chips"?'class="mxrow" ':""}data-mkind="${kind}" data-mstore="${esc(store||"")}" data-mbrand="${esc(brand||"")}">${kind==="card"?metricsCardHtml(store,brand):kind==="chips"?metricsChipsHtml(store,brand):metricsMatchReportHtml()}</${tag||"div"}>`;
+// CSV・AIに渡す数値（指定月のスナップショット、または最新の取得結果から）
+const METRICS_CSV_HEAD=["KPI点","売上実績(円)","予算達成率(%)","原価率(%)","人件費率(%)","FL率(%)","日報参照日"];
+function metricsCsvCells(i){
+  const blank=METRICS_CSV_HEAD.map(()=> "");
+  if(!metricsOn()) return blank;
+  const ym=ymOf(i.date), live=livePack(), sp=metricsMonths[ym]?snapPack(ym):null;
+  const packs=[live,sp].filter(Boolean);
+  const dp=packs.find(p=>p.month===ym&&p.rows.length), kp=packs.find(p=>p.kpi[ym]);
+  const d=dp?packLookup(dp,i.store,i.brand).daily:null;
+  const k=kp?packLookup(kp,i.store,i.brand).kpi[ym]:null;
+  const pc=v=>isFin(v)?+(v*100).toFixed(1):"";
+  return [isFin(k)?+k.toFixed(3):"", d&&isFin(d.sales)?Math.round(d.sales):"", d?pc(d.achievement):"", d?pc(d.costRate):"", d?pc(d.laborRate):"", d?pc(d.fl):"", d?d.asOf:""];
+}
+function metricsContextLines(){
+  const p=livePack(); if(!p) return "";
+  const seen=new Map();
+  for(const i of state.inspections) if(i.completedAt&&!i.provisional&&i.store&&!seen.has(i.store)) seen.set(i.store,i.brand||"");
+  const lines=[];
+  for(const [store,brand] of seen){
+    const f=packLookup(p,store,brand), d=f.daily, km=Object.keys(f.kpi).sort();
+    if(!d&&!km.length) continue;
+    const parts=[];
+    if(km.length) parts.push(`KPI ${+f.kpi[km[km.length-1]].toFixed(3)}点(${+km[km.length-1].slice(5)}月)`);
+    if(d){
+      parts.push(`売上${isFin(d.sales)?Math.round(d.sales)+"円":"—"}`,`達成率${fmtPct(d.achievement)}`,`原価率${fmtPct(d.costRate)}`,`人件費率${fmtPct(d.laborRate)}`,`FL率${fmtPct(d.fl)}`,`(${fmtMD(d.asOf)}参照)`);
+    }
+    lines.push(`${store}：${parts.join(" ")}`);
+  }
+  return lines.length?"【店舗別の経営指標（KPI・売上・FL。売上とFLは当月の月初からの累計。FL率＝原価率＋人件費率）】\n"+lines.join("\n")+"\n":"";
+}
+
 /* ---------- CSV書き出し・ChatGPT分析用プロンプト ---------- */
 function csvEsc(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function buildCsv(month){ // month="YYYY-MM" を渡すとその月の分だけに絞る
   const head=["日付","屋号","店舗","確認者","総合点(100点満点)","状態",
     ...ALL_ITEMS.map(i=>i.name+"(5点満点)"),
-    ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,""))];
+    ...INTERVIEW_QS.map(q=>"面談："+q.label.replace(/^\d+\.\s*/,"")),
+    ...(metricsOn()?METRICS_CSV_HEAD:[])];
   const list=[...state.inspections].filter(i=>i.completedAt&&(!month||ymOf(i.date)===month))
     .sort((a,b)=>(a.date+(a.completedAt||"")).localeCompare(b.date+(b.completedAt||"")));
   const rows=[head];
@@ -819,13 +1107,14 @@ function buildCsv(month){ // month="YYYY-MM" を渡すとその月の分だけ�
     const iv=(i.pdca&&i.pdca.interview)||{};
     rows.push([i.date,i.brand||"",i.store,i.inspector,i.totalScore,i.provisional?"一時保存(入力途中)":"完了",
       ...ALL_ITEMS.map(it=>{const s=score5Of(it,i);return s==null?"":s;}),
-      ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim())]);
+      ...INTERVIEW_QS.map(q=>String(iv[q.key]||"").trim()),
+      ...(metricsOn()?metricsCsvCells(i):[])]);
   }
   return rows.map(r=>r.map(csvEsc).join(",")).join("\n");
 }
 function chatGptPrompt(){
   return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
-以下は全店舗の臨店チェック結果のCSVデータです。各行が1回の臨店チェックで、各項目は5段階評価（5=優秀、3以下=要改善）、総合点は100点満点です。「面談：」の列には店舗スタッフとの面談で聞き取った内容が入っています。
+以下は全店舗の臨店チェック結果のCSVデータです。各行が1回の臨店チェックで、各項目は5段階評価（5=優秀、3以下=要改善）、総合点は100点満点です。「面談：」の列には店舗スタッフとの面談で聞き取った内容が入っています。${metricsOn()?"「KPI点」「売上実績」「予算達成率」「原価率」「人件費率」「FL率」の列は経営指標です（FL率＝原価率＋人件費率。売上とFLはその月の月初からの累計で、日報参照日時点。空欄は取得できなかったもの）。チェック点が低い店舗と、FL率が高い・達成率が低い店舗の関係にも注目してください。":""}
 
 このデータを分析して、エリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
 
@@ -853,8 +1142,18 @@ function storePrompt(store){
     if(h.length) lines.push(`${it.name}：${h.slice(-8).map(p=>`${fmtDate(p.date)} ${p.s5}点`).join("、")}`);
   });
   const ivs=interviewsFor(store).slice(0,3).map(x=>`【面談 ${fmtDate(x.date)}${x.who?`／被面談者：${x.who}`:""}】\n`+x.qa.map(z=>`${z.label}\n${z.text}`).join("\n"));
+  const mxBrand=(state.inspections.find(i=>i.store===store&&i.brand)||{}).brand||"";
+  const mxLine=(()=>{
+    const p=livePack(); if(!p) return "";
+    const f=packLookup(p,store,mxBrand), d=f.daily, km=Object.keys(f.kpi).sort();
+    if(!d&&!km.length) return "";
+    const a=[];
+    if(km.length) a.push(`KPI：${km.slice(-3).map(m=>`${+m.slice(5)}月 ${+f.kpi[m].toFixed(3)}点`).join("、")}`);
+    if(d) a.push(`売上（月累計）${isFin(d.sales)?Math.round(d.sales)+"円":"—"}／予算達成率 ${fmtPct(d.achievement)}／原価率 ${fmtPct(d.costRate)}／人件費率 ${fmtPct(d.laborRate)}／FL率 ${fmtPct(d.fl)}（${fmtMD(d.asOf)}参照。FL率＝原価率＋人件費率）`);
+    return a.join("\n");
+  })();
   return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
-以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容です。
+以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容${mxLine?"、経営指標（KPI・売上・FL）":""}です。
 
 このデータを分析して、この店舗についてエリアマネージャーのPDCAのうち「Do（実行すべき具体的な行動）」だけを出力してください。
 
@@ -869,7 +1168,10 @@ ${lines.join("\n")||"（データなし）"}
 
 ■ 面談内容（直近）
 ${ivs.join("\n\n")||"（記録なし）"}
-`;
+${mxLine?`
+■ 経営指標
+${mxLine}
+`:""}`;
 }
 /* ---------- AIアシスタント（β） ----------
    全店のチェック結果・ランキング・面談内容をGemini（既存のAI接続）に渡し、
@@ -887,6 +1189,8 @@ function buildAssistantContext(){
   if(al.length) lines.push("【アラート項目】"+al.join("／"));
   const ds=dangerStores();
   if(ds.length) lines.push("【面談リスクの高い店舗】"+ds.map(d=>`${d.store}（リスク${d.risk}・${d.level}${d.summary?`：${d.summary}`:""}）`).join("／"));
+  const mx=metricsContextLines();
+  if(mx) lines.push(mx.trimEnd());
   // チェックデータ本体（CSV・写真なし）。長すぎる場合は新しい記録を優先して収める
   let csv=buildCsv();
   const MAX=24000;
@@ -928,6 +1232,11 @@ async function askAssistant(q){
   state.chat.push({role:"user",text:String(q).trim()});
   chatBusy=true; renderChat();
   try{
+    if(metricsOn()){
+      // 経営指標が古い・未取得なら先に取り直す（失敗しても質問は続行）
+      await Promise.race([fetchMetrics(false),new Promise(r=>setTimeout(r,8000))]).catch(()=>{});
+      await Promise.race([preloadMetricMonths([ymOf(todayStr()),ymAdd(ymOf(todayStr()),-1)]),new Promise(r=>setTimeout(r,4000))]).catch(()=>{});
+    }
     const transcript=state.chat.slice(-10).map(m=>(m.role==="user"?"ユーザー：":"アシスタント：")+m.text).join("\n");
     const prompt=`あなたは「${APP_NAME}」に組み込まれた、飲食チェーンのエリアマネージャー向けAIアシスタントです。
 以下の店舗チェックデータ（各項目は5点満点・3点以下は要改善・総合点は100点満点）と面談内容だけを根拠に、日本語で簡潔に答えてください。
@@ -939,6 +1248,7 @@ async function askAssistant(q){
 - 「7月の」「先月の」など期間の指定があれば、CSVの日付列でその期間の記録だけに絞って答える
 - 箇条書き中心で短く。前置きや復唱はしない
 - 店舗名・点数は正確に引用する
+- 「経営指標」（KPI・売上・原価率・人件費率・FL率）が付いている店舗は、売上や達成率、FL率とチェック点・面談内容を結び付けて答える（FL率＝原価率＋人件費率。売上とFLは当月の月初からの累計で、参照日時点の値。KPIは月ごとの点数）。経営指標が無い店舗について聞かれたら「経営指標のデータにありません」と伝える
 
 ${buildAssistantContext()}
 
@@ -1507,6 +1817,7 @@ function render(){
   updateSyncBar();
   if(state.view==="home") bindHome();
   if(state.view==="admin") bindAdmin();
+  if(metricsOn()) fetchMetrics(false);   // 古ければ裏で取り直す（画面全体は描き直さない）
 }
 
 /* ---------- ホーム ---------- */
@@ -1614,7 +1925,8 @@ function viewHome(){
       ${rank.length?rank.map((r,i)=>`
         <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
           <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　${r.brand?`<span class="hw-meta">${esc(r.brand)}</span> `:""}<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
-            <span class="hw-meta">　${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span></span>
+            <span class="hw-meta">　${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span>
+            ${metricsOn()?metricsSlot("chips",r.store,r.brand,"span"):""}</span>
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
         </button></div>`).join(""):`<p class="empty">${ymLabel(month)}の完了チェックはありません。「◀ 前の月」で過去のランキングを見られます。</p>`}
       </div>`;})()}
@@ -1632,7 +1944,8 @@ function viewHome(){
       ${stores.length?stores.map(s=>{
         const n=storeAlerts(s).length;
         return `<div class="hw-item" data-sname="${esc(s)}"><button class="list-card" data-trend="${esc(s)}">
-          <span><b>${esc(s)}</b>${n?`<span class="hw-meta">　<span style="color:var(--bad);font-weight:700">⚠ アラート ${n}件</span></span>`:""}</span>
+          <span><b>${esc(s)}</b>${n?`<span class="hw-meta">　<span style="color:var(--bad);font-weight:700">⚠ アラート ${n}件</span></span>`:""}
+            ${metricsOn()?metricsSlot("chips",s,(state.inspections.find(i=>i.store===s&&i.brand)||{}).brand||"","span"):""}</span>
           <span style="color:var(--accent);font-weight:700;font-size:13px">推移を見る</span>
         </button></div>`;}).join(""):`<p class="empty">完了したチェックがまだありません。チェックを重ねると推移が見られます。</p>`}
     </div>
@@ -1772,6 +2085,28 @@ function viewAdmin(){
       <p class="note" style="color:var(--bad)">⚠ 接続URLは合鍵そのものです。社外の人に共有しないでください。URLはこの端末内にのみ保存されます（漏れた場合はCloudflare側でSECRETを変更して再デプロイ）。</p>
     </div>
     <div class="card">
+      <h3>経営指標（KPI・売上・FL） <span class="badge ${metricsOn()?"done":"todo"}">${metricsOn()?"設定済み":"未設定"}</span></h3>
+      <p class="desc">店舗ごとのKPI・売上・FL（原価率＋人件費率）を、推移画面・報告書画面・ランキング・CSV・AIアシスタントに表示します。取得先（Cloudflare Worker）のURLと閲覧キーを1回設定すると、<b>全端末に自動共有</b>されます。</p>
+      <div class="field"><label>取得先URL（Workerのアドレス。例：https://xxxx.workers.dev）</label>
+        <input id="mx-url" autocomplete="off" placeholder="https://xxxx.workers.dev" value="${esc(metricsCfg?metricsCfg.url:"")}">
+      </div>
+      <div class="field"><label>閲覧キー</label>
+        <input id="mx-key" autocomplete="off" placeholder="Workerに設定した METRICS_KEY を貼り付け" value="${esc(metricsCfg?metricsCfg.key:"")}">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn sub" id="mx-save">保存</button>
+        <button class="btn ghost" id="mx-test">接続テスト</button>
+        ${metricsOn()?`<button class="btn ghost" id="mx-clear" style="color:var(--bad)">削除</button>`:""}
+      </div>
+      <p class="note" id="mx-status">${metricsOn()&&state.metrics?esc(metricsSummaryText(state.metrics)):"未設定の間は、経営指標の表示は出ません。"}</p>
+      <div class="field" style="margin-top:12px"><label>店名の対応表（任意・1行に「アプリの店名=日報/KPIシート側の店名」）</label>
+        <textarea id="mx-alias" placeholder="例：&#10;歌舞伎3号=鶏ヤロー歌舞伎町3号店">${esc(aliasesToText(metricsAliases))}</textarea>
+      </div>
+      <div style="margin-top:8px"><button class="btn sub" id="mx-alias-save">対応表を保存</button></div>
+      <p class="note" id="mx-alias-status">アプリの店名は自由入力なので、日報・KPIの店名と一致しない店舗はここで対応づけます（全端末に共有）。</p>
+      ${metricsSlot("matchreport","","")}
+    </div>
+    <div class="card">
       <h3>セットアップ支援（管理者向け）</h3>
       <p class="desc">firebaseConfigやアクセスコードを<b>チャットやメールに貼らずに</b>共通設定するためのツールです。入力内容はこの画面の中だけで処理され、どこにも送信されません。生成された行をコピーして、GitHub上で <code>rakuraku-check/index.html</code> の同じ名前の行と置き換えれば設定完了です。</p>
       <div class="field"><label>共通AI設定にする firebaseConfig（任意）</label>
@@ -1823,6 +2158,40 @@ function bindAdmin(){
     }catch(err){
       st.textContent="接続失敗："+friendlyAIError(err).slice(0,120)+(lastAIError?`　詳細：${lastAIError.slice(0,160)}`:"");
     }
+  });
+  $("#mx-save")?.addEventListener("click",async()=>{
+    const st=$("#mx-status"); const url=$("#mx-url").value.trim().replace(/\/+$/,""), key=$("#mx-key").value.trim();
+    if(!url||!key){st.textContent="取得先URLと閲覧キーの両方を入力してください。";return;}
+    if(!/^https:\/\/[^\s/]+/.test(url)){st.textContent="取得先URLは https:// で始まる形式にしてください。";return;}
+    metricsCfg={url,key}; await kvSet("metricsCfg",metricsCfg).catch(()=>{});
+    const shared=await cloudSaveMetricsCfg(metricsCfg,null);
+    metricsClearMemo(); state.metrics=null; metricsAt=0;
+    render();
+    const s2=$("#mx-status"); if(s2) s2.textContent=shared?"保存しました（全端末に自動共有されます）。取得しています…":"この端末に保存しました（クラウド未接続のため共有は保留）。取得しています…";
+    await fetchMetrics(true);
+    const s3=$("#mx-status"); if(s3) s3.textContent=state.metrics?metricsSummaryText(state.metrics):("取得に失敗しました："+metricsErr);
+  });
+  $("#mx-test")?.addEventListener("click",async()=>{
+    const st=$("#mx-status"); const url=$("#mx-url").value.trim(), key=$("#mx-key").value.trim();
+    if(!url||!key){st.textContent="取得先URLと閲覧キーの両方を入力してください。";return;}
+    st.textContent="接続テスト中…（最大25秒）";
+    try{ const j=await metricsRequest(url,key); st.textContent="接続成功："+metricsSummaryText(j); }
+    catch(err){ st.textContent="接続失敗："+String(err.message||err).slice(0,160); }
+  });
+  $("#mx-clear")?.addEventListener("click",async()=>{
+    if(!confirm("経営指標の取得先設定を削除しますか？（全端末で経営指標の表示が消えます）")) return;
+    metricsCfg=null; state.metrics=null; metricsClearMemo();
+    await kvDel("metricsCfg").catch(()=>{}); await kvDel("metrics").catch(()=>{});
+    await cloudDeleteMetricsCfg();
+    render();
+  });
+  $("#mx-alias-save")?.addEventListener("click",async()=>{
+    const st=$("#mx-alias-status");
+    metricsAliases=parseAliases($("#mx-alias").value);
+    await kvSet("metricsAliases",metricsAliases).catch(()=>{});
+    const shared=await cloudSaveMetricsCfg(null,metricsAliases);
+    metricsClearMemo(); refreshMetricSlots();
+    st.textContent=`${Object.keys(metricsAliases).length}件の対応を保存しました。${shared?"（全端末に共有）":"（この端末のみ・クラウド未接続）"}`;
   });
   $("#ck-save")?.addEventListener("click",async()=>{
     const st=$("#ck-status"); const v=$("#ck-input").value.trim();
@@ -1984,6 +2353,7 @@ function viewTrends(){
     <h1 style="flex:1">${brand?esc(brand)+"　":""}${esc(store)}｜推移</h1><span class="meta" style="margin-right:8px">チェック${hist.length}回分</span>${aiHeaderBtn()}
   </div></header>
   <div class="wrap">
+    ${metricsOn()?metricsSlot("card",store,brand):""}
     ${alerts.length?`<div class="card" style="border-color:var(--bad)">
       <h3 style="color:var(--bad)">⚠ アラート（3点以下が${ALERT_COUNT}回以上）</h3>
       ${alerts.map(x=>`<div class="hw-item"><b>${esc(x.it.name)}</b><div class="hw-meta">3点以下が${x.c}回。重点的な改善が必要です。</div></div>`).join("")}
@@ -2058,6 +2428,7 @@ async function initCloud(){
     setTimeout(()=>cloudFetchGeminiKey(),0); // 共有AIキーの取得
     setTimeout(()=>cloudFetchGptUrl(),0);    // 共有GPTリンクの取得
     setTimeout(()=>cloudFetchClaudeKey(),0); // 共有Claudeキーの取得
+    setTimeout(()=>cloudFetchMetricsCfg(),0); // 経営指標の取得先・店名対応表の取得
     fsMods=fsMod;
     fsDb=fsMod.initializeFirestore(app,{localCache:fsMod.persistentLocalCache()});
     fsMod.onSnapshot(fsMod.collection(fsDb,"inspections"),async snap=>{
@@ -2501,6 +2872,7 @@ function viewReport(){
       <div class="ttl">一時保存（入力途中）の報告書です。完了するまでランキング・推移には集計されません。</div>
       <button class="btn sub no-print" id="rep-resume" style="margin-top:8px">続きを入力する</button>
     </div>`:""}
+    ${metricsOn()?metricsSlot("card",insp.store,insp.brand||""):""}
     ${reportBody(insp,false)}
     ${(()=>{const pm=photoMissingItems(insp);
       return pm.length?`<div class="miss no-print" style="margin-top:4px">
@@ -2644,18 +3016,21 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="gpt-copy"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
+    if(metricsOn()) await preloadMetricMonths(state.inspections.map(i=>ymOf(i.date)));
     const ok=await copyText(chatGptPrompt()+buildCsv());
     showToast(ok?"コピーしました。ChatGPTに貼り付けて送信してください":"コピーできませんでした。CSVダウンロードをお使いください");
     return;
   }
   if(t.id==="csv-dl"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
+    if(metricsOn()) await preloadMetricMonths(state.inspections.map(i=>ymOf(i.date)));
     downloadCsv(); return;
   }
   if(t.id==="csv-dl-month"){
     const m=($("#csv-month")&&$("#csv-month").value)||"";
     if(!/^\d{4}-\d{2}$/.test(m)){showToast("月を選択してください");return;}
     if(!state.inspections.some(i=>i.completedAt&&ymOf(i.date)===m)){showToast(`${ymLabel(m)}の完了チェックはありません`);return;}
+    if(metricsOn()) await preloadMetricMonths([m]);
     downloadCsv(m); showToast(`${ymLabel(m)}のCSVをダウンロードしました`); return;
   }
   if(t.id==="gpt-store"){
@@ -2838,6 +3213,9 @@ document.addEventListener("input",e=>{
     deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
     deviceGptUrl=(await kvGet("gptUrl").catch(()=>null))||null;
     deviceClaudeKey=(await kvGet("claudeKey").catch(()=>null))||null;
+    metricsCfg=(await kvGet("metricsCfg").catch(()=>null))||null;
+    metricsAliases=(await kvGet("metricsAliases").catch(()=>null))||{};
+    if(metricsCfg) state.metrics=(await kvGet("metrics").catch(()=>null))||null;   // 前回取得分（圏外でも表示できる）
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{

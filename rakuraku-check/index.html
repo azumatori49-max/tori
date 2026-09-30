@@ -1270,6 +1270,11 @@ const DEFAULT_METRIC_ALIASES={
 };
 
 let metricsCfg=null, metricsAliases={}, metricsBusy=false, metricsAt=0, metricsErr="", metricsSnapAt=0, metricsInflight=null;
+// 編集の版番号：保存・削除のたびに増やし、遅れて届いたクラウドの読み取り結果が、その間の編集を取り消さないようにする
+let metricsEditSeq=0;
+// 端末に残す同期メモ（圏外で保存・削除した分を、次にクラウドへ繋がったとき正しく反映する）
+let metricsMeta={cfgDeleted:false,aliasesPendingAt:0,kpiDeleted:{}};
+const metricsMonthsErr={};
 let livePackCache=null;
 const metricsMonths={}, metricsSnapPacks={};
 const METRICS_STALE_MS=10*60*1000;
@@ -1287,12 +1292,12 @@ function metricsClearMemo(){livePackCache=null;metricsAliasesMerged=null;metrics
 function metricsAllAliases(){return metricsAliasesMerged||(metricsAliasesMerged={...DEFAULT_METRIC_ALIASES,...metricsAliases});}
 // 屋号が空のチェック記録は、同じ店名で屋号が一意に決まる他の記録から補う（北千住のように複数屋号にまたがる店名は補わない）
 function appBrandFor(store,brand){
-  if(!metricsBrandFill||metricsBrandFill.n!==state.inspections.length){
+  if(!metricsBrandFill||metricsBrandFill.n!==state.inspections.length||metricsBrandFill.ref!==state.inspections){
     const seen=new Map();
     for(const i of state.inspections) if(i.store){const k=i.store+"|"+(i.brand||""); if(!seen.has(k)) seen.set(k,{store:i.store,brand:i.brand||""});}
     const keys=[...seen.keys()], filled=fillBrands([...seen.values()]), map=new Map();
     filled.forEach((f,idx)=>map.set(keys[idx],{brand:f.brand||"",amb:!!f.ambiguousBrand}));
-    metricsBrandFill={n:state.inspections.length,map};
+    metricsBrandFill={n:state.inspections.length,ref:state.inspections,map};
   }
   return metricsBrandFill.map.get(store+"|"+(brand||""))||{brand:brand||"",amb:false};
 }
@@ -1338,11 +1343,22 @@ function sanitizeMetrics(j){
   }
   return out;
 }
-// 手動で取り込んだKPIは、同じ月の自動取得分のうち「同じ店の行」だけを置き換える（人が確認した値を優先。他の店の自動取得分は残す）
+// 手動で取り込んだKPIは、同じ月の自動取得分のうち「同じ店の行」だけを置き換える（人が確認した値を優先。他の店の自動取得分は残す）。
+// 貼り付けた店名の書き方が自動取得側と少し違っても（屋号なし・「1号店」など）、店名の照合で同じ店として扱い、重複行を作らない
 function overlayKpi(auto,manual){
   const out={...(auto||{})};
-  for(const ym of Object.keys(manual||{})){
-    const mrows=(manual[ym]||[]).filter(r=>r&&r.store&&isFin(r.score));
+  const months=Object.keys(manual||{}).filter(ym=>(manual[ym]||[]).length);
+  if(!months.length) return out;
+  const names=new Map();
+  for(const ym of Object.keys(out).sort().reverse()) for(const r of out[ym]||[]) if(r&&r.store&&!names.has(indexKey(r.store))) names.set(indexKey(r.store),{store:r.store});
+  let ix=null;
+  try{ ix=names.size?buildIndex([...names.values()]):null; }catch(e){ ix=null; }
+  const canon=name=>{
+    if(ix){ try{ const m=matchStore(name,"",ix,metricsAllAliases()); if(m.row) return m.row.store; }catch(e){} }
+    return name;
+  };
+  for(const ym of months){
+    const mrows=(manual[ym]||[]).filter(r=>r&&r.store&&isFin(r.score)).map(r=>({store:canon(r.store),score:r.score}));
     if(!mrows.length) continue;
     const keys=new Set(mrows.map(r=>indexKey(r.store)));
     out[ym]=[...(out[ym]||[]).filter(r=>!keys.has(indexKey(r.store))),...mrows];
@@ -1351,7 +1367,7 @@ function overlayKpi(auto,manual){
 }
 function mkPack(m){
   if(!m) return null;
-  return {rows:(m.daily&&m.daily.rows)||m.rows||[],kpi:overlayKpi(m.kpi||{},metricsManualKpi),month:m.month||"",fetchedAt:m.fetchedAt||"",ix:null,memo:new Map(),memoN:-1};
+  return {rows:(m.daily&&m.daily.rows)||m.rows||[],kpi:overlayKpi(m.kpi||{},metricsManualKpi),month:m.month||"",fetchedAt:m.fetchedAt||"",ix:null,memo:new Map(),memoN:-1,memoRef:null};
 }
 function livePack(){
   if(!state.metrics) return null;
@@ -1377,7 +1393,7 @@ function packIndexes(p){
 }
 // アプリの店名（自由入力）から、日報の行とKPIの月別点数を探す。曖昧なときは紐づけない
 function packLookup(p,store,brand){
-  if(p.memoN!==state.inspections.length){p.memo.clear();p.memoN=state.inspections.length;}
+  if(p.memoN!==state.inspections.length||p.memoRef!==state.inspections){p.memo.clear();p.memoN=state.inspections.length;p.memoRef=state.inspections;}
   const key=store+"|"+(brand||"");
   if(p.memo.has(key)) return p.memo.get(key);
   let out={daily:null,dailyHow:"none",kpi:{},kpiName:"",kpiHow:"none"};
@@ -1433,15 +1449,23 @@ function metricsBrandAvg(p,brand){
   const lab=lr.reduce((s,r)=>s+r.laborAmount,0), sal=lr.reduce((s,r)=>s+r.sales,0);
   return {n:rows.length,nCost:cr.length,nLabor:lr.length,nFl:both.length,
     costRate:mean(cr,r=>r.costRate),laborRate:sal>0?lab/sal:null,fl:mean(both,r=>r.costRate+r.laborRate),
-    achievement:mean(ac,r=>r.achievement),excluded:rows.length-both.length};
+    achievement:mean(ac,r=>r.achievement),excluded:rows.length-both.length,
+    outOfRange:rows.filter(r=>(isFin(r.costRate)&&!okRate(r.costRate))||(isFin(r.laborRate)&&!okRate(r.laborRate))).length};
 }
 async function metricsRequest(url,key){
   const base=String(url||"").trim().replace(/\/+$/,"").replace(/\/metrics$/,"");
   if(!/^https:\/\//.test(base)) throw new Error("取得先URLは https:// で始まる形式にしてください");
-  const r=await withTimeout(fetch(base+"/metrics",{headers:{Authorization:"Bearer "+String(key||"").trim()},cache:"no-store"}),25000);
-  if(r.status===401) throw new Error("閲覧キーが正しくありません");
-  if(!r.ok) throw new Error(`取得に失敗しました (${r.status})`);
-  return await r.json();
+  // 25秒で「本文の受信まで」含めて打ち切る（回線が途中で止まっても取得が固まったままにならないように）
+  const ac=typeof AbortController!=="undefined"?new AbortController():null;
+  const timer=ac?setTimeout(()=>ac.abort(),25000):null;
+  try{
+    return await withTimeout((async()=>{
+      const r=await fetch(base+"/metrics",{headers:{Authorization:"Bearer "+String(key||"").trim()},cache:"no-store",signal:ac?ac.signal:undefined});
+      if(r.status===401) throw new Error("閲覧キーが正しくありません");
+      if(!r.ok) throw new Error(`取得に失敗しました (${r.status})`);
+      return await r.json();
+    })(),26000);
+  }finally{ if(timer) clearTimeout(timer); }
 }
 // 取得結果を反映する。日報かKPIの片方だけ失敗した応答（Workerは部分的でも返す）は、失敗した側だけ前回の値を残す
 function applyMetrics(j){
@@ -1457,30 +1481,36 @@ function applyMetrics(j){
   metricsAt=Date.now()-(j.errors.length?METRICS_STALE_MS-60*1000:0);
   metricsClearMemo();
   kvSet("metrics",out).catch(()=>{});
-  cloudSaveMetricsSnapshot(out);
+  // 月ごとの記録には、今回の応答で実際に取れた側だけを渡す（前回値の流用分で、クラウド上の新しい記録を古い値に戻さない）
+  cloudSaveMetricsSnapshot({month:j.month,fetchedAt:j.fetchedAt,daily:j.daily,kpi:j.kpi});
 }
 // 取得中にもう一度呼ばれたら、その取得の完了を待たせる（保存直後の再取得・AIの質問前の取得が空振りしないように）
 function fetchMetrics(force){
   if(!metricsOn()) return Promise.resolve();
   if(metricsInflight) return metricsInflight;
   if(!force&&Date.now()-metricsAt<METRICS_STALE_MS) return Promise.resolve();
-  const cfg=metricsCfg;
   metricsBusy=true;
-  let changed=false;
+  const same=(a,b)=>!!a&&!!b&&a.url===b.url&&a.key===b.key;
   metricsInflight=(async()=>{
     try{
-      const j=sanitizeMetrics(await metricsRequest(cfg.url,cfg.key));
-      if(metricsCfg!==cfg&&!(metricsCfg&&metricsCfg.url===cfg.url&&metricsCfg.key===cfg.key)){changed=true;return;} // 取得中に設定が変わった/消えた → この応答は使わない
-      applyMetrics(j);
-    }catch(e){
-      if(metricsCfg===cfg||(metricsCfg&&metricsCfg.url===cfg.url&&metricsCfg.key===cfg.key)){
-        metricsErr=String(e&&e.message||e).slice(0,140);
-        metricsAt=Date.now()-METRICS_STALE_MS+60*1000;   // 失敗時は1分後まで再試行しない
-      }else changed=true;
+      // 取得中に設定が変わった/消えた場合は、その応答を使わず、新しい設定で取り直す（同じ待ちの中で最大3回）
+      for(let n=0;n<3&&metricsOn();n++){
+        const cfg=metricsCfg;
+        try{
+          const j=sanitizeMetrics(await metricsRequest(cfg.url,cfg.key));
+          if(!same(metricsCfg,cfg)) continue;
+          applyMetrics(j);
+          return;
+        }catch(e){
+          if(!same(metricsCfg,cfg)) continue;
+          metricsErr=String(e&&e.message||e).slice(0,140);
+          metricsAt=Date.now()-METRICS_STALE_MS+60*1000;   // 失敗時は1分後まで再試行しない
+          return;
+        }
+      }
     }finally{
       metricsBusy=false; metricsInflight=null;
       refreshMetricSlots();
-      if(changed&&metricsOn()) setTimeout(()=>fetchMetrics(true),0);
     }
   })();
   return metricsInflight;
@@ -1490,12 +1520,18 @@ async function cloudSaveMetricsSnapshot(j){
   if(!fsDb||!j||!j.month||!(j.daily&&j.daily.rows&&j.daily.rows.length)) return;
   if(Date.now()-metricsSnapAt<3*3600*1000) return;
   metricsSnapAt=Date.now();
+  const doc={month:j.month,fetchedAt:j.fetchedAt||new Date().toISOString(),rows:j.daily.rows};
+  if(j.kpi) doc.kpi=overlayKpi(j.kpi,metricsManualKpi);   // KPIが取れていない時は書かない（既存の記録を消さない）
+  const ok=await cloudTry(()=>fsMods.setDoc(fsMods.doc(fsDb,"config","metrics-"+j.month),doc,{merge:true}));
+  if(!ok) metricsSnapAt=0;
+}
+// 過去月の記録の検証（壊れた行があっても画面が止まらないように、読み込み時に行を選別する）
+function sanitizeSnapshot(d){
   try{
-    const doc={month:j.month,fetchedAt:j.fetchedAt||new Date().toISOString(),rows:j.daily.rows};
-    const mk=overlayKpi(j.kpi||{},metricsManualKpi);
-    if(Object.keys(mk).length) doc.kpi=mk;
-    await fsMods.setDoc(fsMods.doc(fsDb,"config","metrics-"+j.month),doc,{merge:true});
-  }catch(e){ metricsSnapAt=0; }
+    if(!d||typeof d!=="object") return null;
+    const s=sanitizeMetrics({month:d.month,fetchedAt:d.fetchedAt,daily:{rows:d.rows},kpi:d.kpi,errors:[]});
+    return {month:s.month||"",fetchedAt:s.fetchedAt,rows:(s.daily&&s.daily.rows)||[],kpi:s.kpi||{}};
+  }catch(e){ return null; }
 }
 // 過去月のスナップショットと手動取り込みKPIを読み込む（月ごとに1回）
 async function preloadMetricMonths(list){
@@ -1507,46 +1543,57 @@ async function preloadMetricMonths(list){
     ...months.filter(ym=>ym!==live&&!(ym in metricsMonths)).map(async ym=>{
       try{
         const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","metrics-"+ym));
-        metricsMonths[ym]=snap&&snap.exists&&snap.exists()?snap.data():null;
-        delete metricsSnapPacks[ym];
-      }catch(e){ /* 取得できなければ次回また試す */ }
+        metricsMonths[ym]=snap&&snap.exists&&snap.exists()?sanitizeSnapshot(snap.data()):null;
+        delete metricsSnapPacks[ym]; delete metricsMonthsErr[ym];
+      }catch(e){ metricsMonthsErr[ym]=true; /* 取得できなければ次回また試す */ }
     }),
   ]);
 }
+// クラウドへの書き込み。圏外だと Firestore は失敗ではなく「保留のまま応答しない」ので、6秒で「未送信」として先へ進める
+async function cloudTry(fn){
+  if(!fsDb) return false;
+  try{ return await Promise.race([Promise.resolve().then(fn).then(()=>true),new Promise(r=>setTimeout(()=>r(false),6000))]); }
+  catch(e){ return false; }
+}
 async function cloudSaveMetricsCfg(cfg,aliases){
   if(!fsDb) return false;
-  try{
-    if(cfg) await fsMods.setDoc(fsMods.doc(fsDb,"config","metrics"),{url:cfg.url,key:cfg.key,updatedAt:new Date().toISOString()});
-    if(aliases) await fsMods.setDoc(fsMods.doc(fsDb,"config","storeAliases"),{map:aliases,updatedAt:new Date().toISOString()});
-    return true;
-  }catch(e){ return false; }
+  const at=new Date().toISOString();
+  if(cfg&&!await cloudTry(()=>fsMods.setDoc(fsMods.doc(fsDb,"config","metrics"),{url:cfg.url,key:cfg.key,updatedAt:at}))) return false;
+  if(aliases&&!await cloudTry(()=>fsMods.setDoc(fsMods.doc(fsDb,"config","storeAliases"),{map:aliases,updatedAt:at}))) return false;
+  return true;
 }
-async function cloudDeleteMetricsCfg(){
-  if(!fsDb) return;
-  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","metrics")); }catch(e){}
-}
-// 入力中の欄を消さないよう、画面全体の描き直しは「今は入力していない」ときだけにする
+function cloudDeleteMetricsCfg(){ return cloudTry(()=>fsMods.deleteDoc(fsMods.doc(fsDb,"config","metrics"))); }
+function persistMetricsMeta(){ return kvSet("metricsMeta",metricsMeta).catch(()=>{}); }
+const isoMs=v=>{const t=Date.parse(v);return Number.isFinite(t)?t:0;};
+// 設定が届いたときなどの更新。ホーム・推移・報告書は、スロットの中身だけを更新する（画面全体を描き直さない＝入力中の欄を消さない）。
+// 管理画面は表示に反映する必要があるので描き直すが、未保存の入力がある間は何もしない
 function softRender(){
   if(!["home","trends","report","admin"].includes(state.view)) return;
-  const a=document.activeElement;
-  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
-  if(state.view==="admin"&&["mx-kpi-text","mx-alias"].some(id=>{const el=document.getElementById(id);return el&&el.value&&el.value!==(id==="mx-alias"?aliasesToText(metricsAliases):"");})) return;
+  if(state.view!=="admin"){ refreshMetricSlots(); ensureSlotMonths(); return; }
+  const dirty=[...document.querySelectorAll("#app input,#app textarea")].some(el=>el.value!==el.defaultValue);
+  if(dirty) return;
   render();
 }
 async function cloudFetchMetricsCfg(){
   if(IS_COMPANY_SITE||!fsDb||!fsMods.getDoc) return;
+  const seq=metricsEditSeq;
   try{
     const c=await fsMods.getDoc(fsMods.doc(fsDb,"config","metrics"));
     const d=c&&c.exists&&c.exists()?c.data():null;
     const a=await fsMods.getDoc(fsMods.doc(fsDb,"config","storeAliases"));
-    const map=a&&a.exists&&a.exists()?((a.data()||{}).map||{}):null;
+    const ad=a&&a.exists&&a.exists()?(a.data()||{}):null;
+    if(seq!==metricsEditSeq) return;   // 読み取り中にこの端末で保存・削除した → 古い読み取り結果で取り消さない（次の同期で整える）
     const wasOn=metricsOn(); let changed=false;
-    if(d&&d.url&&d.key){
-      if(metricsCfg&&metricsCfg.synced===false){
-        // この端末で圏外のときに保存した設定が未送信 → クラウドへ送る（クラウドの古い値で上書きしない）
+    // --- 取得先URL・閲覧キー ---
+    if(metricsMeta.cfgDeleted){
+      // この端末で削除したがクラウドに届いていなかった → クラウド側を消す（復活させない）
+      if(await cloudDeleteMetricsCfg()){metricsMeta.cfgDeleted=false; persistMetricsMeta();}
+    }else if(d&&d.url&&d.key){
+      if(metricsCfg&&metricsCfg.synced===false&&isoMs(d.updatedAt)<=(metricsCfg.at||0)){
+        // この端末で圏外のときに保存した設定が未送信（クラウドより新しい） → 送る
         if(await cloudSaveMetricsCfg(metricsCfg,null)){metricsCfg={...metricsCfg,synced:true};kvSet("metricsCfg",metricsCfg).catch(()=>{});}
       }else if(!metricsCfg||metricsCfg.url!==d.url||metricsCfg.key!==d.key||!metricsCfg.synced){
-        metricsCfg={url:d.url,key:d.key,synced:true}; kvSet("metricsCfg",metricsCfg).catch(()=>{}); changed=true;
+        metricsCfg={url:d.url,key:d.key,synced:true,at:isoMs(d.updatedAt)}; kvSet("metricsCfg",metricsCfg).catch(()=>{}); changed=true;
       }
     }else if(!d&&metricsCfg){
       if(metricsCfg.synced===true){
@@ -1556,12 +1603,18 @@ async function cloudFetchMetricsCfg(){
         metricsCfg={...metricsCfg,synced:true}; kvSet("metricsCfg",metricsCfg).catch(()=>{});
       }
     }
-    if(map&&JSON.stringify(map)!==JSON.stringify(metricsAliases)){
-      metricsAliases=map; kvSet("metricsAliases",map).catch(()=>{}); changed=true;
+    // --- 店名の対応表 ---
+    if(metricsMeta.aliasesPendingAt){
+      // この端末で圏外のときに直した対応表が未送信。クラウドがそれより新しければクラウドを採用、そうでなければ送る
+      if(ad&&isoMs(ad.updatedAt)>metricsMeta.aliasesPendingAt&&ad.map&&typeof ad.map==="object"){
+        metricsAliases=ad.map; kvSet("metricsAliases",metricsAliases).catch(()=>{}); metricsMeta.aliasesPendingAt=0; persistMetricsMeta(); changed=true;
+      }else if(await cloudSaveMetricsCfg(null,metricsAliases)){metricsMeta.aliasesPendingAt=0; persistMetricsMeta();}
+    }else if(ad&&ad.map&&typeof ad.map==="object"&&!Array.isArray(ad.map)&&JSON.stringify(ad.map)!==JSON.stringify(metricsAliases)){
+      metricsAliases=ad.map; kvSet("metricsAliases",ad.map).catch(()=>{}); changed=true;
     }
     if(changed) metricsClearMemo();
     if(changed||wasOn!==metricsOn()) softRender();
-    if(metricsOn()){ await loadManualKpi(metricsRecentMonths(5)); fetchMetrics(true); }
+    if(metricsOn()){ fetchMetrics(true); loadManualKpi(metricsRecentMonths(5)); }   // 手動KPIの読み込みを待たずに取得を始める（届いたら表示を更新する）
   }catch(e){}
 }
 // KPIシートを自動取得できないとき用：スプレッドシートの「店名列＋点数列」を貼り付けて月ごとに取り込む
@@ -1579,33 +1632,35 @@ function parseKpiText(text){
   }
   return rows;
 }
-async function cloudSaveKpiManual(ym,rows){
-  if(!fsDb) return false;
-  try{ await fsMods.setDoc(fsMods.doc(fsDb,"config","kpi-"+ym),{month:ym,rows,updatedAt:new Date().toISOString()}); return true; }
-  catch(e){ return false; }
-}
-async function cloudDeleteKpiManual(ym){
-  if(!fsDb) return;
-  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","kpi-"+ym)); }catch(e){}
-}
-// 手動取り込み分を読み込む（月ごとに1回）。圏外で取り込んで未送信のものはクラウドへ送り、消さない
+function cloudSaveKpiManual(ym,rows){ return cloudTry(()=>fsMods.setDoc(fsMods.doc(fsDb,"config","kpi-"+ym),{month:ym,rows,updatedAt:new Date().toISOString()})); }
+function cloudDeleteKpiManual(ym){ return cloudTry(()=>fsMods.deleteDoc(fsMods.doc(fsDb,"config","kpi-"+ym))); }
+// 手動取り込み分を読み込む（月ごとに1回）。圏外で取り込んで未送信のものはクラウドへ送り、圏外で削除した分はクラウドからも消す
 async function loadManualKpi(months,force){
   if(IS_COMPANY_SITE||!fsDb||!fsMods||!fsMods.getDoc) return;
-  let changed=false, pendingChanged=false;
+  const seq=metricsEditSeq;
+  let changed=false, pendingChanged=false, metaChanged=false;
   await Promise.all([...new Set(months)].filter(ym=>/^\d{4}-\d{2}$/.test(ym||"")&&(force||!metricsManualTried[ym])).map(async ym=>{
     try{
       const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","kpi-"+ym));
+      if(seq!==metricsEditSeq) return;   // 読み取り中にこの端末で編集した → 古い読み取り結果で取り消さない
       metricsManualTried[ym]=true;
       const d=snap&&snap.exists&&snap.exists()?snap.data():null;
       const cloudRows=d&&Array.isArray(d.rows)&&d.rows.length?d.rows:null;
-      if(metricsManualPending[ym]&&metricsManualKpi[ym]){
-        if(await cloudSaveKpiManual(ym,metricsManualKpi[ym])){delete metricsManualPending[ym];pendingChanged=true;}
+      if(metricsMeta.kpiDeleted[ym]){
+        if(!cloudRows||await cloudDeleteKpiManual(ym)){delete metricsMeta.kpiDeleted[ym];metaChanged=true;}
+        return;
+      }
+      const pend=Number(metricsManualPending[ym])||0;
+      if(pend&&metricsManualKpi[ym]){
+        if(cloudRows&&isoMs(d.updatedAt)>pend){ metricsManualKpi[ym]=cloudRows; delete metricsManualPending[ym]; pendingChanged=true; changed=true; }   // クラウドの方が新しい
+        else if(await cloudSaveKpiManual(ym,metricsManualKpi[ym])){delete metricsManualPending[ym];pendingChanged=true;}
       }else if(cloudRows){
         if(JSON.stringify(metricsManualKpi[ym])!==JSON.stringify(cloudRows)){metricsManualKpi[ym]=cloudRows;changed=true;}
       }else if(metricsManualKpi[ym]){delete metricsManualKpi[ym];changed=true;}   // 他の端末で削除された
     }catch(e){ /* 取得できなければ次回また試す */ }
   }));
   if(pendingChanged) kvSet("kpiManualPending",metricsManualPending).catch(()=>{});
+  if(metaChanged) persistMetricsMeta();
   if(changed){
     kvSet("kpiManual",metricsManualKpi).catch(()=>{});
     metricsClearMemo(); refreshMetricSlots();
@@ -1613,6 +1668,7 @@ async function loadManualKpi(months,force){
   }
 }
 let exportBusy=false;
+// 書き出し前に過去月の記録と手動KPIを読み込む。クラウドが応答しなくても最大4秒で先へ進む
 async function prepMetricsForExport(months){
   if(!metricsOn()) return;
   await Promise.race([preloadMetricMonths(months),new Promise(r=>setTimeout(r,4000))]).catch(()=>{});
@@ -1648,8 +1704,14 @@ function metricsCardHtml(store,brand,ym){
   const f=v&&v.f, d=f&&f.daily;
   const kpiMonths=f?Object.keys(f.kpi).sort():[];
   if(!d&&!kpiMonths.length){
-    if(ym&&fsDb&&!(ym in metricsMonths)&&m.month!==ym) return wrap(`<p class="desc">この月のデータを読み込んでいます…</p>`);
-    if(ym&&!(f&&f.kpiName)&&m.month!==ym) return wrap(`<p class="desc">${esc(ymLabel(ym))}の経営指標は保存されていません（記録は、アプリで取得した月から残ります）。</p>`);
+    // 「店名が対応していない」のか「この月のデータが無い」のかは別の話。紐づけは最新の取得結果で判定する
+    const lp=livePack(), lf=lp?packLookup(lp,store,brand):null;
+    const linked=!!(lf&&(lf.daily||lf.kpiName));
+    if(ym&&m.month!==ym){
+      if(fsDb&&!(ym in metricsMonths)&&!metricsMonthsErr[ym]) return wrap(`<p class="desc">この月のデータを読み込んでいます…</p>`);
+      if(metricsMonthsErr[ym]) return wrap(`<p class="desc">この月の記録を読み込めませんでした（通信を確認してください）。</p>`);
+      if(linked) return wrap(`<p class="desc">${esc(ymLabel(ym))}の経営指標は保存されていません（記録は、アプリで取得した月から残ります）。</p>`);
+    }
     return wrap(`<p class="desc">この店舗に対応する日報・KPIの行が見つかりませんでした。店名の表記が違う可能性があります（管理画面の「経営指標」で店名の対応を設定できます）。</p>`);
   }
   const tile=(l,val,s)=>`<div class="mx-t"><div class="mx-l">${l}</div><div class="mx-v">${val}</div>${s?`<div class="mx-s">${s}</div>`:""}</div>`;
@@ -1670,7 +1732,7 @@ function metricsCardHtml(store,brand,ym){
   if(d){
     avg=metricsBrandAvg(v.pack,d.brand);
     const vs=(val,a,n)=>isFin(val)&&isFin(a)&&n>1?`同業態${n}店の平均（${fmtPct(a)}）より ${fmtPt(val-a)}${Math.abs(val-a)<0.0005?"":val>a?"（高い）":"（低い）"}`:"";
-    const odd=val=>isFin(val)&&val>1?`<br>※値が極端です（開店直後など）`:"";
+    const odd=val=>isFin(val)&&(val>1||val<0)?`<br>※値が極端です（開店直後など）`:"";
     tiles.push(tile("売上実績（月累計）",fmtYen(d.sales),`予算達成率 ${fmtPct(d.achievement)}${isFin(d.pace)?`<br>着地ペース ${fmtYen(d.pace)}`:""}`));
     tiles.push(tile("原価率（F）",fmtPct(d.costRate),`${vs(d.costRate,avg.costRate,avg.nCost)}${isFin(d.costForecast)?`<br>着地予想 ${fmtPct(d.costForecast)}`:""}${odd(d.costRate)}`));
     const lt=d.brand==="鶏ヤロー"&&isFin(d.laborRate)?`<br>目標基準26.5%との差 ${fmtPt(d.laborRate-0.265)}`:"";
@@ -1689,7 +1751,7 @@ function metricsCardHtml(store,brand,ym){
   if(!d&&ym) notes.push("この月の売上・FLは保存されていません（記録は、アプリで取得した月から残ります）。");
   if(m.stale&&m.stale.includes("KPI")) notes.push("今回の取得に失敗したため前回のKPIを表示中。");
   notes.push("FL率＝原価率＋人件費率。");
-  if(avg&&avg.excluded>0) notes.push(`同業態平均は、率が0〜100%を外れる店（開店直後など${avg.excluded}店）を除いています。`);
+  if(avg&&avg.excluded>0) notes.push(`同業態平均は、率が取得できない店・0〜100%を外れる店（開店直後の仕入れや準備人件費など。範囲外${avg.outOfRange}店を含む計${avg.excluded}店）を除いています。`);
   return wrap(`<div class="mx-grid">${tiles.join("")}</div>
     <p class="mx-note">${notes.join(" ")}<br>紐づけ先 → ${how.join(" ／ ")||"—"}<br>違う店に紐づいている場合は、管理画面の「経営指標」で店名の対応を直せます。</p>`);
 }
@@ -1697,11 +1759,14 @@ function metricsChipsHtml(store,brand,ym){
   if(!metricsOn()) return "";
   const v=metricsView(store,brand,ym); if(!v) return "";
   const d=v.f.daily, km=Object.keys(v.f.kpi).sort();
+  // 月を指定しない一覧では、当月でない月の値に月を添える（古い月の数字が今月のように見えないように）
+  const nowYm=ymOf(todayStr());
+  const tag=mo=>!ym&&mo&&mo!==nowYm?`(${+mo.slice(5)}月)`:"";
   const chips=[];
-  if(d&&isFin(d.fl)) chips.push(`FL ${fmtPct(d.fl)}`);
-  if(d&&isFin(d.achievement)) chips.push(`達成 ${fmtPct(d.achievement)}`);
+  if(d&&isFin(d.fl)) chips.push(`FL ${fmtPct(d.fl)}${tag(v.pack&&v.pack.month)}`);
+  if(d&&isFin(d.achievement)) chips.push(`達成 ${fmtPct(d.achievement)}${tag(v.pack&&v.pack.month)}`);
   const kk=ym?(isFin(v.f.kpi[ym])?ym:null):km[km.length-1];
-  if(kk) chips.push(`KPI ${+v.f.kpi[kk].toFixed(2)}`);
+  if(kk) chips.push(`KPI ${+v.f.kpi[kk].toFixed(2)}${tag(kk)}`);
   return chips.map(c=>`<span class="mx-chip">${esc(c)}</span>`).join("");
 }
 // 管理画面：アプリの店名がどの日報・KPIの行に紐づいたかの確認
@@ -1734,7 +1799,8 @@ function refreshMetricSlots(){
     while(i<els.length&&performance.now()-t1<12){
       const el=els[i++]; if(!el.isConnected) continue;
       const k=el.dataset.mkind, s=el.dataset.mstore||"", b=el.dataset.mbrand||"", ym=el.dataset.mmonth||"";
-      el.innerHTML=k==="card"?metricsCardHtml(s,b,ym):k==="chips"?metricsChipsHtml(s,b,ym):k==="matchreport"?metricsMatchReportHtml():"";
+      try{ el.innerHTML=k==="card"?metricsCardHtml(s,b,ym):k==="chips"?metricsChipsHtml(s,b,ym):k==="matchreport"?metricsMatchReportHtml():""; }
+      catch(e){ el.innerHTML=k==="card"?`<section class="card mx-card no-print"><p class="desc">経営指標を表示できませんでした。</p></section>`:""; }
     }
     if(i<els.length) setTimeout(step,0);
   };
@@ -1750,7 +1816,7 @@ function ensureSlotMonths(){
 }
 // スロットは設定の有無にかかわらず常に置く（後から設定が届いたとき、画面を描き直さずに中身だけ埋められる）。
 // 一覧のチップは多いので、最初は空にして refreshMetricSlots が区切りながら埋める
-const metricsSlot=(kind,store,brand,tag,ym)=>{const t=tag||"div";return `<${t} ${kind==="chips"?'class="mxrow" ':""}data-mkind="${kind}" data-mstore="${esc(store||"")}" data-mbrand="${esc(brand||"")}"${ym?` data-mmonth="${esc(ym)}"`:""}>${kind==="card"?metricsCardHtml(store,brand,ym):""}</${t}>`;};
+const metricsSlot=(kind,store,brand,tag,ym)=>{const t=tag||"div";return `<${t} ${kind==="chips"?'class="mxrow" ':""}data-mkind="${kind}" data-mstore="${esc(store||"")}" data-mbrand="${esc(brand||"")}"${ym?` data-mmonth="${esc(ym)}"`:""}>${kind==="card"?(()=>{try{return metricsCardHtml(store,brand,ym);}catch(e){return "";}})():""}</${t}>`;};
 // CSV・AIに渡す数値（その行の月のデータだけから）
 const METRICS_CSV_HEAD=["KPI点","売上実績(円)","予算達成率(%)","原価率(%)","人件費率(%)","FL率(%)","日報参照日"];
 function metricsCsvCells(i){
@@ -2090,7 +2156,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.48.1";
+const APP_VERSION="v7.48.2";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2864,59 +2930,71 @@ function bindAdmin(){
     const st=$("#mx-status"); const url=$("#mx-url").value.trim().replace(/\/+$/,""), key=$("#mx-key").value.trim();
     if(!url||!key){st.textContent="取得先URLと閲覧キーの両方を入力してください。";return;}
     if(!/^https:\/\/[^\s/]+/.test(url)){st.textContent="取得先URLは https:// で始まる形式にしてください。";return;}
-    metricsCfg={url,key,synced:false}; await kvSet("metricsCfg",metricsCfg).catch(()=>{});
+    metricsEditSeq++;
+    metricsCfg={url,key,synced:false,at:Date.now()}; metricsMeta.cfgDeleted=false;
+    await kvSet("metricsCfg",metricsCfg).catch(()=>{}); await persistMetricsMeta();   // 先に端末へ残す（圏外で書き込みが保留になっても失われない）
     const shared=await cloudSaveMetricsCfg(metricsCfg,null);
     if(shared){metricsCfg={...metricsCfg,synced:true}; await kvSet("metricsCfg",metricsCfg).catch(()=>{});}
     metricsClearMemo(); state.metrics=null; metricsAt=0;
     render();
-    const s2=$("#mx-status"); if(s2) s2.textContent=shared?"保存しました（全端末に自動共有されます）。取得しています…":"この端末に保存しました（クラウド未接続のため共有は保留）。取得しています…";
+    const s2=$("#mx-status"); if(s2) s2.textContent=shared?"保存しました（全端末に自動共有されます）。取得しています…":"この端末に保存しました（クラウドへ未送信。繋がったときに共有します）。取得しています…";
     await fetchMetrics(true);
-    const s3=$("#mx-status"); if(s3) s3.textContent=state.metrics?metricsSummaryText(state.metrics):("取得に失敗しました："+metricsErr);
+    const s3=$("#mx-status"); if(s3) s3.textContent=state.metrics?metricsSummaryText(state.metrics):("取得に失敗しました："+(metricsErr||"もう一度お試しください"));
   });
   $("#mx-test")?.addEventListener("click",async()=>{
     const st=$("#mx-status"); const url=$("#mx-url").value.trim(), key=$("#mx-key").value.trim();
     if(!url||!key){st.textContent="取得先URLと閲覧キーの両方を入力してください。";return;}
     st.textContent="接続テスト中…（最大25秒）";
-    try{ const j=await metricsRequest(url,key); st.textContent="接続成功："+metricsSummaryText(j); }
+    try{ const j=sanitizeMetrics(await metricsRequest(url,key)); st.textContent="接続成功："+metricsSummaryText(j); }
     catch(err){ st.textContent="接続失敗："+String(err.message||err).slice(0,160); }
   });
   $("#mx-clear")?.addEventListener("click",async()=>{
     if(!confirm("経営指標の取得先設定を削除しますか？（全端末で経営指標の表示が消えます）")) return;
+    metricsEditSeq++;
     metricsCfg=null; state.metrics=null; metricsClearMemo();
+    metricsMeta.cfgDeleted=true; await persistMetricsMeta();   // クラウドの削除が届くまで印を残す（届かなければ次回の同期で削除する。復活させない）
     await kvDel("metricsCfg").catch(()=>{}); await kvDel("metrics").catch(()=>{});
-    await cloudDeleteMetricsCfg();
+    const ok=await cloudDeleteMetricsCfg();
+    if(ok){metricsMeta.cfgDeleted=false; await persistMetricsMeta();}
     render();
+    if(!ok){const s2=$("#mx-status"); if(s2) s2.textContent="この端末では削除しました。クラウド上の設定は、通信できたときに削除します（それまで他の端末には残ります）。";}
   });
   $("#mx-kpi-save")?.addEventListener("click",async()=>{
     const st=$("#mx-kpi-status"); const ym=$("#mx-kpi-month").value;
     if(!/^\d{4}-\d{2}$/.test(ym||"")){st.textContent="月を選んでください。";return;}
     const rows=parseKpiText($("#mx-kpi-text").value);
     if(rows.length<3){st.textContent="店名と点数の行を読み取れませんでした（3店以上必要です）。シートの店名列と点数列をそのままコピーして貼り付けてください。";return;}
+    metricsEditSeq++;
     metricsManualKpi[ym]=rows; metricsManualTried[ym]=true;
-    await kvSet("kpiManual",metricsManualKpi).catch(()=>{});
+    metricsManualPending[ym]=Date.now(); delete metricsMeta.kpiDeleted[ym];   // 先に「未送信」として端末へ残す
+    await kvSet("kpiManual",metricsManualKpi).catch(()=>{}); await kvSet("kpiManualPending",metricsManualPending).catch(()=>{}); await persistMetricsMeta();
     const shared=await cloudSaveKpiManual(ym,rows);
-    if(shared) delete metricsManualPending[ym]; else metricsManualPending[ym]=true;   // 圏外で取り込んだ分は、次にクラウドへ繋がったときに送る
-    await kvSet("kpiManualPending",metricsManualPending).catch(()=>{});
+    if(shared){ delete metricsManualPending[ym]; await kvSet("kpiManualPending",metricsManualPending).catch(()=>{}); }
     metricsClearMemo(); render();
-    const s2=$("#mx-kpi-status"); if(s2) s2.textContent=`${+ym.slice(5)}月のKPI ${rows.length}店を取り込みました。${shared?"（全端末に共有）":"（この端末のみ・クラウド未接続）"}`;
+    const s2=$("#mx-kpi-status"); if(s2) s2.textContent=`${+ym.slice(5)}月のKPI ${rows.length}店を取り込みました。${shared?"（全端末に共有）":"（この端末のみ。クラウドへは繋がったときに送ります）"}`;
   });
   $("#mx-kpi-del")?.addEventListener("click",async()=>{
     const st=$("#mx-kpi-status"); const ym=$("#mx-kpi-month").value;
     if(!metricsManualKpi[ym]){st.textContent="その月の取り込みはありません。";return;}
     if(!confirm(`${+ym.slice(5)}月の手動取り込みKPIを削除しますか？`)) return;
-    delete metricsManualKpi[ym]; delete metricsManualPending[ym];
-    await kvSet("kpiManual",metricsManualKpi).catch(()=>{});
-    await kvSet("kpiManualPending",metricsManualPending).catch(()=>{});
-    await cloudDeleteKpiManual(ym);
+    metricsEditSeq++;
+    delete metricsManualKpi[ym]; delete metricsManualPending[ym]; metricsMeta.kpiDeleted[ym]=true;
+    await kvSet("kpiManual",metricsManualKpi).catch(()=>{}); await kvSet("kpiManualPending",metricsManualPending).catch(()=>{}); await persistMetricsMeta();
+    const ok=await cloudDeleteKpiManual(ym);
+    if(ok){ delete metricsMeta.kpiDeleted[ym]; await persistMetricsMeta(); }
     metricsClearMemo(); render();
+    if(!ok){const s2=$("#mx-kpi-status"); if(s2) s2.textContent="この端末では削除しました。クラウド上の分は、通信できたときに削除します。";}
   });
   $("#mx-alias-save")?.addEventListener("click",async()=>{
     const st=$("#mx-alias-status");
+    metricsEditSeq++;
     metricsAliases=parseAliases($("#mx-alias").value);
-    await kvSet("metricsAliases",metricsAliases).catch(()=>{});
+    metricsMeta.aliasesPendingAt=Date.now();
+    await kvSet("metricsAliases",metricsAliases).catch(()=>{}); await persistMetricsMeta();   // 先に「未送信」として端末へ残す
     const shared=await cloudSaveMetricsCfg(null,metricsAliases);
+    if(shared){ metricsMeta.aliasesPendingAt=0; await persistMetricsMeta(); }
     metricsClearMemo(); refreshMetricSlots();
-    st.textContent=`${Object.keys(metricsAliases).length}件の対応を保存しました。${shared?"（全端末に共有）":"（この端末のみ・クラウド未接続）"}`;
+    st.textContent=`${Object.keys(metricsAliases).length}件の対応を保存しました。${shared?"（全端末に共有）":"（この端末のみ。クラウドへは繋がったときに送ります）"}`;
   });
   $("#ck-save")?.addEventListener("click",async()=>{
     const st=$("#ck-status"); const v=$("#ck-input").value.trim();
@@ -3953,6 +4031,8 @@ document.addEventListener("input",e=>{
       metricsManualKpi=mk&&typeof mk==="object"&&!Array.isArray(mk)?mk:{};
       const mp=(await kvGet("kpiManualPending").catch(()=>null))||{};
       metricsManualPending=mp&&typeof mp==="object"&&!Array.isArray(mp)?mp:{};
+      const mm=(await kvGet("metricsMeta").catch(()=>null))||{};
+      metricsMeta={cfgDeleted:mm.cfgDeleted===true,aliasesPendingAt:Number(mm.aliasesPendingAt)||0,kpiDeleted:mm.kpiDeleted&&typeof mm.kpiDeleted==="object"&&!Array.isArray(mm.kpiDeleted)?mm.kpiDeleted:{}};
       if(metricsCfg){
         // 前回取得分（圏外でも表示できる）。形が壊れていたら捨てる（アプリが起動不能にならないように）
         try{ state.metrics=sanitizeMetrics(await kvGet("metrics")); }catch(e){ state.metrics=null; kvDel("metrics").catch(()=>{}); }

@@ -266,8 +266,7 @@ function compactDaily(item) {
 // 日報APIの応答は {history:[…], month:"…", items:[…]} の順で、履歴(history)込みだと月末に約2.5MBになる。
 // 全体を JSON.parse すると無料枠のCPU上限(10ms)を超えかねないので、後ろから "items": を探して以降だけを解析する。
 // 見つからない／読めない場合は従来どおり全体を解析する（小さな応答や並び順が違う場合）。
-async function readDailyJson(r) {
-  const buf = new Uint8Array(await r.arrayBuffer());
+function readDailyJson(buf) {
   const ascii = t => Uint8Array.from(t, c => c.charCodeAt(0));
   const findBack = (needle, from) => {
     const n = needle.length;
@@ -288,7 +287,7 @@ async function readDailyJson(r) {
         const m = /"month":"(\d{4}-\d{2})"/.exec(new TextDecoder().decode(buf.subarray(mo, it)));
         if (m) obj.month = m[1];
       }
-      if (Array.isArray(obj.items)) return obj;
+      if (Array.isArray(obj.items) && typeof obj.month === "string") return obj; // month が取れない並びのときは全体解析に戻る
     } catch { /* 全体解析へ */ }
   }
   return JSON.parse(new TextDecoder().decode(buf));
@@ -302,8 +301,11 @@ async function fetchDailyPart() {
   try { r = await fetch(`${origin}/api/daily`, { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) }); }
   catch (e) { return { daily: null, month: null, error: `日報APIを取得できません（${failText(e)}）`, transient: true }; }
   if (!r.ok) return { daily: null, month: null, error: `日報APIを取得できません (${r.status})`, transient: r.status >= 500 || r.status === 429 };
+  let buf;
+  try { buf = new Uint8Array(await r.arrayBuffer()); }
+  catch (e) { return { daily: null, month: null, error: `日報APIを取得できません（${failText(e)}）`, transient: true }; }
   let j;
-  try { j = await readDailyJson(r); } catch { j = null; }
+  try { j = readDailyJson(buf); } catch { j = null; }
   if (!j || !Array.isArray(j.items)) return { daily: null, month: null, error: "日報APIの形式が想定と異なります", transient: false };
   const rows = j.items.map(compactDaily).filter(Boolean);
   const stamps = j.items.map(i => i && i.updatedAt).filter(t => isNum(t) && t > 0);
@@ -318,18 +320,18 @@ async function fetchDailyPart() {
 // gviz は存在しないタブ名を指定してもエラーにならず先頭タブの内容を返すことがある。
 // そこで実在しないタブ名でも1回取り（decoy）、その内容と同じ本文が返ってきたタブ名の候補は「タブが無い」とみなす。
 //   body   … decoy の本文を取得できた（同じ本文なら先頭タブが返っただけ）
-//   missing… Googleが「そんなタブは無い」と明確に返した（4xx／HTML）＝タブ名で取れた本文は信用できる
-//   unknown… 通信エラー・5xx・429が続いた＝判定できない。安全のため、タブ名だけで取れた本文は採用しない
+//   missing… Googleが「そんなタブは無い」と明確に返した（400／404／410）＝タブ名で取れた本文は信用できる
+//   unknown… 通信エラー・5xx・429・401/403・HTMLや空の応答が続いた＝判定できない。安全のため、タブ名だけで取れた本文は採用しない
 async function kpiDecoyProbe() {
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(String(KPI_SHEET_ID).trim())}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await fetch(`${base}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(KPI_DECOY_TAB)}`, { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) });
-      if (r.status === 429 || r.status >= 500) continue; // 一時的な失敗→もう1回
-      if (!r.ok) return { kind: "missing" };
+      if (r.status === 400 || r.status === 404 || r.status === 410) return { kind: "missing" }; // Googleが「そのタブは無い」と明確に返した
+      if (!r.ok) continue; // 429・5xx・401/403 など＝判定できない→もう1回
       const t = await r.text();
       if (t && !t.trimStart().startsWith("<")) return { kind: "body", text: t };
-      return { kind: "missing" };
+      /* 200 でHTML／空本文（ログイン画面・メンテ画面など）は「無い」とは言えない → もう1回 */
     } catch { /* もう1回 */ }
   }
   return { kind: "unknown" };
@@ -358,12 +360,18 @@ async function fetchKpiMonth(month, decoy) {
   }
   return { rows: null, transient, blocked }; // 過去月でタブが無いのは普通
 }
-async function fetchKpiPart() {
+async function fetchKpiPart(shared) {
   if (isUnset(KPI_SHEET_ID)) return { kpi: null, error: "KPIシートのID（KPI_SHEET_ID）が未設定です", transient: false };
   const months = kpiMonthList();
   let decoyP = null;
   const decoy = () => (decoyP || (decoyP = kpiDecoyProbe()));
-  const got = await Promise.all(months.map(m => fetchKpiMonth(m, decoy)));
+  // gid が無い月（タブ名で探す月）があるなら、先頭タブ判定を最初から並行して始める（各月の取得の後ろに直列で待たせない）
+  if (months.some(m => !(KPI_TAB_GIDS && KPI_TAB_GIDS[m]))) decoy();
+  const got = await Promise.all(months.map(async m => {
+    const g = await fetchKpiMonth(m, decoy);
+    if (g.rows && shared) shared.kpi[m] = g.rows; // 締め切りに間に合わなかった場合でも、取れた月はここから返せる
+    return g;
+  }));
   const kpi = {};
   months.forEach((m, i) => { if (got[i].rows) kpi[m] = got[i].rows; });
   const blocked = got.some(g => g.blocked);
@@ -377,12 +385,15 @@ async function fetchKpiPart() {
 
 let metricsCache = null, metricsAt = 0, metricsInflight = null;
 async function buildMetrics() {
+  const kshared = { kpi: {} };   // 締め切りに間に合わなくても、その時点までに取れたKPIの月は返す
+  const TIMEOUT_KPI = { get kpi() { return Object.keys(kshared.kpi).length ? { ...kshared.kpi } : null; },
+    get error() { return Object.keys(kshared.kpi).length ? "KPI：一部の月は時間内に取得できませんでした" : "KPIの取得がタイムアウトしました"; }, transient: true };
   // daily と kpi は互いに失敗を隔離して並列取得。どちらも遅い側に足を引っ張られないよう締め切りを付ける
   const [d, k] = await Promise.all([
     withDeadline(fetchDailyPart().catch(() => ({ daily: null, month: null, error: "日報の取得中に予期しないエラーが起きました", transient: true })),
       METRICS_DEADLINE_MS, { daily: null, month: null, error: "日報の取得がタイムアウトしました", transient: true }),
-    withDeadline(fetchKpiPart().catch(() => ({ kpi: null, error: KPI_UNREADABLE, transient: true })),
-      METRICS_DEADLINE_MS, { kpi: null, error: "KPIの取得がタイムアウトしました", transient: true }),
+    withDeadline(fetchKpiPart(kshared).catch(() => ({ kpi: null, error: KPI_UNREADABLE, transient: true })),
+      METRICS_DEADLINE_MS, TIMEOUT_KPI),
   ]);
   metricsCache = {
     fetchedAt: new Date().toISOString(),

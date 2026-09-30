@@ -23,6 +23,7 @@ const METRICS_KEY = "PASTE_METRICS_KEY_HERE"; // アプリが /metrics を読む
 const TEAM_NOTE_ORIGIN = "PASTE_TEAM_NOTE_ORIGIN_HERE"; // 売上・FLの取得元。例 https://xxxx.example.site（末尾スラッシュ無し）
 const KPI_SHEET_ID = "PASTE_KPI_SHEET_ID_HERE"; // KPIスプレッドシートのID（URLの /d/ と /edit の間）
 const KPI_TAB_GIDS = {}; // 任意。"YYYY-MM" → タブのgid。例 {"2026-09": "123456789"}。空でも名前で探す
+const KPI_DECOY_TAB = "__rakuraku_no_such_tab__"; // 実在しないタブ名（gvizが先頭タブを返す挙動の検出用）
 const PROJECT_ID = "rakuraku-check";
 const REFERER = "https://rakuraku-check.com/";
 
@@ -270,7 +271,18 @@ async function fetchDailyPart() {
 }
 
 /* KPIシート：月ごとに CSV を取る（gid指定 → 無ければ／失敗したらタブ名2通り） */
-async function fetchKpiMonth(month) {
+// gviz は存在しないタブ名を指定してもエラーにならず先頭タブの内容を返すことがある。
+// 実在しないタブ名で取った内容（＝先頭タブ）と同じ本文が返ってきた候補は「タブが無い」とみなす
+async function kpiDecoyBody() {
+  const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(String(KPI_SHEET_ID).trim())}`;
+  try {
+    const r = await fetch(`${base}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(KPI_DECOY_TAB)}`, { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) });
+    if (!r.ok) return null;
+    const t = await r.text();
+    return t && !t.trimStart().startsWith("<") ? t : null;
+  } catch { return null; }
+}
+async function fetchKpiMonth(month, decoy) {
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(String(KPI_SHEET_ID).trim())}`;
   const urls = [];
   const gid = KPI_TAB_GIDS && KPI_TAB_GIDS[month];
@@ -282,6 +294,7 @@ async function fetchKpiMonth(month) {
       if (!r.ok) continue;
       const text = await r.text();
       if (!text || text.trimStart().startsWith("<")) continue; // ログイン画面などのHTML＝取得失敗
+      if (u.includes("/gviz/")) { const d = await decoy(); if (d != null && text === d) continue; } // 先頭タブが返っただけ＝該当タブ無し
       return parseKpiCsv(text);
     } catch { /* 次の候補へ */ }
   }
@@ -290,7 +303,9 @@ async function fetchKpiMonth(month) {
 async function fetchKpiPart() {
   if (isUnset(KPI_SHEET_ID)) return { kpi: null, error: "KPIシートのID（KPI_SHEET_ID）が未設定です" };
   const months = kpiMonthList();
-  const got = await Promise.all(months.map(m => fetchKpiMonth(m)));
+  let decoyP = null;
+  const decoy = () => (decoyP || (decoyP = kpiDecoyBody()));
+  const got = await Promise.all(months.map(m => fetchKpiMonth(m, decoy)));
   const kpi = {};
   months.forEach((m, i) => { if (got[i]) kpi[m] = got[i]; });
   return Object.keys(kpi).length ? { kpi, error: null } : { kpi: null, error: KPI_UNREADABLE };

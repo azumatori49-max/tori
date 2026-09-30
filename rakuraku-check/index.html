@@ -826,7 +826,449 @@ function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})
    取得元：Cloudflare Worker の /metrics（売上・FL＝日報API、KPI＝KPIスプレッドシート）。
    取得先URLと閲覧キーは管理画面で1回設定し、Firestore（config/metrics）で全端末に共有する。
    FL率 ＝ 原価率(F) ＋ 人件費率(L)。売上・FLは当月の累計（日報の参照日時点）。 */
-/*__MATCHER__*/
+const MetricMatch=(()=>{
+// metrics-match.mjs
+// らくらく臨店チェックの店名(SVの手入力) と 日報/KPI 側の店名を自動で紐づける純関数。
+// 依存なし・DOM/Node非依存（ブラウザへそのまま埋め込める）。データは一切含まない。
+//
+// 設計方針: 「誤紐づけ」より「未紐づけ」を選ぶ。曖昧なら必ず none を返し、aliases（手動対応表）で救う。
+//
+//   metricKey(name, brandHint?)  正規化キー（屋号語頭・末尾「店」除去済み）
+//   brandOf(name, brandHint?)    屋号（鶏ヤロー|イザカラ|すし鳥商店|まる助 | ''）
+//   buildIndex(rows)             rows = [{ store, branch?, brand? }]
+//   matchStore(appStore, appBrand, index, aliases={})
+//                                → { row|null, how:'alias'|'exact'|'fuzzy'|'none', score, kind?, reason?, nearest? }
+//   fillBrands(list)             屋号が空のアプリ店名を、同じ店名で屋号が一意に決まる他レコードから補う
+//   matchAll(list, index, aliases) list=[{store, brand}] を一括照合
+//
+// aliases のキー: 'アプリ店名' または '屋号|アプリ店名'（屋号付きが優先）。空白・全角半角は無視して比較。
+//   値: '相手側の店名(store の全体)' | ['日報側の店名','KPI側の店名'] | null（= 明示的に「紐づけない」）
+//   エイリアスがあれば最優先（how:'alias'）。値がこの索引に存在しない時は、通常の「完全一致」だけ許し、あいまい照合はしない。
+//   （1つの alias 表を日報用・KPI用の両方で使えるよう、値は配列で両方の表記を書ける）
+//
+// 照合の優先順（上から。途中で曖昧になったら none）:
+//   1. alias
+//   2. 正規化キーの完全一致（how:'exact'）。屋号が両方分かって食い違えば不採用。屋号不明で同名別屋号の疑い
+//      (MULTI_BRAND_KEYS: 柏/町田/北千住、または別屋号に“アプリ名で始まる/終わる長い店名”がある)なら none。
+//      「X1号」は「X」と同一視（名古屋栄1号=名古屋栄）。号数/階数(2号,2F,B1)の食い違いは絶対に別店舗。
+//   3. 前方/後方一致の部分一致（how:'fuzzy', kind:'contain'）。候補が1件だけで、短い側が2文字以上・
+//      長さ比が屋号既知で0.25以上(不明は0.5以上)・付帯語が安全なものだけ。複数候補、または採用条件を満たさない
+//      前方/後方一致の別行が居れば none。カラオケ等の別店舗語、アプリ名が長い側で付帯語が地名/方角の場合は不採用。
+//   4. 文字bigramのDice係数（how:'fuzzy', kind:'dice'）。屋号既知0.6以上(不明0.7以上)かつ2位との差0.15以上。
+//      部分一致の関係にあるペアは 3. の規則だけで判断し、Diceの裏口では採用しない。
+
+const BRAND_WORDS = '魚と鶏ヤロー|魚鶏|すし鳥商店|鶏ヤロー|イザカラ|まる助';
+const BRAND_PREFIX = new RegExp('^(' + BRAND_WORDS + ')');
+const BRAND_FOLD = { '魚と鶏ヤロー': 'すし鳥商店', '魚鶏': 'すし鳥商店' };
+
+// 改称ルール（team-note lib/kpi.ts の kpiStoreKey と daily-source の除外注記に基づく）。
+// 対象は「屋号+店名(末尾の店を除去済み)」。両側（アプリ/索引）に適用して安全なもの。
+const RENAMES = [
+  [/^鶏ヤロー渋谷店道玄坂$/, '鶏ヤロー渋谷道玄坂'],   // kpiStoreKey
+  [/^鶏ヤロー新橋$/, 'すし鳥商店新橋'],                 // kpiStoreKey（8月に業態変更）
+  [/^すし鳥商店立川$/, '鶏ヤロー立川北口'],             // kpiStoreKey（旧: 魚と鶏ヤロー立川店。4月に業態変更）
+  [/^鶏ヤロー志木$/, 'すし鳥商店志木'],                 // daily-source excluded「旧鶏ヤロー志木→新しいすし鳥商店志木」
+];
+// 旧KPIシート由来の名前にだけ意味があるルール。アプリの手入力「立川」は曖昧なので索引側(buildIndex)にのみ適用。
+const LEGACY_RENAMES = [
+  [/^鶏ヤロー立川$/, '鶏ヤロー立川南口'],               // kpiStoreKey: 鶏ヤロー立川南口→鶏ヤロー立川（旧「立川店」）
+];
+
+// 屋号語ではない“別店舗を示す修飾語”。含む部分一致は別店舗とみなして採用しない。
+const DISTINCT_EXTRA = /カラオケ/;
+// 部分一致で「アプリ名のほうが長い」時に許す付帯語（一般的な語だけ。方角(東口等)や地名は別店舗の恐れがあるので許さない）
+const GENERIC_EXTRA = /^(駅前|駅|本|本店)$/;
+// アプリ名が略称のとき、正式名の後ろに付いていてよい付帯語（町/駅前/本店/方角口）。地名っぽい語(栄/一番街/クレアモール等)は別店舗の恐れがあるので許さない
+const GENERIC_SUFFIX_EXTRA = /^(駅前|駅|前|本|本店|町|店|[東西南北]口|中央口)$/;
+const GENERIC_ONLY = /^(駅前|駅|本|本店|口|[東西南北]口|中央口)$/;
+
+// 複数の屋号に同名店がある正規化キー。屋号が不明なアプリ店名は、索引に片方しか無くても取り違えるので紐づけない。
+// （新しい同名店が増えたらここに追加。fillBrands で屋号が決まるものは影響しない）
+const MULTI_BRAND_KEYS = new Set(['柏', '町田', '北千住']);
+
+// しきい値（実データで検証済み。誤紐づけ0件）
+const CONTAIN_RATIO_BRAND = 0.25;  // 屋号が両方分かる時: 短い側/長い側 の最小比
+const CONTAIN_RATIO_NOBRAND = 0.5; // どちらかの屋号が不明な時
+const DICE_MIN_BRAND = 0.6;
+const DICE_MIN_NOBRAND = 0.7;
+const DICE_MARGIN = 0.15;          // 1位と2位のDice差の最小値
+const COMPETITOR_DICE = 0.6;       // 部分一致の採用時、別行がこれ以上のDiceなら曖昧として捨てる
+
+/** NFKC・大文字化・空白/中黒/記号除去（長音「ー」は残す） */
+function clean(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/[\s　・･·•､、，,。．.\-‐‑–—―−~〜～_\/\\|:;'"`!?*★☆@#&%+=<>()\[\]{}「」『』【】〈〉《》]/g, '');
+}
+
+function foldBrand(b) {
+  const c = clean(b);
+  if (!c) return '';
+  const m = c.match(BRAND_PREFIX);
+  if (!m || m[1].length !== c.length) return '';
+  return BRAND_FOLD[m[1]] || m[1];
+}
+
+/** 屋号語頭の除去・末尾店除去・表記ゆれ正規化・改称ルール → { brand, key } */
+function parse(name, brandHint, legacy) {
+  let s = clean(name);
+  let brand = '';
+  const m = s.match(BRAND_PREFIX);
+  if (m) {
+    brand = BRAND_FOLD[m[1]] || m[1];
+    s = s.slice(m[1].length);
+  } else {
+    brand = foldBrand(brandHint);
+  }
+  s = s.replace(/店$/, '');
+  s = s.replace(/B(\d+)F/g, 'B$1');                                            // 三宮B1F = 三宮B1
+  s = s.replace(/([一-鿿])[のノヶケ]([一-鿿])/g, '$1$2');       // 三ノ宮=三宮, 溝の口=溝口
+  s = s.replace(/^(難波|なんば)(千日前)?$/, 'なんば');                          // 難波=なんば=なんば千日前
+  const rules = legacy ? RENAMES.concat(LEGACY_RENAMES) : RENAMES;
+  if (brand) {
+    let composite = brand + s;
+    for (const [re, to] of rules) {
+      if (re.test(composite)) { composite = to; break; }
+    }
+    const mm = composite.match(BRAND_PREFIX);
+    if (mm) { brand = BRAND_FOLD[mm[1]] || mm[1]; s = composite.slice(mm[1].length); }
+  }
+  return { brand, key: s };
+}
+
+/** 正規化キー。屋号語頭と末尾「店」は除去済み。屋号は brandOf で別途取得する。 */
+function metricKey(name, brandHint) {
+  return parse(name, brandHint, false).key;
+}
+
+/** 店名の語頭（または brandHint）から屋号を取り出す。改称後の屋号を返す（鶏ヤロー新橋→すし鳥商店）。 */
+function brandOf(name, brandHint) {
+  return parse(name, brandHint, false).brand;
+}
+/** 索引用のキー（屋号|正規化キー）。旧名称の読み替え（例：鶏ヤロー立川→立川南口）を含み、月をまたいだ表記ゆれのまとめに使う。 */
+function indexKey(name, brandHint) {
+  const p = parse(name, brandHint, true);
+  return p.brand + '|' + p.key;
+}
+
+/** X1号 は X と同じ店（1号店は号数を付けない運用）。キーの別表記を返す。 */
+function variants(key) {
+  const out = [key];
+  const m = key.match(/^(.*\D)1号$/);
+  if (m && m[1]) out.push(m[1]);
+  return out;
+}
+
+const tokensOf = (key) => new Set((key.match(/B\d+|\d+F|\d+号/g) || []).filter((t) => t !== '1号'));
+const dirsOf = (key) => new Set(key.match(/[東西南北]口/g) || []);
+const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+
+/** 号数・階数・方角が食い違う組は“別店舗”として絶対に候補にしない */
+function compatible(a, b) {
+  if (!sameSet(tokensOf(a), tokensOf(b))) return false;
+  const da = dirsOf(a), db = dirsOf(b);
+  if (da.size && db.size && !sameSet(da, db)) return false;
+  return true;
+}
+
+function grams(s) {
+  const g = new Set();
+  for (let i = 0; i < s.length - 1; i++) g.add(s.slice(i, i + 2));
+  return g;
+}
+function dice(a, b) {
+  const ga = grams(a), gb = grams(b);
+  if (!ga.size || !gb.size) return 0;
+  let inter = 0;
+  for (const x of ga) if (gb.has(x)) inter++;
+  return (2 * inter) / (ga.size + gb.size);
+}
+
+/** 前方/後方一致の部分一致判定。okは採用可否。query が短い側なら dir='a'（略称）、長い側なら 'b' */
+function contain(qk, ek, brandKnown) {
+  if (qk === ek) return null;
+  const qShort = qk.length <= ek.length;
+  const s = qShort ? qk : ek, l = qShort ? ek : qk;
+  if (s.length < 2 || s.length === l.length) return null;
+  const pre = l.startsWith(s), suf = l.endsWith(s);
+  if (!pre && !suf) return null;
+  const extra = pre ? l.slice(s.length) : l.slice(0, l.length - s.length);
+  const ratio = s.length / l.length;
+  const blocked = [];
+  if (GENERIC_ONLY.test(s)) blocked.push('generic-word-only');                 // 「駅前」だけ等は店名として使わない
+  if (DISTINCT_EXTRA.test(extra)) blocked.push('distinct-store-word');          // カラオケ池袋 と 池袋 は別店舗
+  if (!qShort && !GENERIC_EXTRA.test(extra)) blocked.push('app-name-longer-with-specific-extra'); // アプリ名のほうが長い時は付帯語が一般的なものに限る
+  if (ratio < (brandKnown ? CONTAIN_RATIO_BRAND : CONTAIN_RATIO_NOBRAND)) blocked.push('length-ratio-low');
+  if (!brandKnown && /[東西南北]口/.test(extra)) blocked.push('direction-dropped-brand-unknown'); // 立川 → 立川南口 のように方角を省いた略称は、屋号が分かる時だけ
+  // アプリ名が略称(短い側)で、正式名の「後ろ」に付帯語がある時（名古屋→名古屋栄 のように別店舗になり得る）は、一般的な付帯語だけ許す
+  if (qShort && pre && !GENERIC_SUFFIX_EXTRA.test(extra)) blocked.push('specific-suffix-extra');
+  const ok = blocked.length === 0;
+  return { ok, blocked, ratio, extra, dir: qShort ? 'a' : 'b' };
+}
+
+/** 前方/後方一致の関係にあるか（採用可否は問わない）。曖昧さ・同名別店舗の検出に使う */
+function related(a, b) {
+  if (a === b) return false;
+  const [sh, lo] = a.length <= b.length ? [a, b] : [b, a];
+  return sh.length >= 2 && sh.length < lo.length && (lo.startsWith(sh) || lo.endsWith(sh));
+}
+
+/** 索引を作る。rows = [{ store, branch?, brand? }]。屋号は店名の語頭を優先、なければ brand 欄 */
+function buildIndex(rows) {
+  const entries = [];
+  const byFull = new Map();
+  for (const row of rows || []) {
+    if (!row || !row.store) continue;
+    const p = parse(row.store, row.brand, true);
+    const keys = new Set();
+    for (const k of variants(p.key)) if (k) keys.add(k);
+    if (row.branch) {
+      const pb = parse(row.branch, p.brand, true);
+      for (const k of variants(pb.key)) if (k) keys.add(k);
+    }
+    const e = { row, brand: p.brand, key: p.key, keys: [...keys], full: clean(row.store) };
+    entries.push(e);
+    const arr = byFull.get(e.full) || [];
+    arr.push(e);
+    byFull.set(e.full, arr);
+  }
+  return { entries, byFull };
+}
+
+function aliasMap(aliases) {
+  if (!aliases || typeof aliases !== 'object') return null;
+  const m = new Map();
+  for (const k of Object.keys(aliases)) {
+    const i = k.indexOf('|');
+    const brand = i >= 0 ? foldBrand(k.slice(0, i)) : '';
+    const store = clean(i >= 0 ? k.slice(i + 1) : k);
+    const v = aliases[k];
+    m.set((brand ? brand + '|' : '') + store, v == null ? null : Array.isArray(v) ? v : [v]);
+  }
+  return m;
+}
+
+function resolveTarget(index, target) {
+  const full = index.byFull.get(clean(target));
+  if (full && full.length === 1) return full[0];
+  if (full && full.length > 1) return null;
+  const p = parse(target, '', true);
+  const hit = index.entries.filter((e) => e.keys.includes(p.key) && (!p.brand || !e.brand || p.brand === e.brand));
+  return hit.length === 1 ? hit[0] : null;
+}
+
+function none(reason, extra) {
+  return { row: null, how: 'none', score: (extra && extra.score) || 0, reason, nearest: (extra && extra.nearest) || null, candidates: (extra && extra.candidates) || undefined };
+}
+function hit(e, how, score, kind) {
+  const r = { row: e.row, how, score: Math.round(score * 1000) / 1000 };
+  if (kind) r.kind = kind;
+  return r;
+}
+
+/** 文字単位のDice（情報表示用） */
+function charDice(a, b) {
+  const A = [...a], B = [...b];
+  if (!A.length || !B.length) return 0;
+  const cnt = new Map();
+  for (const c of B) cnt.set(c, (cnt.get(c) || 0) + 1);
+  let inter = 0;
+  for (const c of A) if (cnt.get(c) > 0) { inter++; cnt.set(c, cnt.get(c) - 1); }
+  return (2 * inter) / (A.length + B.length);
+}
+
+/** 情報表示用（採用判断には使わない）: 屋号・ゲートを無視した最も近い行と、採用されない理由 */
+function nearestOf(index, qks, q) {
+  let best = null, bestOK = null;
+  for (const e of index.entries) {
+    const bothKnown = !!(q.brand && e.brand);
+    let sc = 0, why = '';
+    for (const qk of qks) for (const ek of e.keys) {
+      let s = 0, w = '';
+      if (qk === ek) { s = 1; w = 'same-key'; }
+      else {
+        s = Math.max(dice(qk, ek), 0.7 * charDice(qk, ek));
+        w = 'dice-below-threshold';
+        const [sh, lo] = qk.length <= ek.length ? [qk, ek] : [ek, qk];
+        if (sh.length >= 1 && lo.includes(sh)) s = Math.max(s, 0.5 + 0.5 * (sh.length / lo.length));
+        const c = contain(qk, ek, bothKnown);
+        if (c && !c.ok) w = 'partial-rejected:' + c.blocked.join('+');
+        else if (!c && sh.length === 1 && lo.includes(sh)) w = 'partial-rejected:abbreviation-too-short';
+        if (!compatible(qk, ek)) { s *= 0.85; w = 'number-or-direction-conflict'; }
+      }
+      if (s > sc) { sc = s; why = w; }
+    }
+    const cand = { row: e.row, score: Math.round(sc * 1000) / 1000, brandMismatch: !!(q.brand && e.brand && q.brand !== e.brand), why };
+    if (!best || sc > best.score) best = cand;
+    if (!cand.brandMismatch && (!bestOK || sc > bestOK.score)) bestOK = cand;
+  }
+  if (bestOK && bestOK.score >= 0.4) return bestOK;
+  return best;
+}
+
+/**
+ * アプリ店名 → 索引の行。優先順: alias → 正規化キー完全一致 → 部分一致(一意) → bigram Dice(閾値+マージン)。
+ * 曖昧・不確かなら none（row:null）。
+ */
+function matchStore(appStore, appBrand, index, aliases = {}) {
+  const raw = clean(appStore);
+  if (!raw) return none('empty');
+  const q = parse(appStore, appBrand, false);
+
+  // 1. alias
+  let aliasMissing = false;
+  const am = aliasMap(aliases);
+  if (am && am.size) {
+    const tries = [];
+    const hb = foldBrand(appBrand);
+    if (hb) tries.push(hb + '|' + raw);
+    if (q.brand && q.brand !== hb) tries.push(q.brand + '|' + raw);
+    tries.push(raw);
+    for (const k of tries) {
+      if (!am.has(k)) continue;
+      const targets = am.get(k);
+      if (targets == null) return none('alias-blocked');
+      for (const t of targets) {
+        const e = resolveTarget(index, t);
+        if (e) return hit(e, 'alias', 1);
+      }
+      aliasMissing = true; // この索引に対応先が無い。完全一致だけは通常どおり許し、あいまい照合はしない
+      break;
+    }
+  }
+
+  const qks = variants(q.key).filter(Boolean);
+  if (!qks.length) return none('empty');
+  const brandOK = (e) => !q.brand || !e.brand || q.brand === e.brand;
+  const bothKnown = (e) => !!(q.brand && e.brand);
+
+  // 2. 正規化キー完全一致（屋号が両方分かって食い違うものは不採用）
+  if (!q.brand && qks.some((k) => MULTI_BRAND_KEYS.has(k))) return none('brand-required');
+  const exactAll = index.entries.filter((e) => e.keys.some((k) => qks.includes(k)));
+  const exact = exactAll.filter(brandOK);
+  if (exact.length > 1) {
+    return none('ambiguous-exact', { candidates: exact.map((e) => e.row), nearest: { row: exact[0].row, score: 1 } });
+  }
+  if (exact.length === 1) {
+    const e = exact[0];
+    if (!q.brand && e.brand) {
+      // 屋号不明の照合: 別屋号に「アプリ名を含む長い名前」があれば同名別店舗の恐れ（北千住 と すし鳥商店北千住西口 等）
+      const sib = index.entries.filter((o) => o !== e && o.brand !== e.brand && o.keys.some((ok) => qks.some((qk) => ok.length > qk.length && compatible(qk, ok) && related(qk, ok))));
+      if (sib.length) return none('ambiguous-sibling-brand', { candidates: [e.row, ...sib.map((o) => o.row)], nearest: { row: e.row, score: 1 } });
+    }
+    return hit(e, 'exact', 1);
+  }
+
+  if (aliasMissing) return none('alias-target-missing');
+
+  // 3/4. 部分一致 → Dice
+  const info = [];
+  for (const e of index.entries) {
+    if (!brandOK(e)) continue;
+    let contBest = null, diceBest = 0, gated = false, rel = false;
+    for (const qk of qks) for (const ek of e.keys) {
+      if (!compatible(qk, ek)) { gated = true; continue; }
+      if (related(qk, ek)) rel = true;
+      const c = contain(qk, ek, bothKnown(e));
+      if (c) {
+        // 前方/後方一致の関係にある組は部分一致の規則だけで判断する（Diceで裏口採用しない）
+        if (!c.ok) continue;
+        if (!contBest || c.ratio > contBest.ratio) contBest = c;
+      }
+      diceBest = Math.max(diceBest, dice(qk, ek));
+    }
+    info.push({ e, cont: contBest, dice: diceBest, gated, rel });
+  }
+  const nearest = nearestOf(index, qks, q);
+
+  const conts = info.filter((x) => x.cont);
+  if (conts.length > 1) {
+    return none('ambiguous-partial', { candidates: conts.map((x) => x.e.row), nearest, score: nearest && nearest.score });
+  }
+  if (conts.length === 1) {
+    const c = conts[0];
+    // 採用条件を満たさなくても前方/後方一致する別行が居れば曖昧（渋谷 → 渋谷駅前 / 渋谷道玄坂 など）
+    const rival = info.find((x) => x !== c && (x.rel || x.dice >= COMPETITOR_DICE));
+    if (rival) return none('ambiguous-partial', { candidates: [c.e.row, rival.e.row], nearest, score: nearest && nearest.score });
+    return hit(c.e, 'fuzzy', Math.max(c.dice, 0.5 + 0.5 * c.cont.ratio), 'contain');
+  }
+
+  const min = q.brand ? DICE_MIN_BRAND : DICE_MIN_NOBRAND;
+  const ranked = info.filter((x) => x.dice > 0).sort((a, b) => b.dice - a.dice);
+  if (ranked.length && ranked[0].dice >= min) {
+    const second = ranked[1] ? ranked[1].dice : 0;
+    if (ranked[0].dice - second >= DICE_MARGIN) return hit(ranked[0].e, 'fuzzy', ranked[0].dice, 'dice');
+    return none('ambiguous-margin', { candidates: [ranked[0].e.row, ranked[1].e.row], nearest, score: ranked[0].dice });
+  }
+  let reason = 'no-candidate';
+  if (nearest && nearest.score >= 0.4) reason = nearest.brandMismatch && nearest.score >= 0.5 ? 'brand-mismatch' : nearest.why;
+  return none(reason, { nearest, score: ranked[0] ? ranked[0].dice : 0 });
+}
+
+/**
+ * 屋号が空のアプリ店名を補う。同じ店名(空白等無視)で、屋号ありのレコードが全て同じ屋号ならそれを採用。
+ * 屋号ありのレコードが複数の屋号にまたがる店名（例: 北千住 = すし鳥商店 / 鶏ヤロー）で屋号が空のものは
+ * どちらか判別できないので brand は空のまま ambiguousBrand:true を付ける（matchAll は none にする）。
+ * list = [{ store, brand }] → 新しい配列（コピー）
+ */
+function fillBrands(list) {
+  const seen = new Map();
+  for (const it of list) {
+    const b = foldBrand(it.brand);
+    if (!b) continue;
+    const k = clean(it.store);
+    if (!seen.has(k)) seen.set(k, new Set());
+    seen.get(k).add(b);
+  }
+  return list.map((it) => {
+    if (foldBrand(it.brand)) return { ...it };
+    if (brandOf(it.store)) return { ...it };            // 店名の語頭に屋号があるなら補完不要
+    const s = seen.get(clean(it.store));
+    if (!s) return { ...it };
+    if (s.size === 1) return { ...it, brand: [...s][0] };
+    return { ...it, ambiguousBrand: true };
+  });
+}
+
+/** 一括照合。fillBrands で ambiguousBrand と判定されたものは照合しない。 */
+function matchAll(list, index, aliases = {}) {
+  return list.map((it) => {
+    const r = it.ambiguousBrand && !(it.brand) ? none('brand-unknown-ambiguous') : matchStore(it.store, it.brand, index, aliases);
+    return { app: it, ...r };
+  });
+}
+
+return {metricKey,brandOf,indexKey,buildIndex,matchStore,fillBrands,matchAll};
+})();
+const {metricKey,brandOf,indexKey,buildIndex,matchStore,fillBrands}=MetricMatch;
+// 標準の店名対応表（アプリの店名の表記ゆれ → 日報側・KPI側の店名）。店名のみ。管理画面の対応表で上書き・追加できる
+const DEFAULT_METRIC_ALIASES={
+  "歌舞伎3号":"鶏ヤロー歌舞伎町3号店",
+  "栄1号":["鶏ヤロー名古屋栄店","鶏ヤロー名古屋栄"],
+  "栄2号":["鶏ヤロー名古屋栄2号店","鶏ヤロー名古屋栄2号"],
+  "東武宇都宮":["鶏ヤロー宇都宮店","鶏ヤロー東武宇都宮"],
+  "道玄坂":["鶏ヤロー渋谷道玄坂店","鶏ヤロー渋谷道玄坂"],
+  "福島栄店":["鶏ヤロー福島栄町店","鶏ヤロー福島栄町"],
+  "西院":["鶏ヤロー京都西院店","鶏ヤロー京都西院"],
+  "いわき":["鶏ヤロー福島いわき店","鶏ヤロー福島いわき"],
+  "茶屋町":["鶏ヤロー茶屋町店","鶏ヤロー梅田茶屋町"],
+  "難波店":["鶏ヤローなんば店","鶏ヤローなんば千日前"],
+  "なんば千日前店":["鶏ヤローなんば店","鶏ヤローなんば千日前"],
+  "まる助|川越":["まる助川越クレアモール店","まる助川越クレアモール"],
+  "まる助|川越店":["まる助川越クレアモール店","まる助川越クレアモール"],
+  "まる助大宮店":["まる助大宮一番街店","まる助大宮一番街"],
+  "まる助|熊谷":["まる助熊谷駅前店","まる助熊谷"],
+  "まる助熊谷店":["まる助熊谷駅前店","まる助熊谷"],
+  "まる助|東松山":["まる助東松山駅前店","まる助東松山"],
+  "まる助|西武秩父駅":["まる助西武秩父駅前店","まる助西武秩父駅前"],
+  "まる助西武秩父店":["まる助西武秩父駅前店","まる助西武秩父駅前"],
+  "まる助|みやのかわ":["まる助みやのかわ本店","まる助みやのかわ"],
+  "まる助みやのかわ":["まる助みやのかわ本店","まる助みやのかわ"],
+  "すし鳥商店|北千住":"すし鳥商店北千住西口店",
+  "すし鳥商店北千住":"すし鳥商店北千住西口店",
+};
+
 let metricsCfg=null, metricsAliases={}, metricsBusy=false, metricsAt=0, metricsErr="", metricsSnapAt=0;
 let livePackCache=null;
 const metricsMonths={}, metricsSnapPacks={};
@@ -837,14 +1279,30 @@ const fmtPct=(v,d=1)=>isFin(v)?(v*100).toFixed(d)+"%":"—";
 const fmtYen=v=>isFin(v)?"¥"+Math.round(v).toLocaleString("ja-JP"):"—";
 const fmtPt=v=>!isFin(v)?"—":Math.abs(v)<0.0005?"±0.0pt":(v>0?"+":"−")+Math.abs(v*100).toFixed(1)+"pt";
 const fmtMD=s=>{const m=/^(\d{1,2})\/(\d{1,2})$/.exec(String(s||""));return m?`${+m[1]}/${+m[2]}`:String(s||"");};
-function metricsClearMemo(){livePackCache=null;for(const k of Object.keys(metricsSnapPacks))delete metricsSnapPacks[k];}
-function mkPack(m){
+let metricsManualKpi={}, metricsManualTried={}, metricsAliasesMerged=null, metricsBrandFill=null;
+function metricsClearMemo(){livePackCache=null;metricsAliasesMerged=null;metricsBrandFill=null;for(const k of Object.keys(metricsSnapPacks))delete metricsSnapPacks[k];}
+// 標準の対応表＋管理画面の対応表（後者が優先）
+function metricsAllAliases(){return metricsAliasesMerged||(metricsAliasesMerged={...DEFAULT_METRIC_ALIASES,...metricsAliases});}
+// 屋号が空のチェック記録は、同じ店名で屋号が一意に決まる他の記録から補う（北千住のように複数屋号にまたがる店名は補わない）
+function appBrandFor(store,brand){
+  if(!metricsBrandFill||metricsBrandFill.n!==state.inspections.length){
+    const seen=new Map();
+    for(const i of state.inspections) if(i.store){const k=i.store+"|"+(i.brand||""); if(!seen.has(k)) seen.set(k,{store:i.store,brand:i.brand||""});}
+    const keys=[...seen.keys()], filled=fillBrands([...seen.values()]), map=new Map();
+    filled.forEach((f,idx)=>map.set(keys[idx],{brand:f.brand||"",amb:!!f.ambiguousBrand}));
+    metricsBrandFill={n:state.inspections.length,map};
+  }
+  return metricsBrandFill.map.get(store+"|"+(brand||""))||{brand:brand||"",amb:false};
+}
+function mkPack(m,withManual){
   if(!m) return null;
-  return {rows:(m.daily&&m.daily.rows)||m.rows||[],kpi:m.kpi||{},month:m.month||"",fetchedAt:m.fetchedAt||"",ix:null,memo:new Map()};
+  // 手動で取り込んだKPIは、シートから自動取得した同じ月の値より優先する（人が確認した値のため）
+  const kpi=withManual?{...(m.kpi||{}),...metricsManualKpi}:(m.kpi||{});
+  return {rows:(m.daily&&m.daily.rows)||m.rows||[],kpi,month:m.month||"",fetchedAt:m.fetchedAt||"",ix:null,memo:new Map(),memoN:-1};
 }
 function livePack(){
   if(!state.metrics) return null;
-  if(!livePackCache||livePackCache.src!==state.metrics) livePackCache={src:state.metrics,pack:mkPack(state.metrics)};
+  if(!livePackCache||livePackCache.src!==state.metrics) livePackCache={src:state.metrics,pack:mkPack(state.metrics,true)};
   return livePackCache.pack;
 }
 function snapPack(ym){
@@ -853,25 +1311,31 @@ function snapPack(ym){
 }
 function packIndexes(p){
   if(!p.ix){
-    const names=new Map();
-    for(const m of Object.keys(p.kpi)) for(const r of p.kpi[m]||[]) if(r&&r.store&&!names.has(r.store)) names.set(r.store,{store:r.store});
-    p.ix={daily:buildIndex(p.rows),kpi:buildIndex([...names.values()])};
+    const seen=new Set(), names=[];
+    for(const m of Object.keys(p.kpi).sort().reverse()) for(const r of p.kpi[m]||[]){
+      if(!r||!r.store) continue;
+      const k=indexKey(r.store);
+      if(seen.has(k)) continue;
+      seen.add(k); names.push({store:r.store});
+    }
+    p.ix={daily:buildIndex(p.rows),kpi:buildIndex(names)};
   }
   return p.ix;
 }
 // アプリの店名（自由入力）から、日報の行とKPIの月別点数を探す。曖昧なときは紐づけない
 function packLookup(p,store,brand){
+  if(p.memoN!==state.inspections.length){p.memo.clear();p.memoN=state.inspections.length;}
   const key=store+"|"+(brand||"");
   if(p.memo.has(key)) return p.memo.get(key);
-  const b=brand==="イザカラ"?"鶏ヤロー":(brand||"");
-  const ix=packIndexes(p);
-  const md=matchStore(store,b,ix.daily,metricsAliases);
-  const mk=matchStore(store,b,ix.kpi,metricsAliases);
+  const fb=appBrandFor(store,brand), ix=packIndexes(p), al=metricsAllAliases();
+  const NONE={row:null,how:"none"};
+  const md=fb.amb&&!fb.brand?NONE:matchStore(store,fb.brand,ix.daily,al);
+  const mk=fb.amb&&!fb.brand?NONE:matchStore(store,fb.brand,ix.kpi,al);
   const kpi={};
   if(mk.row){
-    const kk=metricKey(mk.row.store), kb=brandOf(mk.row.store);
+    const kk=indexKey(mk.row.store);
     for(const m of Object.keys(p.kpi)){
-      const hit=(p.kpi[m]||[]).find(r=>r&&isFin(r.score)&&metricKey(r.store)===kk&&(!kb||!brandOf(r.store)||brandOf(r.store)===kb));
+      const hit=(p.kpi[m]||[]).find(r=>r&&isFin(r.score)&&indexKey(r.store)===kk);
       if(hit) kpi[m]=hit.score;
     }
   }
@@ -890,7 +1354,7 @@ function metricsBrandAvg(p,brand){
   return {n:rows.length,costRate:cost,laborRate:labor,fl:isFin(cost)&&isFin(labor)?cost+labor:null,achievement:mean("achievement")};
 }
 async function metricsRequest(url,key){
-  const base=String(url||"").trim().replace(/\/+$/,"");
+  const base=String(url||"").trim().replace(/\/+$/,"").replace(/\/metrics$/,"");
   if(!/^https:\/\//.test(base)) throw new Error("取得先URLは https:// で始まる形式にしてください");
   const r=await withTimeout(fetch(base+"/metrics",{headers:{Authorization:"Bearer "+String(key||"").trim()},cache:"no-store"}),25000);
   if(r.status===401) throw new Error("閲覧キーが正しくありません");
@@ -924,13 +1388,15 @@ async function cloudSaveMetricsSnapshot(j){
   metricsSnapAt=Date.now();
   try{
     const doc={month:j.month,fetchedAt:j.fetchedAt||new Date().toISOString(),rows:j.daily.rows};
-    if(j.kpi) doc.kpi=j.kpi;
+    const mk={...(j.kpi||{}),...metricsManualKpi};
+    if(Object.keys(mk).length) doc.kpi=mk;
     await fsMods.setDoc(fsMods.doc(fsDb,"config","metrics-"+j.month),doc,{merge:true});
   }catch(e){ metricsSnapAt=0; }
 }
 async function preloadMetricMonths(list){
   if(!fsDb||!fsMods||!fsMods.getDoc) return;
   const live=state.metrics&&state.metrics.month;
+  loadManualKpi([...new Set(list)]).catch(()=>{});
   await Promise.all([...new Set(list)].filter(ym=>/^\d{4}-\d{2}$/.test(ym||"")&&ym!==live&&!(ym in metricsMonths)).map(async ym=>{
     try{
       const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","metrics-"+ym));
@@ -967,9 +1433,54 @@ async function cloudFetchMetricsCfg(){
       metricsAliases=map; kvSet("metricsAliases",map).catch(()=>{}); changed=true;
     }
     if(changed){ metricsClearMemo(); if(state.view==="admin") render(); }
-    if(metricsOn()) fetchMetrics(true);
+    if(metricsOn()){ await loadManualKpi(metricsRecentMonths(5)); fetchMetrics(true); }
   }catch(e){}
 }
+// KPIシートを自動取得できないとき用：スプレッドシートの「店名列＋点数列」を貼り付けて月ごとに取り込む
+function parseKpiText(text){
+  const rows=[];
+  for(const raw of String(text||"").split(/\r?\n/)){
+    const line=raw.normalize("NFKC").trim(); if(!line) continue;
+    let name="", score="";
+    if(line.includes("\t")){const c=line.split("\t").map(x=>x.trim()); name=c[0]; score=c[1];}
+    else if(line.includes(",")){const c=line.split(",").map(x=>x.trim().replace(/^"|"$/g,"")); name=c[0]; score=c[1];}
+    else{const m=/^(.*\S)\s+(-?\d+(?:\.\d+)?)\s*点?$/.exec(line); if(m){name=m[1];score=m[2];}}
+    const v=parseFloat(String(score||"").replace(/[点\s]/g,""));
+    if(!name||!Number.isFinite(v)||/^(平均|合計|全体|全社|total|average)/i.test(name)) continue;
+    rows.push({store:name.replace(/\s+/g," "),score:v});
+  }
+  return rows;
+}
+async function cloudSaveKpiManual(ym,rows){
+  if(!fsDb) return false;
+  try{ await fsMods.setDoc(fsMods.doc(fsDb,"config","kpi-"+ym),{month:ym,rows,updatedAt:new Date().toISOString()}); return true; }
+  catch(e){ return false; }
+}
+async function cloudDeleteKpiManual(ym){
+  if(!fsDb) return;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","kpi-"+ym)); }catch(e){}
+}
+// 手動取り込み分を読み込む（月ごとに1回。変更があれば表示を更新）
+async function loadManualKpi(months,force){
+  if(!fsDb||!fsMods||!fsMods.getDoc) return;
+  let changed=false;
+  await Promise.all([...new Set(months)].filter(ym=>/^\d{4}-\d{2}$/.test(ym||"")&&(force||!metricsManualTried[ym])).map(async ym=>{
+    try{
+      const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","kpi-"+ym));
+      metricsManualTried[ym]=true;
+      const d=snap&&snap.exists&&snap.exists()?snap.data():null;
+      if(d&&Array.isArray(d.rows)&&d.rows.length){
+        if(JSON.stringify(metricsManualKpi[ym])!==JSON.stringify(d.rows)){metricsManualKpi[ym]=d.rows;changed=true;}
+      }else if(metricsManualKpi[ym]){delete metricsManualKpi[ym];changed=true;}
+    }catch(e){ /* 取得できなければ次回また試す */ }
+  }));
+  if(changed){
+    kvSet("kpiManual",metricsManualKpi).catch(()=>{});
+    metricsClearMemo(); refreshMetricSlots();
+    if(state.view==="admin") render();
+  }
+}
+const metricsRecentMonths=n=>{const cur=ymOf(todayStr());return Array.from({length:n},(_,i)=>ymAdd(cur,-i));};
 function metricsSummaryText(m){
   const rows=(m.daily&&m.daily.rows)||[], km=m.kpi?Object.keys(m.kpi).sort():[];
   const t=m.fetchedAt?new Date(m.fetchedAt):null;
@@ -1398,7 +1909,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.47.1";
+const APP_VERSION="v7.48.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2104,6 +2615,15 @@ function viewAdmin(){
       </div>
       <div style="margin-top:8px"><button class="btn sub" id="mx-alias-save">対応表を保存</button></div>
       <p class="note" id="mx-alias-status">アプリの店名は自由入力なので、日報・KPIの店名と一致しない店舗はここで対応づけます（全端末に共有）。</p>
+      <div class="field" style="margin-top:14px"><label>KPIの手動取り込み（KPIシートを自動取得できない場合・月ごと）</label>
+        <div class="row2" style="margin-bottom:8px">
+          <input type="month" id="mx-kpi-month" value="${ymAdd(ymOf(todayStr()),-1)}" max="${ymOf(todayStr())}">
+          <button class="btn ghost" id="mx-kpi-del" style="margin:0">この月の取り込みを削除</button>
+        </div>
+        <textarea id="mx-kpi-text" placeholder="KPIシートの「店名の列」と「点数の列」をコピーして貼り付け（タブ区切り・カンマ区切りどちらでも可）"></textarea>
+      </div>
+      <div style="margin-top:8px"><button class="btn sub" id="mx-kpi-save">この月のKPIを取り込む</button></div>
+      <p class="note" id="mx-kpi-status">${Object.keys(metricsManualKpi).length?`取り込み済み：${Object.keys(metricsManualKpi).sort().map(m=>`${+m.slice(5)}月（${metricsManualKpi[m].length}店）`).join("・")}`:"取り込みはまだありません。取り込んだKPIは、自動取得した同じ月の値より優先されます。"}</p>
       ${metricsSlot("matchreport","","")}
     </div>
     <div class="card">
@@ -2184,6 +2704,26 @@ function bindAdmin(){
     await kvDel("metricsCfg").catch(()=>{}); await kvDel("metrics").catch(()=>{});
     await cloudDeleteMetricsCfg();
     render();
+  });
+  $("#mx-kpi-save")?.addEventListener("click",async()=>{
+    const st=$("#mx-kpi-status"); const ym=$("#mx-kpi-month").value;
+    if(!/^\d{4}-\d{2}$/.test(ym||"")){st.textContent="月を選んでください。";return;}
+    const rows=parseKpiText($("#mx-kpi-text").value);
+    if(rows.length<3){st.textContent="店名と点数の行を読み取れませんでした（3店以上必要です）。シートの店名列と点数列をそのままコピーして貼り付けてください。";return;}
+    metricsManualKpi[ym]=rows; metricsManualTried[ym]=true;
+    await kvSet("kpiManual",metricsManualKpi).catch(()=>{});
+    const shared=await cloudSaveKpiManual(ym,rows);
+    metricsClearMemo(); render();
+    const s2=$("#mx-kpi-status"); if(s2) s2.textContent=`${+ym.slice(5)}月のKPI ${rows.length}店を取り込みました。${shared?"（全端末に共有）":"（この端末のみ・クラウド未接続）"}`;
+  });
+  $("#mx-kpi-del")?.addEventListener("click",async()=>{
+    const st=$("#mx-kpi-status"); const ym=$("#mx-kpi-month").value;
+    if(!metricsManualKpi[ym]){st.textContent="その月の取り込みはありません。";return;}
+    if(!confirm(`${+ym.slice(5)}月の手動取り込みKPIを削除しますか？`)) return;
+    delete metricsManualKpi[ym];
+    await kvSet("kpiManual",metricsManualKpi).catch(()=>{});
+    await cloudDeleteKpiManual(ym);
+    metricsClearMemo(); render();
   });
   $("#mx-alias-save")?.addEventListener("click",async()=>{
     const st=$("#mx-alias-status");
@@ -3216,6 +3756,7 @@ document.addEventListener("input",e=>{
     metricsCfg=(await kvGet("metricsCfg").catch(()=>null))||null;
     metricsAliases=(await kvGet("metricsAliases").catch(()=>null))||{};
     if(metricsCfg) state.metrics=(await kvGet("metrics").catch(()=>null))||null;   // 前回取得分（圏外でも表示できる）
+    metricsManualKpi=(await kvGet("kpiManual").catch(()=>null))||{};
     if(SHARED_FB_CONFIG){
       state.fb=SHARED_FB_CONFIG;   // 共通設定を優先（個人設定は不要）
     }else{

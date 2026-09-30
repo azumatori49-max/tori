@@ -158,7 +158,8 @@ function buildCsv(list, month) {
 const METRICS_ALLOWED_ORIGINS = ["https://rakuraku-check.com", "https://www.rakuraku-check.com", "https://azumatori49-max.github.io"];
 const METRICS_TTL_MS = 5 * 60 * 1000;       // 正常時のキャッシュ
 const METRICS_RETRY_MS = 60 * 1000;         // errors を含む時のキャッシュ（一時的な失敗からすぐ復帰するため短く）
-const METRICS_TIMEOUT_MS = 20 * 1000;       // 外部取得1回あたりの上限
+const METRICS_TIMEOUT_MS = 8 * 1000;        // 外部取得1回あたりの上限
+const METRICS_DEADLINE_MS = 12 * 1000;      // 日報・KPIそれぞれの全体の締め切り（アプリ側は25秒で諦めるため、それより十分短く）
 const KPI_MONTHS_BACK = 3;                  // 今月＋前3か月
 const KPI_UNREADABLE = "KPIシートを取得できません（共有設定・シートIDを確認）";
 
@@ -167,6 +168,7 @@ const isNum = v => typeof v === "number" && Number.isFinite(v);
 const numOrNull = v => (isNum(v) ? v : null);
 const strOrNull = v => (typeof v === "string" ? v : null);
 const sumOrNull = (a, b) => (isNum(a) && isNum(b) ? a + b : null);
+const withDeadline = (p, ms, fallback) => Promise.race([p, new Promise(res => setTimeout(() => res(fallback), ms))]);
 const failText = e => (e && e.name === "TimeoutError" ? "タイムアウト" : "通信エラー"); // URLは応答に載せない
 
 function jstMonth(ms = Date.now()) { return new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 7); }
@@ -191,7 +193,15 @@ function storeKey(name) {
     .replace(/^鶏ヤロー渋谷店道玄坂$/, "鶏ヤロー渋谷道玄坂")
     .replace(/^鶏ヤロー新橋$/, "すし鳥商店新橋")
     .replace(/^鶏ヤロー立川南口$/, "鶏ヤロー立川")
-    .replace(/^すし鳥商店立川$/, "鶏ヤロー立川北口");
+    .replace(/^すし鳥商店立川$/, "鶏ヤロー立川北口")
+    // 日報とKPIシートで店名の表記が違う店（TEAM NOTE lib/daily-link.ts の dailyStoreKey と同じ）
+    .replace(/^鶏ヤロー東武宇都宮$/, "鶏ヤロー宇都宮")
+    .replace(/^鶏ヤローなんば千日前$/, "鶏ヤローなんば")
+    .replace(/^鶏ヤロー梅田茶屋町$/, "鶏ヤロー茶屋町")
+    .replace(/^まる助熊谷駅前$/, "まる助熊谷")
+    .replace(/^まる助東松山駅前$/, "まる助東松山")
+    .replace(/^まる助みやのかわ本$/, "まる助みやのかわ")
+    .replace(/^鶏ヤロー志木$/, "すし鳥商店志木");
 }
 
 /* CSV（引用符・引用符内の改行/カンマ/"" に対応） */
@@ -231,13 +241,17 @@ function parseKpiCsv(text) {
 }
 
 /* 日報API → 店舗ごとの compact 行（history は巨大なので捨てる） */
+function normAsOf(v) {
+  const m = /^(?:\d{4}\/)?(\d{1,2})\/(\d{1,2})$/.exec(String(v == null ? "" : v).normalize("NFKC").trim());
+  return m ? `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}` : null;
+}
 function compactDaily(item) {
   const s = item && item.store;
   if (!s || typeof s !== "object" || typeof s.store !== "string" || !s.store.trim()) return null;
   const v = s.values && typeof s.values === "object" ? s.values : {};
   return {
     id: strOrNull(s.id), store: s.store, branch: strOrNull(s.branch), brand: strOrNull(s.brand),
-    area: strOrNull(s.area), asOf: strOrNull(s.asOf),
+    area: strOrNull(s.area), asOf: normAsOf(s.asOf),
     sales: numOrNull(v.sales), budget: numOrNull(v.budget), cumulativeBudget: numOrNull(v.cumulativeBudget),
     pace: numOrNull(v.pace), achievement: numOrNull(v.achievement), yoy: numOrNull(v.yoy),
     cost: numOrNull(v.cost), costRate: numOrNull(v.costRate),
@@ -249,84 +263,141 @@ function compactDaily(item) {
     updatedAt: numOrNull(item.updatedAt), error: strOrNull(item.error),
   };
 }
+// 日報APIの応答は {history:[…], month:"…", items:[…]} の順で、履歴(history)込みだと月末に約2.5MBになる。
+// 全体を JSON.parse すると無料枠のCPU上限(10ms)を超えかねないので、後ろから "items": を探して以降だけを解析する。
+// 見つからない／読めない場合は従来どおり全体を解析する（小さな応答や並び順が違う場合）。
+async function readDailyJson(r) {
+  const buf = new Uint8Array(await r.arrayBuffer());
+  const ascii = t => Uint8Array.from(t, c => c.charCodeAt(0));
+  const findBack = (needle, from) => {
+    const n = needle.length;
+    for (let i = Math.min(from, buf.length - n); i >= 0; i--) {
+      if (buf[i] !== needle[0]) continue;
+      let ok = true;
+      for (let k = 1; k < n; k++) if (buf[i + k] !== needle[k]) { ok = false; break; }
+      if (ok) return i;
+    }
+    return -1;
+  };
+  const it = findBack(ascii('"items":'), buf.length);
+  if (it > 0) {
+    try {
+      const obj = JSON.parse("{" + new TextDecoder().decode(buf.subarray(it)));
+      const mo = findBack(ascii('"month":"'), it);
+      if (mo >= 0 && it - mo < 40) {
+        const m = /"month":"(\d{4}-\d{2})"/.exec(new TextDecoder().decode(buf.subarray(mo, it)));
+        if (m) obj.month = m[1];
+      }
+      if (Array.isArray(obj.items)) return obj;
+    } catch { /* 全体解析へ */ }
+  }
+  return JSON.parse(new TextDecoder().decode(buf));
+}
 async function fetchDailyPart() {
-  if (isUnset(TEAM_NOTE_ORIGIN)) return { daily: null, month: null, error: "売上・FLの取得元（TEAM_NOTE_ORIGIN）が未設定です" };
+  if (isUnset(TEAM_NOTE_ORIGIN)) return { daily: null, month: null, error: "売上・FLの取得元（TEAM_NOTE_ORIGIN）が未設定です", transient: false };
   const origin = String(TEAM_NOTE_ORIGIN).trim().replace(/\/+$/, "");
   if (!/^https?:\/\/[^\s/]+/i.test(origin) || /\s/.test(origin))
-    return { daily: null, month: null, error: "TEAM_NOTE_ORIGIN の形式が正しくありません（https:// から始まるURLを入れてください）" };
+    return { daily: null, month: null, error: "TEAM_NOTE_ORIGIN の形式が正しくありません（https:// から始まるURLを入れてください）", transient: false };
   let r;
   try { r = await fetch(`${origin}/api/daily`, { headers: { "Accept": "application/json" }, signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) }); }
-  catch (e) { return { daily: null, month: null, error: `日報APIを取得できません（${failText(e)}）` }; }
-  if (!r.ok) return { daily: null, month: null, error: `日報APIを取得できません (${r.status})` };
+  catch (e) { return { daily: null, month: null, error: `日報APIを取得できません（${failText(e)}）`, transient: true }; }
+  if (!r.ok) return { daily: null, month: null, error: `日報APIを取得できません (${r.status})`, transient: r.status >= 500 || r.status === 429 };
   let j;
-  try { j = await r.json(); } catch { j = null; }
-  if (!j || !Array.isArray(j.items)) return { daily: null, month: null, error: "日報APIの形式が想定と異なります" };
+  try { j = await readDailyJson(r); } catch { j = null; }
+  if (!j || !Array.isArray(j.items)) return { daily: null, month: null, error: "日報APIの形式が想定と異なります", transient: false };
   const rows = j.items.map(compactDaily).filter(Boolean);
   const stamps = j.items.map(i => i && i.updatedAt).filter(t => isNum(t) && t > 0);
   return {
     daily: { rows, upstreamUpdatedAt: stamps.length ? Math.max(...stamps) : null },
     month: typeof j.month === "string" && /^\d{4}-\d{2}$/.test(j.month) ? j.month : null,
-    error: null,
+    error: null, transient: false,
   };
 }
 
 /* KPIシート：月ごとに CSV を取る（gid指定 → 無ければ／失敗したらタブ名2通り） */
 // gviz は存在しないタブ名を指定してもエラーにならず先頭タブの内容を返すことがある。
-// 実在しないタブ名で取った内容（＝先頭タブ）と同じ本文が返ってきた候補は「タブが無い」とみなす
-async function kpiDecoyBody() {
+// そこで実在しないタブ名でも1回取り（decoy）、その内容と同じ本文が返ってきたタブ名の候補は「タブが無い」とみなす。
+//   body   … decoy の本文を取得できた（同じ本文なら先頭タブが返っただけ）
+//   missing… Googleが「そんなタブは無い」と明確に返した（4xx／HTML）＝タブ名で取れた本文は信用できる
+//   unknown… 通信エラー・5xx・429が続いた＝判定できない。安全のため、タブ名だけで取れた本文は採用しない
+async function kpiDecoyProbe() {
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(String(KPI_SHEET_ID).trim())}`;
-  try {
-    const r = await fetch(`${base}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(KPI_DECOY_TAB)}`, { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) });
-    if (!r.ok) return null;
-    const t = await r.text();
-    return t && !t.trimStart().startsWith("<") ? t : null;
-  } catch { return null; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(`${base}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(KPI_DECOY_TAB)}`, { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) });
+      if (r.status === 429 || r.status >= 500) continue; // 一時的な失敗→もう1回
+      if (!r.ok) return { kind: "missing" };
+      const t = await r.text();
+      if (t && !t.trimStart().startsWith("<")) return { kind: "body", text: t };
+      return { kind: "missing" };
+    } catch { /* もう1回 */ }
+  }
+  return { kind: "unknown" };
 }
+// 戻り値 { rows|null, transient, blocked }  transient＝通信エラー等の一時的な失敗があった／blocked＝decoy判定不能でタブ名候補を見送った
 async function fetchKpiMonth(month, decoy) {
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(String(KPI_SHEET_ID).trim())}`;
   const urls = [];
   const gid = KPI_TAB_GIDS && KPI_TAB_GIDS[month];
   if (gid != null && String(gid).trim() !== "") urls.push(`${base}/export?format=csv&gid=${encodeURIComponent(String(gid).trim())}`);
   for (const name of kpiTabNames(month)) urls.push(`${base}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}`);
+  let transient = false, blocked = false;
   for (const u of urls) {
     try {
       const r = await fetch(u, { signal: AbortSignal.timeout(METRICS_TIMEOUT_MS) });
-      if (!r.ok) continue;
+      if (!r.ok) { if (r.status === 429 || r.status >= 500) transient = true; continue; }
       const text = await r.text();
       if (!text || text.trimStart().startsWith("<")) continue; // ログイン画面などのHTML＝取得失敗
-      if (u.includes("/gviz/")) { const d = await decoy(); if (d != null && text === d) continue; } // 先頭タブが返っただけ＝該当タブ無し
-      return parseKpiCsv(text);
-    } catch { /* 次の候補へ */ }
+      if (u.includes("/gviz/")) {
+        const d = await decoy();
+        if (d.kind === "body" && text === d.text) continue; // 先頭タブが返っただけ＝該当タブ無し
+        if (d.kind === "unknown") { blocked = true; continue; } // 判定できないので採用しない
+      }
+      return { rows: parseKpiCsv(text), transient, blocked };
+    } catch { transient = true; /* 次の候補へ */ }
   }
-  return null; // 過去月でタブが無いのは普通
+  return { rows: null, transient, blocked }; // 過去月でタブが無いのは普通
 }
 async function fetchKpiPart() {
-  if (isUnset(KPI_SHEET_ID)) return { kpi: null, error: "KPIシートのID（KPI_SHEET_ID）が未設定です" };
+  if (isUnset(KPI_SHEET_ID)) return { kpi: null, error: "KPIシートのID（KPI_SHEET_ID）が未設定です", transient: false };
   const months = kpiMonthList();
   let decoyP = null;
-  const decoy = () => (decoyP || (decoyP = kpiDecoyBody()));
+  const decoy = () => (decoyP || (decoyP = kpiDecoyProbe()));
   const got = await Promise.all(months.map(m => fetchKpiMonth(m, decoy)));
   const kpi = {};
-  months.forEach((m, i) => { if (got[i]) kpi[m] = got[i]; });
-  return Object.keys(kpi).length ? { kpi, error: null } : { kpi: null, error: KPI_UNREADABLE };
+  months.forEach((m, i) => { if (got[i].rows) kpi[m] = got[i].rows; });
+  const blocked = got.some(g => g.blocked);
+  const curFailed = !got[0].rows && got[0].transient;   // 当月分が通信の都合で取れなかった
+  const notes = [];
+  if (blocked) notes.push("KPI：先頭タブの判定ができなかったため、タブ名だけで取れる月は見送りました（少し待って再取得されます）");
+  if (curFailed) notes.push(`KPI：${months[0]} を一時的に取得できませんでした`);
+  if (!Object.keys(kpi).length) return { kpi: null, error: blocked ? `${KPI_UNREADABLE}／${notes[0]}` : KPI_UNREADABLE, transient: true }; // 通常の文言は変えない（原因の切り分けは README の表）
+  return { kpi, error: notes.length ? notes.join("／") : null, transient: blocked || curFailed };
 }
 
-let metricsCache = null, metricsAt = 0;
-async function getMetrics() {
-  const ttl = metricsCache && metricsCache.errors.length ? METRICS_RETRY_MS : METRICS_TTL_MS;
-  if (metricsCache && Date.now() - metricsAt < ttl) return metricsCache;
-  // daily と kpi は互いに失敗を隔離して並列取得（どちらも例外は投げない作りだが念のため握りつぶす）
+let metricsCache = null, metricsAt = 0, metricsInflight = null;
+async function buildMetrics() {
+  // daily と kpi は互いに失敗を隔離して並列取得。どちらも遅い側に足を引っ張られないよう締め切りを付ける
   const [d, k] = await Promise.all([
-    fetchDailyPart().catch(() => ({ daily: null, month: null, error: "日報の取得中に予期しないエラーが起きました" })),
-    fetchKpiPart().catch(() => ({ kpi: null, error: KPI_UNREADABLE })),
+    withDeadline(fetchDailyPart().catch(() => ({ daily: null, month: null, error: "日報の取得中に予期しないエラーが起きました", transient: true })),
+      METRICS_DEADLINE_MS, { daily: null, month: null, error: "日報の取得がタイムアウトしました", transient: true }),
+    withDeadline(fetchKpiPart().catch(() => ({ kpi: null, error: KPI_UNREADABLE, transient: true })),
+      METRICS_DEADLINE_MS, { kpi: null, error: "KPIの取得がタイムアウトしました", transient: true }),
   ]);
   metricsCache = {
     fetchedAt: new Date().toISOString(),
     month: d.month, daily: d.daily, kpi: k.kpi,
     errors: [d.error, k.error].filter(Boolean),
+    transient: !!(d.transient || k.transient), // 一時的な失敗があるときだけ短いキャッシュ（未設定などは5分のまま）
   };
   metricsAt = Date.now();
   return metricsCache;
+}
+async function getMetrics() {
+  const ttl = metricsCache && metricsCache.transient ? METRICS_RETRY_MS : METRICS_TTL_MS;
+  if (metricsCache && Date.now() - metricsAt < ttl) return metricsCache;
+  if (!metricsInflight) metricsInflight = buildMetrics().finally(() => { metricsInflight = null; }); // 同時アクセスでも上流は1回だけ
+  return metricsInflight;
 }
 
 /* ---------- MCPツール定義 ---------- */
@@ -561,6 +632,7 @@ async function handleMetrics(request) {
   if (request.method !== "GET") return json({ error: "GETのみ対応しています" }, 405, { "Allow": "GET, OPTIONS" });
   // 未設定の間は「PASTE_…」という文字列そのものを鍵として通してしまわないよう、認証より先に弾く
   if (isUnset(METRICS_KEY)) return json({ error: "サーバー未設定です（METRICS_KEY）" }, 500);
+  if (METRICS_KEY === SECRET) return json({ error: "METRICS_KEY は SECRET とは別の値にしてください" }, 500);
   if (!safeEqual(request.headers.get("Authorization") || "", `Bearer ${METRICS_KEY}`))
     return json({ error: "認証エラー：閲覧キー（Bearer）が正しくありません" }, 401);
   try {

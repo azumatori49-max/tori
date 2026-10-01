@@ -265,6 +265,10 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .mon-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:800;color:var(--sub);background:var(--accent-soft);border-radius:8px;padding:5px 10px;margin:12px 0 2px;letter-spacing:.02em}
 .mon-h small{font-weight:600}
 .pl-x{display:none}
+.lf-on .pl-x{display:block}
+.lf-hide{display:none !important}
+.lf-bar{display:grid;grid-template-columns:1fr auto;gap:8px;margin:8px 0}
+.lf-bar input,.lf-bar select{width:100%;min-width:0;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card,transparent);color:inherit}
 details.fold{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 details.fold>summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--accent);padding:8px 0;list-style:none}
 details.fold>summary::-webkit-details-marker{display:none}
@@ -2169,7 +2173,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.50.0";
+const APP_VERSION="v7.51.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2724,16 +2728,20 @@ function viewHome(){
     ${(()=>{
       const rows=stores.map(st=>({st,al:storeAlerts(st)})).sort((x,y)=>y.al.length-x.al.length||x.st.localeCompare(y.st,"ja"));
       const withAl=rows.filter(r=>r.al.length), noAl=rows.filter(r=>!r.al.length);
-      const row=r=>`<div class="hw-item" data-sname="${esc(r.st)}"><button class="list-card" data-trend="${esc(r.st)}">
+      const doneIns=state.inspections.filter(i=>i.completedAt&&!i.provisional);
+      const monthsOf=st=>[...new Set(doneIns.filter(i=>i.store===st).map(i=>ymOf(i.date||todayStr())))].join(",");
+      const allYms=[...new Set(doneIns.map(i=>ymOf(i.date||todayStr())))].sort().reverse();
+      const row=r=>`<div class="hw-item" data-sname="${esc(r.st)}" data-yms="${monthsOf(r.st)}"><button class="list-card" data-trend="${esc(r.st)}">
           <span><b>${esc(r.st)}</b>${r.al.length?`<span class="hw-meta">　<span style="color:var(--bad);font-weight:700">⚠ アラート ${r.al.length}件</span></span>
             <span class="hw-chips">${r.al.slice().sort((x,y)=>y.c-x.c).slice(0,3).map(x=>`<span class="ac">${esc(x.it.name)} ×${x.c}</span>`).join("")}${r.al.length>3?`<span class="hw-meta">他${r.al.length-3}件</span>`:""}</span>`:""}
             ${metricsSlot("chips",r.st,storeBrandOf(r.st),"span")}</span>
           <span style="color:var(--accent);font-weight:700;font-size:13px;white-space:nowrap">推移を見る ›</span>
         </button></div>`;
-      return `<div class="card">
+      return `<div class="card" id="trend-card">
       <h3>項目別の推移・アラート</h3>
       <p class="desc">保存したチェックをもとに、各項目の点数が数ヶ月でどう変わったかを表示します。3点以下が${ALERT_COUNT}回以上になった項目にはアラートが付きます。</p>
-      ${rows.length?`<p class="sum-line">全${rows.length}店舗中 アラートあり <b>${withAl.length}店</b>（アラートが多い順）</p>
+      ${rows.length?`<div class="lf-bar"><input id="trend-q" type="search" autocomplete="off" placeholder="店舗名で検索"><select id="trend-ym" aria-label="月"><option value="">すべての月</option>${allYms.map(y=>`<option value="${y}">${ymLabel(y)}</option>`).join("")}</select></div>
+      <p class="sum-line" id="trend-sum" data-base="全${rows.length}店舗中 アラートあり ${withAl.length}店（アラートが多い順）">全${rows.length}店舗中 アラートあり <b>${withAl.length}店</b>（アラートが多い順）</p>
       ${withAl.map(row).join("")||`<p class="empty">アラートが付いている店舗はありません。</p>`}
       ${noAl.length?`<details class="fold" id="fold-noal"${withAl.length?"":" open"}><summary>アラートなしの店舗（${noAl.length}店）</summary>${noAl.map(row).join("")}</details>`:""}`
       :`<p class="empty">完了したチェックがまだありません。チェックを重ねると推移が見られます。</p>`}
@@ -2742,13 +2750,15 @@ function viewHome(){
       const LIM=20;
       const scCol=v=>v<=50?'style="color:var(--bad)"':v<=75?'style="color:var(--warn)"':"";
       const groups=[]; past.forEach((i,n)=>{const ym=ymOf(i.date||todayStr()); let g=groups[groups.length-1]; if(!g||g.ym!==ym){g={ym,list:[]};groups.push(g);} g.list.push({i,n});});
-      return `<div class="card">
+      const pastYms=groups.map(g=>g.ym);
+      return `<div class="card" id="past-card">
       <h3>過去のチェック</h3>
-      ${past.length?`<p class="sum-line">全${past.length}件（新しい順・月ごと）</p>`+groups.map(g=>{
+      ${past.length?`<div class="lf-bar"><input id="past-q" type="search" autocomplete="off" placeholder="店舗名で検索"><select id="past-ym" aria-label="月"><option value="">すべての月</option>${pastYms.map(y=>`<option value="${y}">${ymLabel(y)}</option>`).join("")}</select></div>
+      <p class="sum-line" id="past-sum" data-base="全${past.length}件（新しい順・月ごと）">全${past.length}件（新しい順・月ごと）</p>`+groups.map(g=>{
         const sc=g.list.map(x=>x.i.totalScore).filter(v=>typeof v==="number");
         const avg=sc.length?Math.round(sc.reduce((a,v)=>a+v,0)/sc.length):null;
-        return `<div class="pl-grp${g.list[0].n>=LIM?" pl-x":""}"><div class="mon-h"><span>${ymLabel(g.ym)}</span><small>${g.list.length}件${avg!==null?`／平均 ${avg}点`:""}</small></div>`+g.list.map(({i,n})=>`
-        <div class="hw-item${n>=LIM?" pl-x":""}" data-sname="${esc(i.store)}">
+        return `<div class="pl-grp${g.list[0].n>=LIM?" pl-x":""}" data-gym="${g.ym}"><div class="mon-h"><span>${ymLabel(g.ym)}</span><small>${g.list.length}件${avg!==null?`／平均 ${avg}点`:""}</small></div>`+g.list.map(({i,n})=>`
+        <div class="hw-item${n>=LIM?" pl-x":""}" data-sname="${esc(i.store)}" data-ym="${g.ym}">
           <button class="list-card" data-open="${esc(i.id)}">
             <span>${i.brand?`<span class="hw-meta">${esc(i.brand)}</span> `:""}<b>${esc(i.store)}</b>${i.provisional?` <span class="badge todo">一時保存</span>`:""}${pendingIds.has(i.id)?` <span class="badge todo">未送信</span>`:""}<span class="hw-meta" style="display:block">${fmtDate(i.date)}／${esc(i.inspector)}</span></span>
             <span class="sc" ${scCol(i.totalScore)}>${i.totalScore}<small>点</small></span>
@@ -3171,20 +3181,36 @@ function bindHome(){
     if(insp&&await hydratePhotos(insp)&&state.view==="report") render();
   }));
   $("#past-more")?.addEventListener("click",e=>{document.querySelectorAll(".pl-x").forEach(el=>el.classList.remove("pl-x"));e.currentTarget.remove();});
-  $("#search-store")?.addEventListener("input",e=>{
-    const q=e.target.value.trim().toLowerCase();
-    let hits=0, total=0;
+  const applyHomeFilters=()=>{
+    const gq=($("#search-store")?.value||"").trim().toLowerCase();
+    const sec=(card,qSel,ymSel,attr)=>{
+      const q=($(qSel)?.value||"").trim().toLowerCase(), ym=$(ymSel)?.value||"";
+      return {card,q,ym,attr,on:!!(q||ym)};
+    };
+    const secs=[sec($("#past-card"),"#past-q","#past-ym","ym"),sec($("#trend-card"),"#trend-q","#trend-ym","yms")];
+    let gHits=0;
     document.querySelectorAll("[data-sname]").forEach(el=>{
-      const on=!q||el.dataset.sname.toLowerCase().includes(q);
-      el.style.display=on?(q&&el.classList.contains("pl-x")?"block":""):"none";
-      total++; if(on) hits++;
+      const nm=el.dataset.sname.toLowerCase();
+      let ok=!gq||nm.includes(gq);
+      const sc=secs.find(x=>x.card&&x.card.contains(el));
+      if(sc){
+        if(sc.q&&!nm.includes(sc.q)) ok=false;
+        if(sc.ym){const v=el.dataset[sc.attr]||""; if(!v.split(",").includes(sc.ym)) ok=false;}
+      }
+      el.classList.toggle("lf-hide",!ok);
+      if(ok) gHits++;
     });
-    document.querySelectorAll(".pl-grp").forEach(g=>{const v=!q||[...g.querySelectorAll("[data-sname]")].some(el=>el.style.display!=="none");g.style.display=v?(q&&g.classList.contains("pl-x")?"block":""):"none";});
-    const fd=$("#fold-noal"); if(fd&&q) fd.open=true;
-    const pm=$("#past-more"); if(pm) pm.style.display=q?"none":"";
+    secs.forEach(sc=>{ if(!sc.card) return; sc.card.classList.toggle("lf-on",sc.on||!!gq); });
+    document.querySelectorAll(".pl-grp").forEach(g=>{g.classList.toggle("lf-hide",![...g.querySelectorAll("[data-sname]")].some(el=>!el.classList.contains("lf-hide")));});
+    const pm=$("#past-more"); if(pm) pm.style.display=(secs[0].on||gq)?"none":"";
+    const fd=$("#fold-noal"); if(fd&&(gq||secs[1].q)) fd.open=true;
+    const cnt=(sumSel,card,sc,unit)=>{const el=$(sumSel); if(!el||!card) return; const n=[...card.querySelectorAll("[data-sname]")].filter(x=>!x.classList.contains("lf-hide")).length; el.textContent=(sc.on||gq)?`該当 ${n}${unit}`+(sc.ym?`（${ymLabel(sc.ym)}）`:""):el.dataset.base;};
+    cnt("#past-sum",secs[0].card,secs[0],"件"); cnt("#trend-sum",secs[1].card,secs[1],"店");
     const h=$("#search-hit");
-    if(h) h.textContent=q?`「${e.target.value.trim()}」に一致：ランキング・推移・過去のチェックを絞り込み中（該当 ${hits}行）`:"";
-  });
+    if(h) h.textContent=gq?`「${$("#search-store").value.trim()}」に一致：ランキング・推移・過去のチェックを絞り込み中（該当 ${gHits}行）`:"";
+  };
+  ["#search-store","#past-q","#trend-q"].forEach(sel=>$(sel)?.addEventListener("input",applyHomeFilters));
+  ["#past-ym","#trend-ym"].forEach(sel=>$(sel)?.addEventListener("change",applyHomeFilters));
 }
 
 /* ---------- 項目別推移ビュー ---------- */

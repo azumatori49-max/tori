@@ -30,6 +30,11 @@
     { k: 'beer', label: 'ビールメーカー', type: 'text' },
     { k: 'rent', label: '家賃', type: 'text' },
   ];
+  const CATS = SEED.cats || [];
+  const OTHER = 'その他';
+  const TITLE_CAT = {};
+  SEED.templates.forEach((tp) => tp.tasks.forEach((t) => { if (t.c && !TITLE_CAT[t.t]) TITLE_CAT[t.t] = t.c; }));
+  const catOf = (t) => (CATS.includes(t.c) ? t.c : OTHER);
   const HOME_FILTERS = [
     ['all', 'すべて'],
     ['launching', '立ち上げ中'],
@@ -57,7 +62,7 @@
 
   const makeTasks = (tplId) => {
     const tpl = SEED.templates.find((t) => t.id === tplId);
-    return tpl ? tpl.tasks.map((t) => ({ id: uid(), t: t.t, who: t.who || '', h: t.h, done: false, date: '', person: '', memo: '' })) : [];
+    return tpl ? tpl.tasks.map((t) => ({ id: uid(), t: t.t, c: t.c || '', who: t.who || '', h: t.h, done: false, date: '', person: '', memo: '' })) : [];
   };
 
   const makeStore = (x = {}) => ({
@@ -90,9 +95,13 @@
   const sampleStore = () => {
     const s = makeStore({ name: '新宿東口（サンプル）', method: '電子', credit: true, qr: true, note: 'デモ用のサンプルです' });
     s.launch = { tpl: 'toriyaro', tasks: makeTasks('toriyaro') };
-    s.launch.tasks.forEach((t, i) => { t.done = i < 30; });
-    s.launch.tasks[30].date = addDays(-3);
-    s.launch.tasks[30].memo = '業者に見積もりを依頼済み';
+    s.launch.tasks.forEach((t, i) => {
+      const ci = CATS.indexOf(t.c);
+      t.done = ci >= 0 && (ci < 3 || (ci === 3 && i % 2 === 0));
+    });
+    const next = s.launch.tasks.find((t) => !t.done);
+    next.date = addDays(-3);
+    next.memo = '業者に見積もりを依頼済み';
     s.info.openDate = addDays(14);
     s.info.moveIn = addDays(-21);
     return s;
@@ -113,6 +122,7 @@
       s.docs = s.docs || {};
       s.info = s.info || {};
       if (s.launch && !Array.isArray(s.launch.tasks)) s.launch = null;
+      if (s.launch) s.launch.tasks.forEach((t) => { if (t.c === undefined) t.c = TITLE_CAT[t.t] || ''; });
     });
     return raw;
   };
@@ -212,7 +222,8 @@
   };
 
   // ---------- UI 状態 ----------
-  const ui = { tab: 'launch', filter: 'all', q: '', who: 'all', onlyOpen: false, homeY: 0, sheetClose: null };
+  const ui = { tab: 'launch', filter: 'all', q: '', who: 'all', status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false, keep: new Set(), homeY: 0, sheetClose: null };
+  const resetStoreView = () => Object.assign(ui, { tab: 'launch', who: 'all', status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false, keep: new Set() });
 
   // デモ表示では URL ハッシュを使わず、画面遷移をメモリ上で持つ
   let memHash = '#/';
@@ -231,14 +242,14 @@
   };
 
   // ---------- 一覧画面 ----------
-  const matchesFilter = (s) => {
-    switch (ui.filter) {
+  const matchesFilter = (s, k = ui.filter) => {
+    switch (k) {
       case 'launching': return isLaunching(s);
       case 'payOpen': return payCount(s) < PAY.length;
       case 'night': return s.lnApply || s.lnPermit;
       case 'smoke': return s.smoke;
       case '電子':
-      case '要確認': return s.method === ui.filter;
+      case '要確認': return s.method === k;
       default: return true;
     }
   };
@@ -249,57 +260,71 @@
     return [s.name, s.eisei, s.bouka, s.note, s.info.manager, s.info.owner].some((v) => (v || '').toLowerCase().includes(q));
   };
 
-  const storeCard = (s) => {
+  // 検索語が責任者名にヒットしたときだけ、その名前を行に添える
+  const hitPeople = (s) => {
+    const q = ui.q.trim().toLowerCase();
+    if (!q) return '';
+    return [['衛生', s.eisei], ['防火', s.bouka], ['店長', s.info.manager], ['責任者', s.info.owner]]
+      .filter(([, v]) => v && v.toLowerCase().includes(q))
+      .map(([l, v]) => `${l} ${v}`)
+      .join('　');
+  };
+
+  const storeRow = (s) => {
     const n = payCount(s);
     const st = launchStats(s);
-    const badges = [
+    const tags = [
       s.method && `<span class="badge ${s.method === '電子' ? 'ok' : 'warn'}">${esc(s.method)}</span>`,
       `<span class="badge ${n === PAY.length ? 'ok' : 'warn'}">${n === PAY.length ? I.check : ''}決済 ${n}/${PAY.length}</span>`,
       s.lnApply && '<span class="badge warn">深夜申請中</span>',
       s.lnPermit && '<span class="badge ok">深夜許可あり</span>',
       s.smoke && '<span class="badge">喫煙申請</span>',
     ].filter(Boolean).join('');
-    const people = [s.eisei && `衛生 ${s.eisei}`, s.bouka && `防火 ${s.bouka}`].filter(Boolean).join('　');
+    const people = hitPeople(s);
     return `
-      <a class="card store" href="#/s/${esc(s.id)}" data-act="go" data-to="#/s/${esc(s.id)}">
-        <div class="store-head"><span class="store-name">${esc(s.name || '(店舗名なし)')}</span>${I.chev}</div>
-        <div class="badges">${badges}</div>
-        ${people ? `<p class="people">${esc(people)}</p>` : ''}
-        ${st ? `<div class="mini-progress"><div class="bar" aria-hidden="true"><i style="width:${st.pct}%"></i></div><p class="small">立ち上げチェック ${st.done}/${st.total}（${st.pct}%）</p></div>` : ''}
+      <a class="store-row" href="#/s/${esc(s.id)}" data-act="go" data-to="#/s/${esc(s.id)}">
+        <span class="sr-main">
+          <span class="sr-line"><span class="sr-name">${esc(s.name || '(店舗名なし)')}</span><span class="sr-tags">${tags}</span></span>
+          ${people ? `<span class="sr-sub">${esc(people)}</span>` : ''}
+          ${st ? `<span class="sr-progress"><span class="bar" aria-hidden="true"><i style="width:${st.pct}%"></i></span><span class="small">${st.done}/${st.total}</span></span>` : ''}
+        </span>
+        ${I.chev}
       </a>`;
   };
+
+  const groupHtml = (title, arr) =>
+    `<section class="group"><h2 class="group-head"><span>${esc(title)}</span><span>${arr.length}</span></h2><div class="rows-card">${arr.map(storeRow).join('')}</div></section>`;
 
   const listHtml = () => {
     const items = state.stores.filter((s) => matchesFilter(s) && matchesQuery(s));
     if (!items.length) {
       return `<div class="empty">${state.stores.length ? '条件に合う店舗がありません' : '店舗がありません。右下の「新しい店舗」から追加してください'}</div>`;
     }
-    return items.map(storeCard).join('');
+    if (ui.filter === 'all' && !ui.q.trim()) {
+      const active = items.filter(isLaunching);
+      if (active.length) return groupHtml('立ち上げ中', active) + groupHtml('ほかの店舗', items.filter((s) => !isLaunching(s)));
+      return groupHtml('すべての店舗', items);
+    }
+    return groupHtml('絞り込み結果', items);
   };
 
-  const viewHome = () => {
-    const launching = state.stores.filter(isLaunching).length;
-    const payOpen = state.stores.filter((s) => payCount(s) < PAY.length).length;
-    const tile = (num, label, cls = '') => `<div class="tile ${cls}"><strong>${num}</strong><span>${label}</span></div>`;
-    return `
+  const viewHome = () => `
       <div class="topbar">
         <div class="appbar">
           <h1>らくらく立ち上げチェック</h1>
           <button class="icon-btn" data-act="settings" aria-label="設定">${I.gear}</button>
         </div>
+        <div class="bar-search">
+          <label class="search">${I.search}<input id="q" type="search" placeholder="店舗名・責任者で検索" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search"></label>
+        </div>
       </div>
       <main class="page">
-        <section class="summary" aria-label="サマリー">
-          ${tile(state.stores.length, '全店舗')}${tile(launching, '立ち上げ中')}${tile(payOpen, '決済未完了', payOpen ? 'warn' : '')}
-        </section>
-        <label class="search">${I.search}<input id="q" type="search" placeholder="店舗名・担当者で検索" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search"></label>
         <div class="chips" role="group" aria-label="絞り込み">
-          ${HOME_FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-k="${esc(k)}" aria-pressed="${ui.filter === k}">${label}</button>`).join('')}
+          ${HOME_FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-k="${esc(k)}" aria-pressed="${ui.filter === k}">${label} <b>${state.stores.filter((s) => matchesFilter(s, k)).length}</b></button>`).join('')}
         </div>
         <div id="list" class="list">${listHtml()}</div>
       </main>
       <button class="fab" data-act="new-store">${I.plus}新しい店舗</button>`;
-  };
 
   // ---------- 店舗画面 ----------
   const taskRow = (t) => {
@@ -315,6 +340,61 @@
           ${I.chev}
         </button>
       </li>`;
+  };
+
+  const whoOk = (t) => ui.who === 'all' || (t.who || '') === ui.who;
+  const matchTask = (t) => {
+    const q = ui.tq.trim().toLowerCase();
+    return !q || [t.t, t.who, t.person, t.memo, catOf(t)].some((v) => (v || '').toLowerCase().includes(q));
+  };
+
+  // チェックリストの可変部分（カテゴリのチップ + 項目一覧）。検索入力中はここだけを差し替える
+  const launchListHtml = (s) => {
+    const tasks = s.launch.tasks;
+    const q = ui.tq.trim();
+    const byWho = tasks.filter(whoOk);
+    const cats = [...CATS, OTHER].filter((c) => byWho.some((t) => catOf(t) === c));
+    if (ui.cat !== 'all' && !cats.includes(ui.cat)) ui.cat = 'all';
+    const cat = q ? 'all' : ui.cat;
+    const openIn = (c) => byWho.filter((t) => !t.done && (c === 'all' || catOf(t) === c)).length;
+
+    const chipCats = cats.filter(
+      (c) => ui.status === 'all' || cat === c || openIn(c) > 0 || byWho.some((t) => catOf(t) === c && ui.keep.has(t.id)),
+    );
+    const chip = (c, label) => {
+      const n = openIn(c);
+      const on = c === 'all' ? cat === 'all' : cat === c;
+      return `<button class="chip ${n ? '' : 'is-done'}" data-act="cat" data-k="${esc(c)}" aria-pressed="${on}">${esc(label)} <b>${n || '完了'}</b></button>`;
+    };
+
+    const inView = byWho.filter((t) => matchTask(t) && (cat === 'all' || catOf(t) === cat));
+    const shown = ui.status === 'all' ? inView : inView.filter((t) => !t.done || ui.keep.has(t.id));
+    const doneRows = ui.status === 'all' ? [] : inView.filter((t) => t.done && !ui.keep.has(t.id));
+
+    let body = '';
+    if (cat === 'all') {
+      body = [...CATS, OTHER]
+        .map((c) => {
+          const arr = shown.filter((t) => catOf(t) === c);
+          if (!arr.length) return '';
+          const all = byWho.filter((t) => catOf(t) === c);
+          const done = all.filter((t) => t.done).length;
+          return `<section class="group"><h3 class="group-head"><span>${esc(c)}</span><span>${done}/${all.length} 完了</span></h3><ul class="task-list">${arr.map(taskRow).join('')}</ul></section>`;
+        })
+        .join('');
+    } else if (shown.length) {
+      body = `<ul class="task-list">${shown.map(taskRow).join('')}</ul>`;
+    }
+    if (!body) {
+      const none = q ? `「${esc(q)}」に合う項目はありません` : byWho.some((t) => !t.done && (cat === 'all' || catOf(t) === cat)) ? '該当する項目はありません' : 'この範囲の項目はすべて完了しています';
+      body = `<div class="empty">${none}</div>`;
+    }
+    const done = doneRows.length
+      ? `<section class="group"><button class="done-toggle" data-act="toggle-done" aria-expanded="${ui.showDone}">完了済み ${doneRows.length}件を${ui.showDone ? '隠す' : '表示'}</button>${ui.showDone ? `<ul class="task-list">${doneRows.map(taskRow).join('')}</ul>` : ''}</section>`
+      : '';
+    return `
+      <div class="chips" role="group" aria-label="カテゴリで絞り込み">${chip('all', 'すべて')}${chipCats.map((c) => chip(c, c)).join('')}</div>
+      ${body}${done}`;
   };
 
   const tabLaunch = (s) => {
@@ -333,30 +413,39 @@
     const days = daysUntil(s.info.openDate);
     let countdown = '';
     if (days !== null) {
-      const text = days > 0 ? `オープンまで あと ${days} 日` : days === 0 ? '本日オープン' : `オープンから ${-days} 日経過`;
-      countdown = `<p class="countdown ${days < 0 && st.done < st.total ? 'late' : ''}">${text}（${esc(fmtDate(s.info.openDate))}）</p>`;
+      const text = days > 0 ? `オープンまで ${days}日` : days === 0 ? '本日オープン' : `オープンから ${-days}日経過`;
+      countdown = `<p class="countdown ${days < 0 && st.done < st.total ? 'late' : ''}">${text}<span class="muted small">　${esc(fmtDate(s.info.openDate))}</span></p>`;
     } else {
       countdown = '<p class="small muted">「情報」でオープン日を入れるとカウントダウンが出ます</p>';
     }
     const whos = [...new Set(tasks.map((t) => t.who || ''))];
     if (ui.who !== 'all' && !whos.includes(ui.who)) ui.who = 'all';
-    const open = (w) => tasks.filter((t) => !t.done && (w === 'all' || (t.who || '') === w)).length;
-    const visible = tasks.filter((t) => (ui.who === 'all' || (t.who || '') === ui.who) && (!ui.onlyOpen || !t.done));
+    const openOf = (w) => tasks.filter((t) => !t.done && (w === 'all' || (t.who || '') === w)).length;
     return `
       <section class="card progress" aria-label="達成率">
         <div class="progress-num">${st.pct}<span>%</span></div>
         <div class="progress-body">
           <div class="bar" aria-hidden="true"><i style="width:${st.pct}%"></i></div>
-          <p class="small">完了 ${st.done} / ${st.total}　残り ${st.total - st.done}${st.hoursLeft ? `　残り目安 ${fmtHours(st.hoursLeft)}` : ''}</p>
+          <p class="small">${st.done}/${st.total} 完了　残り${st.total - st.done}${st.hoursLeft ? `（目安 ${fmtHours(st.hoursLeft)}）` : ''}</p>
           ${countdown}
         </div>
       </section>
-      <div class="chips" role="group" aria-label="担当で絞り込み">
-        <button class="chip" data-act="open-only" aria-pressed="${ui.onlyOpen}">未完了のみ</button>
-        <button class="chip" data-act="who" data-k="all" aria-pressed="${ui.who === 'all'}">全員 ${open('all')}</button>
-        ${whos.map((w) => `<button class="chip" data-act="who" data-k="${esc(w)}" aria-pressed="${ui.who === w}">${esc(w || '担当なし')} ${open(w)}</button>`).join('')}
+      <div class="tools">
+        <label class="search">${I.search}<input id="tq" type="search" placeholder="項目を探す（例：看板、POP、保健所）" value="${esc(ui.tq)}" autocomplete="off" enterkeyhint="search"></label>
+        <div class="tool-row">
+          <div class="segmented compact" role="group" aria-label="表示する項目">
+            <button data-act="status" data-k="open" aria-pressed="${ui.status === 'open'}">未完了 ${openOf('all')}</button>
+            <button data-act="status" data-k="all" aria-pressed="${ui.status === 'all'}">すべて ${tasks.length}</button>
+          </div>
+          <label class="select-wrap"><span class="sr-only">担当</span>
+            <select id="who-sel">
+              <option value="all">担当：全員</option>
+              ${whos.map((w) => `<option value="${esc(w)}" ${ui.who === w ? 'selected' : ''}>担当：${esc(w || 'なし')}（${openOf(w)}）</option>`).join('')}
+            </select>
+          </label>
+        </div>
       </div>
-      ${visible.length ? `<ul class="task-list">${visible.map(taskRow).join('')}</ul>` : '<div class="empty">該当する項目はありません</div>'}
+      <div id="launch-list" class="launch-list">${launchListHtml(s)}</div>
       <button class="btn" data-act="add-task">${I.plus}項目を追加</button>`;
   };
 
@@ -395,9 +484,9 @@
         <h2>深夜営業・喫煙</h2>
         <div class="rows">${FLAGS.filter((f) => f.group === 'night').map((f) => switchRow(f.label, s[f.k], `data-act="toggle-flag" data-k="${f.k}"`)).join('')}</div>
       </section>
-      <section class="card">
-        <h2>深夜営業許可 必要書類（${docDone}/${docItems.length}）</h2>
-        <div class="rows">${docRows}</div>
+      <section class="card acc-card">
+        <button class="acc" data-act="toggle-docs" aria-expanded="${ui.docsOpen}"><span>深夜営業許可 必要書類</span><span class="acc-count">${docDone}/${docItems.length}</span>${I.chev}</button>
+        ${ui.docsOpen ? `<div class="rows">${docRows}</div>` : ''}
       </section>`;
   };
 
@@ -449,9 +538,7 @@
     const r = route();
     if (lastRoute === 'home' && r.name === 'store') {
       ui.homeY = window.scrollY;
-      ui.tab = 'launch';
-      ui.who = 'all';
-      ui.onlyOpen = false;
+      resetStoreView();
     }
     render({ scroll: false });
     window.scrollTo(0, r.name === 'home' && lastRoute === 'store' ? ui.homeY : 0);
@@ -528,6 +615,7 @@
       '項目の編集',
       `
       <label class="field"><span>項目名</span><input data-scope="task" data-id="${esc(t.id)}" data-f="t" value="${esc(t.t)}" autocomplete="off"></label>
+      <label class="field"><span>カテゴリ</span><select data-scope="task" data-id="${esc(t.id)}" data-f="c">${[...CATS, OTHER].map((c) => `<option value="${esc(c === OTHER ? '' : c)}" ${catOf(t) === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
       <label class="field"><span>担当</span><input data-scope="task" data-id="${esc(t.id)}" data-f="who" value="${esc(t.who)}" list="whos" autocomplete="off"></label>
       <datalist id="whos">${whos.map((w) => `<option value="${esc(w)}">`).join('')}</datalist>
       <label class="field"><span>担当者</span><input data-scope="task" data-id="${esc(t.id)}" data-f="person" value="${esc(t.person)}" autocomplete="off"></label>
@@ -671,6 +759,7 @@
     },
     tab: (el) => {
       ui.tab = el.dataset.k;
+      ui.keep = new Set();
       render({ scroll: false, focus: `[data-act="tab"][data-k="${ui.tab}"]` });
       window.scrollTo(0, 0);
     },
@@ -714,6 +803,9 @@
     'toggle-task': (el) => {
       const t = curStore().launch.tasks.find((x) => x.id === el.dataset.id);
       t.done = !t.done;
+      // 未完了表示でも、いま完了にした項目は次の操作まで元の位置に残す（行がずれて押し間違えないように）
+      if (t.done) ui.keep.add(t.id);
+      else ui.keep.delete(t.id);
       save();
       render({ focus: `[data-act="toggle-task"][data-id="${t.id}"]` });
     },
@@ -724,6 +816,8 @@
     'sheet-toggle-task': (el) => {
       const t = curStore().launch.tasks.find((x) => x.id === el.dataset.id);
       t.done = !t.done;
+      if (t.done) ui.keep.add(t.id);
+      else ui.keep.delete(t.id);
       closeSheet();
     },
     'delete-task': async (el) => {
@@ -739,6 +833,7 @@
       openSheet(
         '項目を追加',
         `<label class="field"><span>項目名</span><input id="at-title" autocomplete="off" enterkeyhint="done"></label>
+         <label class="field"><span>カテゴリ</span><select id="at-cat">${[...CATS, OTHER].map((c) => `<option value="${esc(c === OTHER ? '' : c)}" ${ui.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
          <label class="field"><span>担当</span><input id="at-who" list="whos" autocomplete="off"></label>
          <datalist id="whos">${whos.map((w) => `<option value="${esc(w)}">`).join('')}</datalist>
          <button class="btn primary" data-act="save-task">追加する</button>`,
@@ -748,18 +843,29 @@
     'save-task': () => {
       const title = $('#at-title').value.trim();
       if (!title) return toast('項目名を入力してください');
-      curStore().launch.tasks.push({ id: uid(), t: title, who: $('#at-who').value.trim(), done: false, date: '', person: '', memo: '' });
+      curStore().launch.tasks.push({ id: uid(), t: title, c: $('#at-cat').value, who: $('#at-who').value.trim(), done: false, date: '', person: '', memo: '' });
       save();
       closeSheet(true);
       render();
     },
-    who: (el) => {
-      ui.who = el.dataset.k;
-      render({ focus: `[data-act="who"][data-k="${CSS.escape(el.dataset.k)}"]` });
+    status: (el) => {
+      ui.status = el.dataset.k;
+      ui.keep = new Set();
+      render({ focus: `[data-act="status"][data-k="${el.dataset.k}"]` });
     },
-    'open-only': () => {
-      ui.onlyOpen = !ui.onlyOpen;
-      render({ focus: '[data-act="open-only"]' });
+    cat: (el) => {
+      ui.cat = el.dataset.k;
+      ui.tq = '';
+      ui.keep = new Set();
+      render({ focus: `[data-act="cat"][data-k="${CSS.escape(el.dataset.k)}"]` });
+    },
+    'toggle-done': () => {
+      ui.showDone = !ui.showDone;
+      render({ focus: '[data-act="toggle-done"]' });
+    },
+    'toggle-docs': () => {
+      ui.docsOpen = !ui.docsOpen;
+      render({ focus: '[data-act="toggle-docs"]' });
     },
     'set-method': (el) => {
       curStore().method = el.dataset.k;
@@ -823,6 +929,13 @@
       $('#list').innerHTML = listHtml();
       return;
     }
+    if (el.id === 'tq') {
+      ui.tq = el.value;
+      ui.keep = new Set();
+      const s = curStore();
+      if (s && s.launch) $('#launch-list').innerHTML = launchListHtml(s);
+      return;
+    }
     const sc = el.dataset && el.dataset.scope;
     if (!sc) return;
     const s = curStore();
@@ -843,6 +956,12 @@
   });
 
   document.addEventListener('change', (e) => {
+    if (e.target.id === 'who-sel') {
+      ui.who = e.target.value;
+      ui.keep = new Set();
+      render({ focus: '#who-sel' });
+      return;
+    }
     if (e.target.id !== 'import-file') return;
     const file = e.target.files[0];
     if (file) file.text().then(applyImport);

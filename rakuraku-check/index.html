@@ -1896,7 +1896,7 @@ function chatGptPrompt(){
 - 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
 - 店舗ごとに、優先度の高い順に行動を最大3つの箇条書きで
 - 各行動は「どの店舗で・何を・いつまでに・どうやって」が分かる具体的な一文にする
-- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
+- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ${metricsOn()?"。KPI・売上・達成率・原価率・人件費率・FL率も根拠に使い、FL率が高い店舗や達成率が低い店舗には、チェックの低評価項目との関係を踏まえて原価・人件費・売上に関する行動を含める。空欄の店舗の数字は推測しない":""}
 - 最後に「全店舗共通で今週から実行すること」を3つ以内でまとめる
 
 データ（CSV）：
@@ -1909,6 +1909,17 @@ function interviewsFor(store){
       const qa=INTERVIEW_QS.map(q=>({label:q.label,text:String(iv[q.key]||"").trim()})).filter(z=>z.text);
       return qa.length?{date:i.date,who:iv.interviewee||"",qa}:null;}).filter(Boolean);
 }
+// 1店舗分の経営指標（KPI・売上・FL）を1〜2行の文章にする。取得できていなければ空文字
+function storeMetricsLine(store){
+  if(!metricsOn()) return "";
+  const p=livePack(); if(!p) return "";
+  const f=packLookup(p,store,storeBrandOf(store)), d=f.daily, km=Object.keys(f.kpi).sort();
+  if(!d&&!km.length) return "";
+  const a=[];
+  if(km.length) a.push(`KPI：${km.slice(-3).map(m=>`${+m.slice(5)}月 ${+f.kpi[m].toFixed(3)}点`).join("、")}`);
+  if(d) a.push(`売上（月累計）${isFin(d.sales)?Math.round(d.sales)+"円":"—"}／予算達成率 ${fmtPct(d.achievement)}／原価率 ${fmtPct(d.costRate)}／人件費率 ${fmtPct(d.laborRate)}／FL率 ${fmtPct(d.fl)}（${fmtMD(d.asOf)}参照。FL率＝原価率＋人件費率）`);
+  return a.join("\n");
+}
 function storePrompt(store){
   const lines=[];
   ALL_ITEMS.forEach(it=>{
@@ -1916,16 +1927,7 @@ function storePrompt(store){
     if(h.length) lines.push(`${it.name}：${h.slice(-8).map(p=>`${fmtDate(p.date)} ${p.s5}点`).join("、")}`);
   });
   const ivs=interviewsFor(store).slice(0,3).map(x=>`【面談 ${fmtDate(x.date)}${x.who?`／被面談者：${x.who}`:""}】\n`+x.qa.map(z=>`${z.label}\n${z.text}`).join("\n"));
-  const mxBrand=storeBrandOf(store);
-  const mxLine=(()=>{
-    const p=livePack(); if(!p) return "";
-    const f=packLookup(p,store,mxBrand), d=f.daily, km=Object.keys(f.kpi).sort();
-    if(!d&&!km.length) return "";
-    const a=[];
-    if(km.length) a.push(`KPI：${km.slice(-3).map(m=>`${+m.slice(5)}月 ${+f.kpi[m].toFixed(3)}点`).join("、")}`);
-    if(d) a.push(`売上（月累計）${isFin(d.sales)?Math.round(d.sales)+"円":"—"}／予算達成率 ${fmtPct(d.achievement)}／原価率 ${fmtPct(d.costRate)}／人件費率 ${fmtPct(d.laborRate)}／FL率 ${fmtPct(d.fl)}（${fmtMD(d.asOf)}参照。FL率＝原価率＋人件費率）`);
-    return a.join("\n");
-  })();
+  const mxLine=storeMetricsLine(store);
   return `あなたは飲食チェーンのエリアマネージャー（AM）の分析アシスタントです。
 以下は「${store}」の臨店チェックの項目別の点数推移（5点満点、3点以下=要改善）と、店舗スタッフとの面談内容${mxLine?"、経営指標（KPI・売上・FL）":""}です。
 
@@ -1935,7 +1937,7 @@ function storePrompt(store){
 - 分析の説明・計画（Plan）・評価（Check）・考察は書かない。実行する行動のみを出す
 - 優先度の高い順に最大5つの箇条書きで
 - 各行動は「何を・いつまでに・どうやって」が分かる具体的な一文にする
-- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ
+- 根拠は、点数の低い項目・回を追うごとに悪化している項目・面談内容の懸念から選ぶ${mxLine?"。経営指標（KPI・売上・達成率・原価率・人件費率・FL率）も根拠に使い、チェック点の低い項目が数字にどう表れているか（例：清掃・衛生の低下と客数・売上、人手不足の面談内容と人件費率）に触れる。数字が悪い場合は原価・人件費の見直しに関する行動を含める":""}
 
 ■ 項目別の点数推移
 ${lines.join("\n")||"（データなし）"}
@@ -2019,7 +2021,7 @@ async function askAssistant(q){
 回答のルール：
 - データに基づいて答える。データに無いことを聞かれたら「データにありません」と伝える
 - 改善についての質問には、優先度の高い順に「どの店で・何を・どうするか」が分かる具体的な行動で答える
-- 「全店を分析して」「改善アクションを出して」と言われたら、店舗ごとに優先度の高い行動（PDCAのDo）を最大3つずつ箇条書きにし、最後に全店共通で今週やるべきことを3つまでまとめる。計画や考察は書かず行動のみ
+- 「全店を分析して」「改善アクションを出して」と言われたら、店舗ごとに優先度の高い行動（PDCAのDo）を最大3つずつ箇条書きにし（経営指標がある店舗は、FL率が高い・達成率が低い場合に原価・人件費・売上に関する行動を含め、チェックの低評価項目と数字の関係を一言添える）、最後に全店共通で今週やるべきことを3つまでまとめる。計画や考察は書かず行動のみ
 - 「7月の」「先月の」など期間の指定があれば、CSVの日付列でその期間の記録だけに絞って答える
 - 箇条書き中心で短く。前置きや復唱はしない
 - 店舗名・点数は正確に引用する
@@ -2173,7 +2175,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.51.0";
+const APP_VERSION="v7.52.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2407,11 +2409,13 @@ async function judgeItem(itemId){
 }
 let ivBusy=false, ivErr="";
 async function analyzeInterview(store,iv){
+  const mx=storeMetricsLine(store);
   const qs=INTERVIEW_QS.map(q=>({q,t:String(iv[q.key]||"").trim()}));
   const prompt=`あなたは飲食チェーンのスーパーバイザーを補佐するAIです。以下は店舗「${store}」の社員との面談記録です。
 ${qs.map(x=>`${x.q.label}
 ${x.t||"（未回答）"}`).join("\n")}
 
+${mx?`\n参考：この店舗の経営指標（判定は面談内容を主な根拠とし、数字は人手不足・業務過多などの裏付けとして補助的に使う。数字だけでリスクを上げない）\n${mx}\n`:""}
 この面談内容を分析し、次のJSONのみを出力してください（コードブロックや説明文は不要）：
 {"summary":"面談内容の要約（100字以内）","risk":0,"level":"高か中か低","concerns":["懸念点を最大4つ"],"reason":"リスク判定の理由（60字以内）"}
 riskは0〜100の整数で、人間関係の悪化・人手不足・退職リスク・設備の故障放置・衛生問題・業務過多などが深刻なほど高くしてください。`;

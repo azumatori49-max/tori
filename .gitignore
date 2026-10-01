@@ -1,1 +1,4 @@
 node_modules/
+
+# 店舗の実データ（個人名・住所・電話・家賃など）。公開リポジトリには入れない
+rakuraku-tachiage/data.private.js

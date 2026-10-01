@@ -1,5 +1,5 @@
 // ネットワーク優先。通信が遅いときは3秒でキャッシュに切り替える（更新が反映されやすく、圏外や電波が弱くても開ける）
-const CACHE = 'rakuraku-tachiage-v2';
+const CACHE = 'rakuraku-tachiage-v3';
 const ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'data.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 const NETWORK_TIMEOUT_MS = 3000;
 const SLOW_WINDOW_MS = 30000;
@@ -20,7 +20,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  const cached = () => caches.match(req).then((hit) => hit || caches.match('index.html'));
+  // キャッシュに無いときは、画面の読み込みだけ index.html で代用する（スクリプト等に index.html を返すと構文エラーになる）
+  const cached = () => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('index.html') : Response.error()));
   const net = fetch(req).then((res) => {
     if (res.ok) {
       const copy = res.clone();

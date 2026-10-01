@@ -708,3 +708,27 @@ svg { display: block; }
 
 /* シートやダイアログを閉じた直後の連打を受け止める透明な膜 */
 .tap-guard { position: fixed; inset: 0; z-index: 90; }
+
+/* ---------- 資料（共通の手順・チェック表） ---------- */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.step { display: flex; gap: 14px; align-items: flex-start; }
+.step-n { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
+.step-main { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.step-main h2 { margin: 0; font-size: 16px; color: var(--text); letter-spacing: 0; }
+.step-main p { overflow-wrap: anywhere; }
+.link { color: var(--brand); font-weight: 700; text-decoration: underline; }
+
+.bullets { margin: 0 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
+.bullets li { overflow-wrap: anywhere; }
+.vendor .btn { min-height: 48px; }
+.card > h2 .acc-count { float: right; font-weight: 600; }
+.row-note { margin: -4px 0 6px 64px; }
+.rows-card .sr-sub { display: block; }
+
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 10px 8px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.table thead th { border-top: 0; font-size: 12px; color: var(--muted); font-weight: 700; }
+.table tbody th { text-align: left; font-weight: 600; white-space: normal; min-width: 8em; padding-left: 14px; }
+.table th:first-child { text-align: left; padding-left: 14px; }
+.table tr.over td, .table tr.over th { background: var(--warn-soft); }

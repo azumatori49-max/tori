@@ -2,6 +2,9 @@
   'use strict';
 
   const SEED = window.RAKU_SEED;
+  // 店舗ごとの実データ（個人名・住所・電話・家賃・進み具合）。公開しない別ファイル data.private.js があれば読み込む
+  const PRIVATE = window.RAKU_PRIVATE || null;
+  const SEED_VERSION = 2;
   const KEY = 'rakuraku-tachiage:v1';
   // デモ表示（Artifact など、ダウンロード・confirm・URLハッシュが使えない環境）
   const DEMO = !!window.RAKU_DEMO;
@@ -18,6 +21,7 @@
   const PAY = FLAGS.filter((f) => f.group === 'pay');
   const METHODS = [['電子', '電子'], ['要確認', '要確認'], ['', '未設定']];
   const INFO_FIELDS = [
+    { k: 'formal', label: '正式店名（シート上の表記）', type: 'text' },
     { k: 'openDate', label: 'オープン日', type: 'date' },
     { k: 'moveIn', label: '入居日・鍵預かり日', type: 'date' },
     { k: 'handover', label: '工事引渡し日', type: 'date' },
@@ -29,11 +33,13 @@
     { k: 'tel', label: '電話番号', type: 'tel' },
     { k: 'beer', label: 'ビールメーカー', type: 'text' },
     { k: 'rent', label: '家賃', type: 'text' },
+    { k: 'tsubo', label: '坪数', type: 'text' },
   ];
   const CATS = SEED.cats || [];
   const OTHER = 'その他';
   const TITLE_CAT = {};
   SEED.templates.forEach((tp) => tp.tasks.forEach((t) => { if (t.c && !TITLE_CAT[t.t]) TITLE_CAT[t.t] = t.c; }));
+  Object.assign(TITLE_CAT, SEED.extraCats || {}, { ...TITLE_CAT });
   const catOf = (t) => (CATS.includes(t.c) ? t.c : OTHER);
   const HOME_FILTERS = [
     ['all', 'すべて'],
@@ -55,6 +61,7 @@
     gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>'),
     more: svg('<circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/>', 'stroke-width="3"'),
     search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
+    book: svg('<path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 21V5M8 7h7M8 11h7"/>'),
   };
 
   // ---------- 状態 ----------
@@ -85,38 +92,49 @@
 
   const pad2 = (n) => String(n).padStart(2, '0');
   const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  const addDays = (n) => {
-    const d = new Date();
-    d.setDate(d.getDate() + n);
-    return isoDate(d);
-  };
 
-  // デモ用: 進行中の立ち上げチェックがどう見えるかを示すサンプル店舗
-  const sampleStore = () => {
-    const s = makeStore({ name: '新宿東口（サンプル）', method: '電子', credit: true, qr: true, note: 'デモ用のサンプルです' });
-    s.launch = { tpl: 'toriyaro', tasks: makeTasks('toriyaro') };
-    s.launch.tasks.forEach((t, i) => {
-      const ci = CATS.indexOf(t.c);
-      t.done = ci >= 0 && (ci < 3 || (ci === 3 && i % 2 === 0));
-    });
-    const next = s.launch.tasks.find((t) => !t.done);
-    next.date = addDays(-3);
-    next.memo = '業者に見積もりを依頼済み';
-    s.info.openDate = addDays(14);
-    s.info.moveIn = addDays(-21);
-    return s;
-  };
+  // 実データ（data.private.js）の1店舗ぶんの進み具合を、アプリ内のチェックリストにする
+  const launchFromSeed = (l) => ({
+    tpl: l.tpl,
+    tasks: l.tasks.map(([t, who, done, date, person, h, memo]) => ({
+      id: uid(), t, c: TITLE_CAT[t] || '', who: who || '', h: h || undefined, done: !!done, date: date || '', person: person || '', memo: memo || '',
+    })),
+  });
 
-  const seedState = () => {
-    const stores = SEED.stores.map(makeStore);
-    if (DEMO) stores.unshift(sampleStore());
-    return { v: 1, stores };
+  // 実データを、保存済みの内容を壊さないように取り込む（足りない店舗の追加・空欄の補完・チェックリストの無い店舗への追加だけ）
+  const mergeSeed = (st) => {
+    st.stores = st.stores.filter((x) => x.note !== 'デモ用のサンプルです');
+    const P = PRIVATE && PRIVATE.stores;
+    if (P) {
+      Object.entries(P).forEach(([name, p]) => {
+        let s = st.stores.find((x) => x.name === name);
+        if (!s) {
+          if (!p.add) return;
+          s = makeStore({ name, ...(p.permit || {}) });
+          st.stores.push(s);
+        }
+        Object.entries(p.info || {}).forEach(([k, v]) => { if (!s.info[k]) s.info[k] = v; });
+        if (p.launch && !s.launch) s.launch = launchFromSeed(p.launch);
+      });
+    }
+    st.seed = SEED_VERSION;
+    st.priv = !!PRIVATE;
+    return st;
   };
+  // 実データ（別ファイル）が後から使えるようになった場合も取り込む
+  const needsMerge = (st) => st.seed !== SEED_VERSION || (!!PRIVATE && !st.priv);
+  const upgrade = (st) => (needsMerge(st) ? mergeSeed(st) : st);
+
+  const seedState = () => mergeSeed({ v: 1, seed: 0, res: { month: {}, training: {} }, stores: SEED.stores.map(makeStore) });
 
   let storageOK = true;
+  let migrated = false;
 
   const normalize = (raw) => {
     if (!raw || raw.v !== 1 || !Array.isArray(raw.stores)) return null;
+    raw.res = { month: {}, training: {}, ...(raw.res || {}) };
+    raw.seed = raw.seed || 1;
+    raw.priv = !!raw.priv;
     raw.stores.forEach((s) => {
       Object.assign(s, { ...makeStore(), ...s });
       s.docs = s.docs || {};
@@ -142,7 +160,10 @@
     if (raw) {
       try {
         const st = normalize(JSON.parse(raw));
-        if (st) return st;
+        if (st) {
+          migrated = needsMerge(st);
+          return upgrade(st);
+        }
       } catch (e) {
         /* 読み出せない保存データは下で退避する */
       }
@@ -183,6 +204,7 @@
   const flush = () => {
     if (pending) save();
   };
+  if (migrated) save();
   window.addEventListener('pagehide', flush);
   document.addEventListener('visibilitychange', () => document.hidden && flush());
   // 別のタブで保存されたら、その内容に切り替える
@@ -195,7 +217,7 @@
       next = null;
     }
     if (!next) return;
-    state = next;
+    state = upgrade(next);
     const a = document.activeElement;
     if (!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) render();
   });
@@ -224,9 +246,12 @@
     const hoursLeft = tasks.reduce((sum, t) => sum + (t.done || !t.h ? 0 : t.h), 0);
     return { done, total: tasks.length, pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0, hoursLeft };
   };
+  // 「立ち上げ中」: チェックリストが未完了で、オープン日が未定か、オープンから2週間以内のもの
   const isLaunching = (s) => {
     const st = launchStats(s);
-    return !!st && st.done < st.total;
+    if (!st || st.done >= st.total) return false;
+    const d = daysUntil(s.info.openDate);
+    return d === null || d >= -14;
   };
 
   const parseDate = (str) => {
@@ -302,15 +327,21 @@
       location.hash = hash;
     }
   };
-  // 一覧に戻る。アプリ内の操作で開いた画面なら履歴を1つ戻し、そうでなければ履歴を増やさずに置き換える
-  const goHome = () => {
+  // ひとつ上の画面に戻る。アプリ内の操作で開いた画面なら履歴を1つ戻し、そうでなければ履歴を増やさずに置き換える
+  const goHome = (to = '#/') => {
     if (!DEMO && ui.entered) history.back();
-    else navigate('#/', { replace: true });
+    else navigate(to, { replace: true });
   };
   const route = () => {
-    const m = getHash().match(/^#\/s\/([^/?]+)/);
-    return m ? { name: 'store', id: m[1] } : { name: 'home' };
+    const h = getHash();
+    let m = h.match(/^#\/s\/([^/?]+)/);
+    if (m) return { name: 'store', id: m[1] };
+    m = h.match(/^#\/g\/([^/?]+)/);
+    if (m) return { name: 'resItem', id: m[1] };
+    if (/^#\/g\/?$/.test(h)) return { name: 'res' };
+    return { name: 'home' };
   };
+  const DEPTH = { home: 0, store: 1, res: 1, resItem: 2 };
 
   // ---------- 一覧画面 ----------
   const matchesFilter = (s, k = ui.filter) => {
@@ -372,7 +403,7 @@
       return `<div class="empty">${state.stores.length ? '条件に合う店舗がありません' : '店舗がありません。右下の「新しい店舗」から追加してください'}</div>`;
     }
     if (ui.filter === 'all' && !ui.q.trim()) {
-      const active = items.filter(isLaunching);
+      const active = items.filter(isLaunching).sort((a, b) => (a.info.openDate || '9999') < (b.info.openDate || '9999') ? -1 : 1);
       const rest = items.filter((s) => !isLaunching(s));
       if (active.length) return groupHtml('立ち上げ中', active) + (rest.length ? groupHtml('ほかの店舗', rest) : '');
       return groupHtml('すべての店舗', items);
@@ -387,6 +418,7 @@
       <div class="topbar">
         <div class="appbar">
           <h1>らくらく立ち上げチェック</h1>
+          ${RES.some((x) => x.available()) ? `<a class="icon-btn" href="#/g" data-act="go" data-to="#/g" aria-label="資料（共通の手順・チェック表）">${I.book}</a>` : ''}
           <button class="icon-btn" data-act="settings" aria-label="設定">${I.gear}</button>
         </div>
         <div class="bar-search">
@@ -597,6 +629,116 @@
       <main class="page">${body}</main>`;
   };
 
+  // ---------- 資料（共通の手順・チェック表） ----------
+  const R = (PRIVATE && PRIVATE.resources) || SEED.resources || {};
+  const resKey = (kind, text) => `${kind}:${text}`;
+  const resDone = (kind, text) => !!state.res[kind][text];
+  const trainingItems = () => (R.training ? R.training.sections.flatMap((sec) => sec.groups.flatMap((g) => g.items)) : []);
+  const progressText = (kind, items) => `${items.filter((t) => resDone(kind, t)).length}/${items.length}`;
+
+  const RES = [
+    { id: 'ops', title: '立ち上げの流れ', available: () => !!(R.ops && R.ops.length), sub: () => `物件内見から各業者連絡まで ${R.ops.length}ステップ` },
+    { id: 'vendors', title: '業者への連絡内容', available: () => !!(R.vendors && R.vendors.length), sub: () => `${R.vendors.length}業者・連絡で伝える項目` },
+    { id: 'training', title: '新人研修チェック', available: () => !!R.training, sub: () => `STEP0〜${R.training.sections.length - 1}　${progressText('training', trainingItems())}` },
+    { id: 'month', title: '月末・月初のやること', available: () => !!(R.month && R.month.length), sub: () => `${R.month.length}項目　${progressText('month', R.month.map((m) => m.t))}` },
+    { id: 'results', title: '出店実績', available: () => !!(PRIVATE && PRIVATE.results), sub: () => `${PRIVATE.results.rows.length}店舗の作業日数・時間・坪数` },
+  ];
+
+  const viewRes = () => `
+    <div class="topbar">
+      <div class="appbar has-back">
+        <a class="icon-btn" href="#/" data-act="back" aria-label="一覧へ戻る">${I.back}</a>
+        <h1>資料</h1>
+      </div>
+    </div>
+    <main class="page">
+      <p class="small muted">スプレッドシートにあった、店舗に共通の手順やチェック表です。</p>
+      <div class="rows-card">
+        ${RES.filter((x) => x.available()).map((x) => `
+          <a class="store-row" href="#/g/${x.id}" data-act="go" data-to="#/g/${x.id}">
+            <span class="sr-main"><span class="sr-name">${esc(x.title)}</span><span class="sr-sub">${esc(x.sub())}</span></span>
+            ${I.chev}
+          </a>`).join('')}
+      </div>
+    </main>`;
+
+  const resCheckRow = (kind, text) => {
+    const on = resDone(kind, text);
+    return `<div class="row"><button class="check doc-check" role="checkbox" aria-checked="${on}" aria-label="${esc(text)}" data-act="toggle-res" data-kind="${kind}" data-k="${esc(text)}"><span>${I.check}</span></button><span class="row-label plain">${esc(text)}</span></div>`;
+  };
+
+  const resetButton = (kind) => `<button class="btn" data-act="reset-res" data-kind="${kind}">チェックをすべて外す</button>`;
+
+  const vendorText = (v) =>
+    [`【${v.name}】`, v.note ? `※${v.note}` : '', ...v.items.map((i) => `・${i}：`)].filter(Boolean).join('\n');
+
+  const resBody = (id) => {
+    if (id === 'ops') {
+      const links = (PRIVATE && PRIVATE.opsLinks) || {};
+      return `<ol class="steps">${R.ops.map((o) => `
+        <li class="card step">
+          <span class="step-n" aria-hidden="true">${o.n}</span>
+          <div class="step-main">
+            <h2>${esc(o.t)}</h2>
+            ${o.body ? `<p>${esc(o.body)}</p>` : ''}
+            ${o.due ? `<p class="small"><span class="badge">目安</span> ${esc(o.due)}</p>` : ''}
+            ${o.note ? `<p class="small muted">${esc(o.note)}</p>` : ''}
+            ${links[o.n] ? `<a class="small link" href="${esc(links[o.n])}" target="_blank" rel="noopener noreferrer">関連シートを開く</a>` : ''}
+          </div>
+        </li>`).join('')}</ol>`;
+    }
+    if (id === 'vendors') {
+      return R.vendors.map((v, i) => `
+        <section class="card vendor">
+          <h2>${esc(v.name)}</h2>
+          ${v.via ? `<p class="small muted">連絡: ${esc(v.via)}</p>` : ''}
+          ${v.note ? `<p class="small">${esc(v.note)}</p>` : ''}
+          <ul class="bullets">${v.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul>
+          <button class="btn" data-act="copy-vendor" data-i="${i}">連絡文のひな形をコピー</button>
+        </section>`).join('');
+    }
+    if (id === 'month') {
+      return ['月末', '月初'].map((w) => `
+        <section class="card"><h2>${w}</h2><div class="rows">${R.month.filter((m) => m.when === w).map((m) => `${resCheckRow('month', m.t)}${m.due ? `<p class="small muted row-note">${esc(m.due)}</p>` : ''}`).join('')}</div></section>`).join('') + resetButton('month');
+    }
+    if (id === 'training') {
+      const t = R.training;
+      const note = t.note && t.note.lines.length
+        ? `<section class="card"><h2>${esc(t.note.title)}</h2><ul class="bullets">${t.note.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></section>` : '';
+      return note + t.sections.map((sec) => {
+        const items = sec.groups.flatMap((g) => g.items);
+        return `<section class="card"><h2>${esc(sec.title)}<span class="acc-count">${progressText('training', items)}</span></h2>${sec.groups.map((g) => `${g.title ? `<h3 class="group-title">${esc(g.title)}</h3>` : ''}<div class="rows">${g.items.map((it) => resCheckRow('training', it)).join('')}</div>`).join('')}</section>`;
+      }).join('') + resetButton('training');
+    }
+    if (id === 'results') {
+      const rows = PRIVATE.results.rows.filter((x) => x.perTsubo !== null).sort((a, b) => a.perTsubo - b.perTsubo);
+      const avg = PRIVATE.results.avg;
+      return `
+        <section class="card">
+          <h2>見かた</h2>
+          <ul class="bullets">${(R.resultsNotes || []).map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+          <p class="small muted">平均 ${avg}（時間 ÷ 坪数）。平均を超えた店舗に色を付けています。</p>
+        </section>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th scope="col">店舗</th><th scope="col">日数</th><th scope="col">時間</th><th scope="col">坪</th><th scope="col">時間/坪</th></tr></thead>
+          <tbody>${rows.map((x) => `<tr class="${x.perTsubo > avg ? 'over' : ''}"><th scope="row">${esc(x.name)}${x.who ? `<span class="small muted"> ${esc(x.who)}</span>` : ''}</th><td>${x.days ?? ''}</td><td>${x.hours ?? ''}</td><td>${x.tsubo ?? ''}</td><td><b>${x.perTsubo}</b></td></tr>`).join('')}</tbody>
+        </table></div>`;
+    }
+    return '';
+  };
+
+  const viewResItem = (id) => {
+    const meta = RES.find((x) => x.id === id);
+    return `
+      <div class="topbar">
+        <div class="appbar has-back">
+          <a class="icon-btn" href="#/g" data-act="back" aria-label="資料の一覧へ戻る">${I.back}</a>
+          <h1>${esc(meta.title)}</h1>
+        </div>
+      </div>
+      <main class="page">${resBody(id)}</main>`;
+  };
+
   // ---------- 描画 ----------
   const app = $('#app');
 
@@ -630,12 +772,21 @@
       navigate('#/', { replace: true });
       return;
     }
-    const viewKey = s ? `store:${s.id}:${ui.tab}` : 'home';
+    // 資料が1つも無いとき（実データのファイルが無い公開版）は、資料の画面を開かずに一覧へ戻す
+    if ((r.name === 'res' || r.name === 'resItem') && !RES.some((x) => x.available())) {
+      navigate('#/', { replace: true });
+      return;
+    }
+    if (r.name === 'resItem' && !RES.some((x) => x.id === r.id && x.available())) {
+      navigate('#/g', { replace: true });
+      return;
+    }
+    const viewKey = s ? `store:${s.id}:${ui.tab}` : r.name === 'home' ? 'home' : `${r.name}:${r.id || ''}`;
     const xs = app.dataset.view === viewKey ? chipOffsets(app) : [];
     app.dataset.view = viewKey;
-    app.innerHTML = s ? viewStore(s) : viewHome();
+    app.innerHTML = s ? viewStore(s) : r.name === 'res' ? viewRes() : r.name === 'resItem' ? viewResItem(r.id) : viewHome();
     restoreChips(app, xs);
-    if (!DEMO) document.title = s ? `${s.name || '店舗'} | らくらく立ち上げチェック` : 'らくらく立ち上げチェック';
+    if (!DEMO) document.title = s ? `${s.name || '店舗'} | らくらく立ち上げチェック` : r.name === 'home' ? 'らくらく立ち上げチェック' : '資料 | らくらく立ち上げチェック';
     if (scroll) window.scrollTo(0, y);
     if (focus) $(focus)?.focus({ preventScroll: true });
   };
@@ -645,15 +796,15 @@
   const onRoute = () => {
     closeSheet(true);
     const r = route();
-    if (lastRoute === 'home' && r.name === 'store') {
-      ui.homeY = window.scrollY;
+    if (lastRoute === 'home' && r.name !== 'home') ui.homeY = window.scrollY;
+    if (DEPTH[r.name] > DEPTH[lastRoute]) ui.entered = booted;
+    if (r.name === 'store' && lastRoute !== 'store') {
       resetStoreView();
-      ui.entered = booted;
       const st = getStore(r.id);
-      if (st && !st.launch) ui.tab = 'permit'; // チェックリストが無い店舗は、まず届出・許可を見せる
+      if (st && !st.launch) ui.tab = 'permit'; // チェックリストが無い店舗は、まずは届出・許可を見せる
     }
     render({ scroll: false });
-    window.scrollTo(0, r.name === 'home' && lastRoute === 'store' ? ui.homeY : 0);
+    window.scrollTo(0, r.name === 'home' && lastRoute !== 'home' ? ui.homeY : 0);
     lastRoute = r.name;
     booted = true;
   };
@@ -848,6 +999,7 @@
     let next = null;
     try {
       next = normalize(JSON.parse(text));
+      if (next) next = upgrade(next);
     } catch (e) {
       next = null;
     }
@@ -1066,7 +1218,30 @@
     },
     back: (el, e) => {
       e.preventDefault();
-      goHome();
+      goHome(route().name === 'resItem' ? '#/g' : '#/');
+    },
+    'toggle-res': (el) => {
+      const { kind, k } = el.dataset;
+      if (state.res[kind][k]) delete state.res[kind][k];
+      else state.res[kind][k] = true;
+      save();
+      render({ focus: `[data-act="toggle-res"][data-kind="${kind}"][data-k="${CSS.escape(k)}"]` });
+    },
+    'reset-res': async (el) => {
+      if (!(await confirmDialog('この表のチェックをすべて外します。', '外す'))) return;
+      state.res[el.dataset.kind] = {};
+      save();
+      render();
+    },
+    'copy-vendor': async (el) => {
+      const text = vendorText(R.vendors[Number(el.dataset.i)]);
+      try {
+        await navigator.clipboard.writeText(text);
+        toast('コピーしました');
+      } catch (e) {
+        openSheet('連絡文のひな形', `<textarea id="out" class="textarea" readonly rows="8">${esc(text)}</textarea><button class="btn primary" data-act="copy-out">コピーする</button>`);
+        $('#out').select();
+      }
     },
     reset: async () => {
       if (!(await confirmDialog('すべての入力内容を消して、スプレッドシート由来の初期データに戻します。', '初期化する'))) return;

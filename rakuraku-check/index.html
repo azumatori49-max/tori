@@ -1945,8 +1945,9 @@ function buildAssistantContext(){
   const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
   const al=stores.map(s=>{const a=storeAlerts(s);return a.length?`${s}：${a.map(x=>`${x.it.name}（3点以下${x.c}回）`).join("、")}`:null;}).filter(Boolean);
   if(al.length) lines.push("【アラート項目】"+al.join("／"));
-  const ds=dangerStores();
-  if(ds.length) lines.push("【面談リスクの高い店舗】"+ds.map(d=>`${d.store}（リスク${d.risk}・${d.level}${d.summary?`：${d.summary}`:""}）`).join("／"));
+  const dsMonth=ymOf(todayStr());
+  const ds=dangerStores(dsMonth);
+  if(ds.length) lines.push(`【面談リスクの高い店舗（${ymLabel(dsMonth)}）】`+ds.map(d=>`${d.store}（リスク${d.risk}・${d.level}${d.summary?`：${d.summary}`:""}）`).join("／"));
   const mx=metricsContextLines();
   if(mx) lines.push(mx.trimEnd());
   // チェックデータ本体（CSV・写真なし）。長すぎる場合は新しい記録を優先して収める
@@ -2156,7 +2157,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.48.2";
+const APP_VERSION="v7.49.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2467,10 +2468,10 @@ function ivAiBox(iv){
     <div class="rsn">面談の回答をAIが要約し、店舗運営のリスクを点数化します（補助）。</div>
   </div>`;
 }
-function dangerStores(){
+function dangerStores(month){
   const stores=[...new Set(state.inspections.filter(i=>i.completedAt).map(i=>i.store))];
   return stores.map(s=>{
-    const list=completedFor(s);
+    const list=completedFor(s).filter(i=>!month||ymOf(i.date)===month);
     for(let i=list.length-1;i>=0;i--){
       const ai=list[i].pdca&&list[i].pdca.interview&&list[i].pdca.interview.ai;
       if(ai) return {store:s,risk:ai.risk,level:ai.level,date:list[i].date,id:list[i].id,summary:ai.summary};
@@ -2601,7 +2602,7 @@ function dashboardHtml(){
   const worst=storeRanking(cur)[0]||null;
   const stores=[...new Set(done.map(i=>i.store))];
   const alertCount=stores.reduce((n,s)=>n+storeAlerts(s).length,0);
-  const risk=dangerStores().length;
+  const risk=dangerStores(ymOf(todayStr())).length;
   const deltaHtml=(d,unit)=>d==null?"":d===0?`<div class="td">先月と同じ</div>`
     :`<div class="td ${d>0?"up":"down"}">${d>0?"▲":"▼"} ${Math.abs(d)}${unit}（先月比）</div>`;
   const stateHtml=n=>n>0?`<div class="ts" style="color:var(--bad);font-weight:700">⚠ 要対応</div>`:`<div class="ts" style="color:var(--good);font-weight:700">✓ 問題なし</div>`;
@@ -2688,13 +2689,25 @@ function viewHome(){
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
         </button></div>`).join(""):`<p class="empty">${ymLabel(month)}の完了チェックはありません。「◀ 前の月」で過去のランキングを見られます。</p>`}
       </div>`;})()}
-    ${(()=>{const ds=dangerStores(); if(!ds.length) return ""; return `<div class="card" style="border-color:var(--bad)">
+    ${(()=>{
+      if(!state.inspections.some(i=>i.completedAt&&!i.provisional)) return "";
+      const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
+      let month=state.riskMonth||cur;
+      if(month<oldest) month=oldest; if(month>cur) month=cur;
+      const ds=dangerStores(month);
+      if(!ds.length&&month===cur&&!state.inspections.some(i=>i.completedAt&&i.pdca&&i.pdca.interview&&i.pdca.interview.ai)) return "";
+      return `<div class="card" style="border-color:var(--bad)">
       <h3 style="color:var(--bad)">⚠ 面談リスクの高い店舗</h3>
-      <p class="desc">面談内容のAI分析でリスクが検出された店舗です（補助情報）。タップで報告書を確認できます。</p>
-      ${ds.map(d=>`<div class="hw-item" data-sname="${esc(d.store)}"><button class="list-card" data-open="${esc(d.id)}">
+      <div class="rank-nav">
+        <button class="back-btn" id="risk-prev" ${month<=oldest?"disabled":""}>◀ 前の月</button>
+        <b style="font-size:15px">${ymLabel(month)}</b>
+        <button class="back-btn" id="risk-next" ${month>=cur?"disabled":""}>次の月 ▶</button>
+      </div>
+      <p class="desc">${ymLabel(month)}の面談内容のAI分析でリスクが検出された店舗です（補助情報／同じ月に複数回ある店舗は最新分）。タップで報告書を確認できます。</p>
+      ${ds.length?ds.map(d=>`<div class="hw-item" data-sname="${esc(d.store)}"><button class="list-card" data-open="${esc(d.id)}">
         <span><b>${esc(d.store)}</b> ${riskBadge({level:d.level,risk:d.risk})}<span class="hw-meta">　${fmtDate(d.date)}${d.summary?`／${esc(String(d.summary).slice(0,24))}…`:""}</span></span>
         <span class="sc" style="color:${d.level==="高"?"var(--bad)":"var(--warn)"}">${d.risk}</span>
-      </button></div>`).join("")}
+      </button></div>`).join(""):`<p class="empty">${ymLabel(month)}にリスクが検出された店舗はありません。「◀ 前の月」で過去の月を見られます。</p>`}
     </div>`;})()}
     <div class="card">
       <h3>項目別の推移・アラート</h3>
@@ -3816,6 +3829,12 @@ document.addEventListener("click",async e=>{
     let m=ymAdd(state.rankMonth||cur,t.id==="rank-prev"?-1:1);
     if(m<oldest) m=oldest; if(m>cur) m=cur;
     state.rankMonth=m; render(); return;
+  }
+  if(t.id==="risk-prev"||t.id==="risk-next"){
+    const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
+    let m=ymAdd(state.riskMonth||cur,t.id==="risk-prev"?-1:1);
+    if(m<oldest) m=oldest; if(m>cur) m=cur;
+    state.riskMonth=m; render(); return;
   }
   if(t.id==="gpt-copy"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}

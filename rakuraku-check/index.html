@@ -2175,7 +2175,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.52.0";
+const APP_VERSION="v7.53.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2465,6 +2465,57 @@ async function repInterviewAI(id){
   }catch(err){ alert("AI分析に失敗しました："+friendlyAIError(err)); }
   finally{ repIvBusy=false; render(); }
 }
+// 面談のAIリスク判定を自動で行う（チェック完了時と、起動後に未判定の最近の記録を順番に）。失敗しても黙って終わり、手動ボタンは残す
+const autoIv={queue:[],running:false,current:"",tried:new Set()};
+function ivHasText(insp){
+  const iv=insp&&insp.pdca&&insp.pdca.interview;
+  return !!iv&&INTERVIEW_QS.some(q=>String(iv[q.key]||"").trim());
+}
+function autoIvPending(limit){
+  const since=ymAdd(ymOf(todayStr()),-1)+"-01";   // 先月初め以降の記録だけ（AIの利用量を抑える）
+  return state.inspections
+    .filter(i=>i.completedAt&&!i.provisional&&i.date>=since&&ivHasText(i)&&!i.pdca.interview.ai&&!autoIv.tried.has(i.id))
+    .sort((a,b)=>(b.date+b.completedAt).localeCompare(a.date+a.completedAt))
+    .slice(0,limit||5).map(i=>i.id);
+}
+function autoIvEnqueue(ids){
+  if(!AI_ENABLED||!aiConfigured()) return;
+  for(const id of ids){ if(!autoIv.queue.includes(id)&&!autoIv.tried.has(id)&&autoIv.current!==id) autoIv.queue.push(id); }
+  autoIvRun();
+}
+async function autoIvRun(){
+  if(autoIv.running) return;
+  autoIv.running=true;
+  try{
+    while(autoIv.queue.length){
+      const id=autoIv.queue.shift();
+      const insp=state.inspections.find(i=>i.id===id);
+      if(!insp||insp.provisional||!insp.completedAt||!ivHasText(insp)||insp.pdca.interview.ai) continue;
+      autoIv.tried.add(id); autoIv.current=id; autoIvRefresh();
+      try{
+        if(!navigator.onLine) throw new Error("offline");
+        await syncOutbox().catch(()=>{});       // 先に記録本体を送ってから、判定だけを追記する
+        const ai=await analyzeInterview(insp.store,insp.pdca.interview);
+        const cur=state.inspections.find(i=>i.id===id);
+        if(!cur||cur.pdca.interview.ai) continue;
+        cur.pdca.interview.ai=ai;
+        const local=await getInspection(id);
+        if(local){ local.pdca=local.pdca||{}; local.pdca.interview=local.pdca.interview||{}; local.pdca.interview.ai=ai; await putInspection(local); }
+        // 記録本体がクラウドに届いている場合だけ判定を書き足す（未送信なら再送時に一緒に届く）
+        const ob=((await outboxAll().catch(()=>[]))||[]).find(o=>o.id===id);
+        if(fsDb&&ob&&ob.status==="synced"){
+          try{ await fsMods.setDoc(fsMods.doc(fsDb,"inspections",id),{pdca:{interview:{ai}}},{merge:true}); }catch(e){}
+        }
+      }catch(e){ /* 自動判定の失敗は黙って終える（報告書の「AIで…判定」ボタンから手動で実行できる） */ }
+      finally{ autoIv.current=""; autoIvRefresh(); }
+    }
+  }finally{ autoIv.running=false; }
+}
+function autoIvRefresh(){
+  if(!["home","report"].includes(state.view)) return;
+  const dirty=[...document.querySelectorAll("#app input,#app textarea")].some(el=>el.value!==el.defaultValue);
+  if(!dirty) render();
+}
 function riskBadge(ai){
   const cls=ai.level==="高"?"issue":ai.level==="中"?"todo":"done";
   return `<span class="badge ${cls}">リスク${esc(ai.level)}・${ai.risk}/100</span>`;
@@ -2485,7 +2536,7 @@ function ivAiBox(iv){
   return `<div class="ai-box">
     ${ivErr?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(ivErr)}</div>`:""}
     <button class="chip" id="iv-ai">AIで面談内容を要約・リスク判定</button>
-    <div class="rsn">面談の回答をAIが要約し、店舗運営のリスクを点数化します（補助）。</div>
+    <div class="rsn">チェックを完了して保存すると、面談の回答をAIが自動で要約し、リスクを点数化します（補助）。ここで先に実行もできます。</div>
   </div>`;
 }
 function dangerStores(month){
@@ -3817,7 +3868,8 @@ ${esc(iv.ai.summary)}${iv.ai.reason?`
 理由：${esc(iv.ai.reason)}`:""}</div></div>`:""}
       ${INTERVIEW_QS.filter(q=>filled(iv[q.key])).map(q=>`<div class="txt-block"><div class="k">${esc(q.label)}</div><div class="v">${esc(iv[q.key])}</div></div>`).join("")}
       ${!isPreview&&AI_ENABLED?`<div class="no-print" style="margin-top:10px">
-        <button class="chip" data-repivai="${esc(insp.id)}" ${repIvBusy?"disabled":""}>${repIvBusy?"AIが分析中…":(iv.ai?"AIで再分析":"AIで面談を要約・リスク判定（補助）")}</button>
+        <button class="chip" data-repivai="${esc(insp.id)}" ${repIvBusy||autoIv.current===insp.id?"disabled":""}>${repIvBusy||autoIv.current===insp.id?"AIが分析中…":(iv.ai?"AIで再分析":"AIで面談を要約・リスク判定（補助）")}</button>
+        ${!iv.ai&&autoIv.current!==insp.id&&!insp.provisional?`<div class="rsn">自動の判定ができなかった場合は、このボタンで実行できます。</div>`:""}
       </div>`:""}
     </section>`;})()}
   <section class="card">
@@ -4026,6 +4078,7 @@ document.addEventListener("click",async e=>{
     render(); scrollTo(0,0);
     showToast(partial?"一時保存として提出しました。続きは報告書から再開できます":"記録を受け付けました。端末に保存し、通信回復後に送信します");
     syncOutbox();
+    if(!partial) autoIvEnqueue([insp.id]);
     return;
   }
   if(t.id==="rep-resume"){
@@ -4139,6 +4192,7 @@ document.addEventListener("input",e=>{
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); } });
   syncOutbox(); // アプリ起動時の自動再送
+  setTimeout(()=>autoIvEnqueue(autoIvPending(5)),12000); // 面談の未判定分を自動でAI判定（最近の記録・最大5件）
   // 更新の見張り：60秒ごと＋画面再表示時に新バージョンを確認
   setInterval(checkForUpdate,60000);
   setTimeout(checkForUpdate,5000);

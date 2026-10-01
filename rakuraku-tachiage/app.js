@@ -3,6 +3,9 @@
 
   const SEED = window.RAKU_SEED;
   const KEY = 'rakuraku-tachiage:v1';
+  // デモ表示（Artifact など、ダウンロード・confirm・URLハッシュが使えない環境）
+  const DEMO = !!window.RAKU_DEMO;
+  if (DEMO) document.documentElement.classList.add('demo');
 
   const FLAGS = [
     { k: 'credit', label: 'クレジット端末', group: 'pay' },
@@ -75,7 +78,31 @@
     launch: null,
   });
 
-  const seedState = () => ({ v: 1, stores: SEED.stores.map(makeStore) });
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const addDays = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return isoDate(d);
+  };
+
+  // デモ用: 進行中の立ち上げチェックがどう見えるかを示すサンプル店舗
+  const sampleStore = () => {
+    const s = makeStore({ name: '新宿東口（サンプル）', method: '電子', credit: true, qr: true, note: 'デモ用のサンプルです' });
+    s.launch = { tpl: 'toriyaro', tasks: makeTasks('toriyaro') };
+    s.launch.tasks.forEach((t, i) => { t.done = i < 30; });
+    s.launch.tasks[30].date = addDays(-3);
+    s.launch.tasks[30].memo = '業者に見積もりを依頼済み';
+    s.info.openDate = addDays(14);
+    s.info.moveIn = addDays(-21);
+    return s;
+  };
+
+  const seedState = () => {
+    const stores = SEED.stores.map(makeStore);
+    if (DEMO) stores.unshift(sampleStore());
+    return { v: 1, stores };
+  };
 
   let storageOK = true;
 
@@ -187,8 +214,19 @@
   // ---------- UI 状態 ----------
   const ui = { tab: 'launch', filter: 'all', q: '', who: 'all', onlyOpen: false, homeY: 0, sheetClose: null };
 
+  // デモ表示では URL ハッシュを使わず、画面遷移をメモリ上で持つ
+  let memHash = '#/';
+  const getHash = () => (DEMO ? memHash : location.hash);
+  const navigate = (hash) => {
+    if (DEMO) {
+      memHash = hash;
+      onRoute();
+    } else {
+      location.hash = hash;
+    }
+  };
   const route = () => {
-    const m = location.hash.match(/^#\/s\/([^/?]+)/);
+    const m = getHash().match(/^#\/s\/([^/?]+)/);
     return m ? { name: 'store', id: m[1] } : { name: 'home' };
   };
 
@@ -223,7 +261,7 @@
     ].filter(Boolean).join('');
     const people = [s.eisei && `衛生 ${s.eisei}`, s.bouka && `防火 ${s.bouka}`].filter(Boolean).join('　');
     return `
-      <a class="card store" href="#/s/${esc(s.id)}">
+      <a class="card store" href="#/s/${esc(s.id)}" data-act="go" data-to="#/s/${esc(s.id)}">
         <div class="store-head"><span class="store-name">${esc(s.name || '(店舗名なし)')}</span>${I.chev}</div>
         <div class="badges">${badges}</div>
         ${people ? `<p class="people">${esc(people)}</p>` : ''}
@@ -377,7 +415,7 @@
     return `
       <div class="topbar">
         <div class="appbar has-back">
-          <a class="icon-btn" href="#/" aria-label="一覧へ戻る">${I.back}</a>
+          <a class="icon-btn" href="#/" data-act="go" data-to="#/" aria-label="一覧へ戻る">${I.back}</a>
           <h1>${esc(s.name || '(店舗名なし)')}</h1>
           <button class="icon-btn" data-act="more" aria-label="メニュー">${I.more}</button>
         </div>
@@ -396,11 +434,11 @@
     const r = route();
     const s = r.name === 'store' ? getStore(r.id) : null;
     if (r.name === 'store' && !s) {
-      location.hash = '#/';
+      navigate('#/');
       return;
     }
     app.innerHTML = s ? viewStore(s) : viewHome();
-    document.title = s ? `${s.name || '店舗'} | らくらく立ち上げチェック` : 'らくらく立ち上げチェック';
+    if (!DEMO) document.title = s ? `${s.name || '店舗'} | らくらく立ち上げチェック` : 'らくらく立ち上げチェック';
     if (scroll) window.scrollTo(0, y);
     if (focus) $(focus)?.focus({ preventScroll: true });
   };
@@ -419,7 +457,34 @@
     window.scrollTo(0, r.name === 'home' && lastRoute === 'store' ? ui.homeY : 0);
     lastRoute = r.name;
   };
-  window.addEventListener('hashchange', onRoute);
+  if (!DEMO) window.addEventListener('hashchange', onRoute);
+
+  // ---------- 確認ダイアログ（ブラウザ標準の confirm は使えない環境があるため自前） ----------
+  const confirmRoot = $('#confirm-root');
+  let confirmResolve = null;
+
+  const confirmDialog = (message, okLabel = '削除する') =>
+    new Promise((resolve) => {
+      if (confirmResolve) confirmResolve(false);
+      confirmResolve = resolve;
+      confirmRoot.innerHTML = `
+        <div class="scrim dialog-scrim" data-act="confirm-no"></div>
+        <div class="dialog" role="alertdialog" aria-modal="true" aria-label="確認">
+          <p>${esc(message)}</p>
+          <div class="dialog-actions">
+            <button class="btn" data-act="confirm-no" id="confirm-cancel">キャンセル</button>
+            <button class="btn danger-fill" data-act="confirm-yes">${esc(okLabel)}</button>
+          </div>
+        </div>`;
+      $('#confirm-cancel').focus();
+    });
+
+  const closeConfirm = (result) => {
+    confirmRoot.innerHTML = '';
+    const r = confirmResolve;
+    confirmResolve = null;
+    if (r) r(result);
+  };
 
   // ---------- ボトムシート ----------
   const sheetRoot = $('#sheet-root');
@@ -447,7 +512,9 @@
   }
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeSheet();
+    if (e.key !== 'Escape') return;
+    if (confirmResolve) closeConfirm(false);
+    else closeSheet();
   });
 
   const curStore = () => {
@@ -508,24 +575,69 @@
   };
 
   const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const exportCsv = () => {
+  const csvText = () => {
     const head = ['店舗', '申請方法', '衛生管理責任者', '防火管理責任者', '備考', ...FLAGS.map((f) => f.label), '立ち上げ達成率', 'オープン日'];
     const rows = state.stores.map((s) => {
       const st = launchStats(s);
       return [s.name, s.method, s.eisei, s.bouka, s.note, ...FLAGS.map((f) => (s[f.k] ? '○' : '')), st ? `${st.pct}%` : '', s.info.openDate || ''];
     });
-    const text = '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
-    download(`rakuraku-tachiage-${stamp()}.csv`, text, 'text/csv;charset=utf-8');
+    return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+  };
+
+  const copyText = async (ta) => {
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      toast('コピーしました');
+    } catch (e) {
+      ta.focus();
+      ta.select();
+      toast('選択しました。コピーしてください');
+    }
+  };
+
+  const textSheet = (title, text, hint) =>
+    openSheet(
+      title,
+      `<p class="small muted">${esc(hint)}</p>
+       <textarea id="out" class="textarea" readonly rows="8">${esc(text)}</textarea>
+       <button class="btn primary" data-act="copy-out">コピーする</button>`,
+    );
+
+  const importSheet = () =>
+    openSheet(
+      'バックアップを読み込む',
+      `<p class="small muted">書き出したバックアップのテキストを貼り付けてください。</p>
+       <textarea id="in" class="textarea" rows="8" placeholder="{&quot;v&quot;:1,..."></textarea>
+       <button class="btn primary" data-act="apply-import">読み込む</button>`,
+    );
+
+  const applyImport = async (text) => {
+    let next = null;
+    try {
+      next = normalize(JSON.parse(text));
+    } catch (e) {
+      next = null;
+    }
+    if (!next) return toast('バックアップを読み込めませんでした');
+    if (!(await confirmDialog(`${next.stores.length}店舗のバックアップで、いまの内容を置き換えます。`, '置き換える'))) return;
+    state = next;
+    save();
+    closeSheet(true);
+    navigate('#/');
+    render();
+    toast('バックアップを読み込みました');
   };
 
   const settingsSheet = () => {
     openSheet(
       '設定',
       `
-      <p class="small muted">入力内容はこの端末のブラウザ内に保存されます。端末を替えるときは「バックアップを書き出す」で移してください。${storageOK ? '' : '<br><b>いま保存が無効になっています（プライベートブラウズなど）。</b>'}</p>
+      <p class="small muted">${DEMO ? 'デモ表示です。' : ''}入力内容はこの端末のブラウザ内に保存されます。端末を替えるときは「バックアップを書き出す」で移してください。${storageOK ? '' : '<br><b>いま保存が無効になっています（プライベートブラウズなど）。</b>'}</p>
       <div class="btn-stack">
         <button class="btn" data-act="export-json">バックアップを書き出す</button>
-        <label class="btn" style="cursor:pointer">バックアップを読み込む<input id="import-file" type="file" accept="application/json,.json" hidden></label>
+        ${DEMO
+          ? '<button class="btn" data-act="import-text">バックアップを読み込む</button>'
+          : '<label class="btn" style="cursor:pointer">バックアップを読み込む<input id="import-file" type="file" accept="application/json,.json" hidden></label>'}
         <button class="btn" data-act="export-csv">一覧をCSVで書き出す</button>
         <button class="btn danger" data-act="reset">初期データに戻す</button>
       </div>`,
@@ -555,7 +667,7 @@
       state.stores.unshift(s);
       save();
       closeSheet(true);
-      location.hash = `#/s/${s.id}`;
+      navigate(`#/s/${s.id}`);
     },
     tab: (el) => {
       ui.tab = el.dataset.k;
@@ -576,17 +688,17 @@
       closeSheet(true);
       render();
     },
-    'delete-store': () => {
+    'delete-store': async () => {
       const s = curStore();
-      if (!confirm(`「${s.name}」を削除します。元に戻せません。よろしいですか？`)) return;
+      if (!(await confirmDialog(`「${s.name}」を削除します。元に戻せません。`))) return;
       state.stores = state.stores.filter((x) => x.id !== s.id);
       save();
       closeSheet(true);
-      location.hash = '#/';
+      navigate('#/');
     },
-    'delete-launch': () => {
+    'delete-launch': async () => {
       const s = curStore();
-      if (!confirm('この店舗の立ち上げチェックを削除します。よろしいですか？')) return;
+      if (!(await confirmDialog('この店舗の立ち上げチェックを削除します。'))) return;
       s.launch = null;
       save();
       closeSheet(true);
@@ -614,10 +726,10 @@
       t.done = !t.done;
       closeSheet();
     },
-    'delete-task': (el) => {
+    'delete-task': async (el) => {
       const s = curStore();
       const t = s.launch.tasks.find((x) => x.id === el.dataset.id);
-      if (!confirm(`「${t.t}」を削除します。よろしいですか？`)) return;
+      if (!(await confirmDialog(`「${t.t}」を削除します。`))) return;
       s.launch.tasks = s.launch.tasks.filter((x) => x.id !== t.id);
       closeSheet();
     },
@@ -669,16 +781,29 @@
       render({ focus: `[data-act="toggle-doc"][data-k="${CSS.escape(k)}"]` });
     },
     'export-json': () => {
+      if (DEMO) return textSheet('バックアップ', JSON.stringify(state), '全体をコピーして保存してください。別の端末では「バックアップを読み込む」に貼り付けます。');
       download(`rakuraku-tachiage-backup-${stamp()}.json`, JSON.stringify(state), 'application/json');
       toast('バックアップを書き出しました');
     },
-    'export-csv': () => exportCsv(),
-    reset: () => {
-      if (!confirm('すべての入力内容を消して、スプレッドシート由来の初期データに戻します。よろしいですか？')) return;
+    'export-csv': () => {
+      if (DEMO) return textSheet('一覧（CSV）', csvText(), 'コピーして表計算ソフトに貼り付けられます。');
+      download(`rakuraku-tachiage-${stamp()}.csv`, '\uFEFF' + csvText(), 'text/csv;charset=utf-8');
+    },
+    'copy-out': () => copyText($('#out')),
+    'import-text': () => importSheet(),
+    'apply-import': () => applyImport($('#in').value),
+    'confirm-yes': () => closeConfirm(true),
+    'confirm-no': () => closeConfirm(false),
+    go: (el, e) => {
+      e.preventDefault();
+      navigate(el.dataset.to);
+    },
+    reset: async () => {
+      if (!(await confirmDialog('すべての入力内容を消して、スプレッドシート由来の初期データに戻します。', '初期化する'))) return;
       state = seedState();
       save();
       closeSheet(true);
-      location.hash = '#/';
+      navigate('#/');
       render();
       toast('初期データに戻しました');
     },
@@ -688,7 +813,7 @@
     const el = e.target.closest('[data-act]');
     if (!el) return;
     const fn = actions[el.dataset.act];
-    if (fn) fn(el);
+    if (fn) fn(el, e);
   });
 
   document.addEventListener('input', (e) => {
@@ -720,29 +845,13 @@
   document.addEventListener('change', (e) => {
     if (e.target.id !== 'import-file') return;
     const file = e.target.files[0];
-    if (!file) return;
-    file.text().then((text) => {
-      let next = null;
-      try {
-        next = normalize(JSON.parse(text));
-      } catch (err) {
-        next = null;
-      }
-      if (!next) return toast('バックアップファイルを読み込めませんでした');
-      if (!confirm(`${next.stores.length}店舗のバックアップで、いまの内容を置き換えます。よろしいですか？`)) return;
-      state = next;
-      save();
-      closeSheet(true);
-      location.hash = '#/';
-      render();
-      toast('バックアップを読み込みました');
-    });
+    if (file) file.text().then(applyImport);
   });
 
   // ---------- 起動 ----------
   onRoute();
 
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  if (!DEMO && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 })();

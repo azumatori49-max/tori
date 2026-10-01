@@ -122,48 +122,99 @@
       s.docs = s.docs || {};
       s.info = s.info || {};
       if (s.launch && !Array.isArray(s.launch.tasks)) s.launch = null;
-      if (s.launch) s.launch.tasks.forEach((t) => { if (t.c === undefined) t.c = TITLE_CAT[t.t] || ''; });
+      if (s.launch) {
+        s.launch.tasks.forEach((t) => {
+          if (t.c === undefined) t.c = TITLE_CAT[t.t] || '';
+          t.who = String(t.who || '').trim();
+        });
+      }
     });
     return raw;
   };
 
   const load = () => {
+    let raw = null;
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const st = normalize(JSON.parse(raw));
-        if (st) return st;
-      }
+      raw = localStorage.getItem(KEY);
     } catch (e) {
       storageOK = false;
+    }
+    if (raw) {
+      try {
+        const st = normalize(JSON.parse(raw));
+        if (st) return st;
+      } catch (e) {
+        /* 読み出せない保存データは下で退避する */
+      }
+      // 読み出せない保存データは、初期データで上書きされる前に退避しておく
+      try {
+        localStorage.setItem(`${KEY}:broken`, raw);
+      } catch (e) {
+        /* 退避できなくても起動は続ける */
+      }
     }
     return seedState();
   };
 
   let state = load();
   let saveTimer = 0;
+  let pending = false;
+  let warned = false;
 
   const save = () => {
     clearTimeout(saveTimer);
+    pending = false;
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
+      storageOK = true;
+      warned = false;
     } catch (e) {
-      if (storageOK) toast('この端末に保存できませんでした。バックアップの書き出しをおすすめします');
+      if (!warned) toast('この端末に保存できませんでした。バックアップの書き出しをおすすめします');
+      warned = true;
       storageOK = false;
     }
   };
   const saveSoon = () => {
+    pending = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(save, 300);
   };
-  window.addEventListener('pagehide', save);
-  document.addEventListener('visibilitychange', () => document.hidden && save());
+  // 何も編集していないタブが、別のタブの新しいデータを古い内容で上書きしないよう、未保存の編集があるときだけ書き込む
+  const flush = () => {
+    if (pending) save();
+  };
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => document.hidden && flush());
+  // 別のタブで保存されたら、その内容に切り替える
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY || e.newValue == null) return;
+    let next = null;
+    try {
+      next = normalize(JSON.parse(e.newValue));
+    } catch (err) {
+      next = null;
+    }
+    if (!next) return;
+    state = next;
+    const a = document.activeElement;
+    if (!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) render();
+  });
 
   // ---------- ユーティリティ ----------
   const esc = (v) =>
     String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   const $ = (sel, root = document) => root.querySelector(sel);
+  // クリックした要素を、再描画後に見つけ直せるセレクタにする（閉じたシートからフォーカスを戻すため）
+  const focusKey = (el) => {
+    if (!el || !el.dataset || !el.dataset.act) return '';
+    let sel = `[data-act="${el.dataset.act}"]`;
+    if (el.dataset.id) sel += `[data-id="${CSS.escape(el.dataset.id)}"]`;
+    if (el.dataset.k !== undefined) sel += `[data-k="${CSS.escape(el.dataset.k)}"]`;
+    return sel;
+  };
+  // 検索用: 全角/半角・大文字小文字・空白の違いを無視する
+  const norm = (v) => String(v ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
   const getStore = (id) => state.stores.find((s) => s.id === id);
   const payCount = (s) => PAY.filter((f) => s[f.k]).length;
   const launchStats = (s) => {
@@ -193,7 +244,7 @@
     const now = new Date();
     return Math.round((d - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   };
-  const fmtHours = (h) => `${Math.round(h * 10) / 10}h`;
+  const fmtHours = (h) => `${Math.round(h * 100) / 100}h`;
 
   let toastTimer = 0;
   const toast = (msg) => {
@@ -222,19 +273,39 @@
   };
 
   // ---------- UI 状態 ----------
-  const ui = { tab: 'launch', filter: 'all', q: '', who: 'all', status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false, keep: new Set(), homeY: 0, sheetClose: null };
-  const resetStoreView = () => Object.assign(ui, { tab: 'launch', who: 'all', status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false, keep: new Set() });
+  const WHO_ALL = '__all__';
+  const ui = {
+    tab: 'launch', filter: 'all', q: '', who: WHO_ALL, status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false,
+    keep: new Set(), keepDone: new Set(), homeY: 0, sheetClose: null, trigger: '', returnFocus: '', entered: false,
+  };
+  // 「いま完了にした行」「いま未完了に戻した行」は、次の絞り込み操作まで元の位置に残す
+  const clearKeep = () => {
+    ui.keep = new Set();
+    ui.keepDone = new Set();
+  };
+  const resetStoreView = () => {
+    Object.assign(ui, { tab: 'launch', who: WHO_ALL, status: 'open', cat: 'all', tq: '', showDone: false, docsOpen: false });
+    clearKeep();
+  };
 
   // デモ表示では URL ハッシュを使わず、画面遷移をメモリ上で持つ
   let memHash = '#/';
   const getHash = () => (DEMO ? memHash : location.hash);
-  const navigate = (hash) => {
+  const navigate = (hash, { replace = false } = {}) => {
     if (DEMO) {
       memHash = hash;
+      onRoute();
+    } else if (replace) {
+      history.replaceState(null, '', location.pathname + location.search + hash);
       onRoute();
     } else {
       location.hash = hash;
     }
+  };
+  // 一覧に戻る。アプリ内の操作で開いた画面なら履歴を1つ戻し、そうでなければ履歴を増やさずに置き換える
+  const goHome = () => {
+    if (!DEMO && ui.entered) history.back();
+    else navigate('#/', { replace: true });
   };
   const route = () => {
     const m = getHash().match(/^#\/s\/([^/?]+)/);
@@ -255,17 +326,17 @@
   };
 
   const matchesQuery = (s) => {
-    const q = ui.q.trim().toLowerCase();
+    const q = norm(ui.q);
     if (!q) return true;
-    return [s.name, s.eisei, s.bouka, s.note, s.info.manager, s.info.owner].some((v) => (v || '').toLowerCase().includes(q));
+    return [s.name, s.eisei, s.bouka, s.note, s.info.manager, s.info.owner].some((v) => norm(v).includes(q));
   };
 
   // 検索語が責任者名にヒットしたときだけ、その名前を行に添える
   const hitPeople = (s) => {
-    const q = ui.q.trim().toLowerCase();
+    const q = norm(ui.q);
     if (!q) return '';
     return [['衛生', s.eisei], ['防火', s.bouka], ['店長', s.info.manager], ['責任者', s.info.owner]]
-      .filter(([, v]) => v && v.toLowerCase().includes(q))
+      .filter(([, v]) => v && norm(v).includes(q))
       .map(([l, v]) => `${l} ${v}`)
       .join('　');
   };
@@ -302,11 +373,15 @@
     }
     if (ui.filter === 'all' && !ui.q.trim()) {
       const active = items.filter(isLaunching);
-      if (active.length) return groupHtml('立ち上げ中', active) + groupHtml('ほかの店舗', items.filter((s) => !isLaunching(s)));
+      const rest = items.filter((s) => !isLaunching(s));
+      if (active.length) return groupHtml('立ち上げ中', active) + (rest.length ? groupHtml('ほかの店舗', rest) : '');
       return groupHtml('すべての店舗', items);
     }
     return groupHtml('絞り込み結果', items);
   };
+
+  const homeChipsHtml = () =>
+    HOME_FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-k="${esc(k)}" aria-pressed="${ui.filter === k}">${label} <b>${state.stores.filter((s) => matchesQuery(s) && matchesFilter(s, k)).length}</b></button>`).join('');
 
   const viewHome = () => `
       <div class="topbar">
@@ -315,13 +390,11 @@
           <button class="icon-btn" data-act="settings" aria-label="設定">${I.gear}</button>
         </div>
         <div class="bar-search">
-          <label class="search">${I.search}<input id="q" type="search" placeholder="店舗名・責任者で検索" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search"></label>
+          <label class="search">${I.search}<input id="q" type="search" aria-label="店舗名・責任者で検索" placeholder="店舗名・責任者で検索" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search"></label>
         </div>
       </div>
       <main class="page">
-        <div class="chips" role="group" aria-label="絞り込み">
-          ${HOME_FILTERS.map(([k, label]) => `<button class="chip" data-act="filter" data-k="${esc(k)}" aria-pressed="${ui.filter === k}">${label} <b>${state.stores.filter((s) => matchesFilter(s, k)).length}</b></button>`).join('')}
-        </div>
+        <div id="home-chips" class="chips" role="group" aria-label="絞り込み">${homeChipsHtml()}</div>
         <div id="list" class="list">${listHtml()}</div>
       </main>
       <button class="fab" data-act="new-store">${I.plus}新しい店舗</button>`;
@@ -336,40 +409,43 @@
       <li class="task ${t.done ? 'done' : ''}">
         <button class="check" role="checkbox" aria-checked="${t.done}" aria-label="${esc(t.t)}を完了にする" data-act="toggle-task" data-id="${esc(t.id)}"><span>${I.check}</span></button>
         <button class="task-main" data-act="edit-task" data-id="${esc(t.id)}">
-          <span class="task-text"><span class="task-title">${esc(t.t)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</span>
+          <span class="task-text"><span class="task-title">${esc(t.t.trim() ? t.t : '(無題)')}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</span>
           ${I.chev}
         </button>
       </li>`;
   };
 
-  const whoOk = (t) => ui.who === 'all' || (t.who || '') === ui.who;
+  const whoOk = (t) => ui.who === WHO_ALL || (t.who || '') === ui.who;
   const matchTask = (t) => {
-    const q = ui.tq.trim().toLowerCase();
-    return !q || [t.t, t.who, t.person, t.memo, catOf(t)].some((v) => (v || '').toLowerCase().includes(q));
+    const q = norm(ui.tq);
+    return !q || [t.t, t.who, t.person, t.memo].some((v) => norm(v).includes(q));
   };
 
   // チェックリストの可変部分（カテゴリのチップ + 項目一覧）。検索入力中はここだけを差し替える
   const launchListHtml = (s) => {
     const tasks = s.launch.tasks;
-    const q = ui.tq.trim();
+    const qShown = ui.tq.trim();
     const byWho = tasks.filter(whoOk);
-    const cats = [...CATS, OTHER].filter((c) => byWho.some((t) => catOf(t) === c));
-    if (ui.cat !== 'all' && !cats.includes(ui.cat)) ui.cat = 'all';
-    const cat = q ? 'all' : ui.cat;
-    const openIn = (c) => byWho.filter((t) => !t.done && (c === 'all' || catOf(t) === c)).length;
+    const base = byWho.filter(matchTask); // 検索語を反映した範囲（件数もこの範囲で数える）
+    const allCats = [...CATS, OTHER].filter((c) => byWho.some((t) => catOf(t) === c));
+    if (ui.cat !== 'all' && !allCats.includes(ui.cat)) ui.cat = 'all';
+    const cat = ui.cat;
+    const openIn = (c) => base.filter((t) => !t.done && (c === 'all' || catOf(t) === c)).length;
 
-    const chipCats = cats.filter(
-      (c) => ui.status === 'all' || cat === c || openIn(c) > 0 || byWho.some((t) => catOf(t) === c && ui.keep.has(t.id)),
-    );
+    const chipCats = allCats.filter((c) => {
+      if (cat === c) return true;
+      if (ui.status === 'all') return base.some((t) => catOf(t) === c);
+      return openIn(c) > 0 || base.some((t) => catOf(t) === c && (ui.keep.has(t.id) || ui.keepDone.has(t.id)));
+    });
     const chip = (c, label) => {
       const n = openIn(c);
-      const on = c === 'all' ? cat === 'all' : cat === c;
-      return `<button class="chip ${n ? '' : 'is-done'}" data-act="cat" data-k="${esc(c)}" aria-pressed="${on}">${esc(label)} <b>${n || '完了'}</b></button>`;
+      return `<button class="chip ${n ? '' : 'is-done'}" data-act="cat" data-k="${esc(c)}" aria-pressed="${cat === c}">${esc(label)} <b>${n || '0'}</b></button>`;
     };
 
-    const inView = byWho.filter((t) => matchTask(t) && (cat === 'all' || catOf(t) === cat));
-    const shown = ui.status === 'all' ? inView : inView.filter((t) => !t.done || ui.keep.has(t.id));
-    const doneRows = ui.status === 'all' ? [] : inView.filter((t) => t.done && !ui.keep.has(t.id));
+    const inView = base.filter((t) => cat === 'all' || catOf(t) === cat);
+    const isDoneRow = (t) => (t.done && !ui.keep.has(t.id)) || ui.keepDone.has(t.id);
+    const shown = ui.status === 'all' ? inView : inView.filter((t) => !isDoneRow(t));
+    const doneRows = ui.status === 'all' ? [] : inView.filter(isDoneRow);
 
     let body = '';
     if (cat === 'all') {
@@ -386,14 +462,20 @@
       body = `<ul class="task-list">${shown.map(taskRow).join('')}</ul>`;
     }
     if (!body) {
-      const none = q ? `「${esc(q)}」に合う項目はありません` : byWho.some((t) => !t.done && (cat === 'all' || catOf(t) === cat)) ? '該当する項目はありません' : 'この範囲の項目はすべて完了しています';
+      let none;
+      if (!tasks.length) none = 'この店舗にはまだ項目がありません。下の「項目を追加」から追加できます';
+      else if (doneRows.length) none = qShown ? `「${esc(qShown)}」に合う未完了の項目はありません` : 'この範囲の未完了の項目はありません';
+      else if (qShown) none = `「${esc(qShown)}」に合う項目はありません`;
+      else if (byWho.some((t) => !t.done && (cat === 'all' || catOf(t) === cat))) none = '該当する項目はありません';
+      else none = 'この範囲の項目はすべて完了しています';
       body = `<div class="empty">${none}</div>`;
     }
     const done = doneRows.length
       ? `<section class="group"><button class="done-toggle" data-act="toggle-done" aria-expanded="${ui.showDone}">完了済み ${doneRows.length}件を${ui.showDone ? '隠す' : '表示'}</button>${ui.showDone ? `<ul class="task-list">${doneRows.map(taskRow).join('')}</ul>` : ''}</section>`
       : '';
+    const chips = tasks.length ? `<div class="chips" role="group" aria-label="カテゴリで絞り込み">${chip('all', 'すべて')}${chipCats.map((c) => chip(c, c)).join('')}</div>` : '';
     return `
-      <div class="chips" role="group" aria-label="カテゴリで絞り込み">${chip('all', 'すべて')}${chipCats.map((c) => chip(c, c)).join('')}</div>
+      ${chips}
       ${body}${done}`;
   };
 
@@ -419,8 +501,8 @@
       countdown = '<p class="small muted">「情報」でオープン日を入れるとカウントダウンが出ます</p>';
     }
     const whos = [...new Set(tasks.map((t) => t.who || ''))];
-    if (ui.who !== 'all' && !whos.includes(ui.who)) ui.who = 'all';
-    const openOf = (w) => tasks.filter((t) => !t.done && (w === 'all' || (t.who || '') === w)).length;
+    if (ui.who !== WHO_ALL && !whos.includes(ui.who)) ui.who = WHO_ALL;
+    const openOf = (w) => tasks.filter((t) => !t.done && (w === WHO_ALL || (t.who || '') === w)).length;
     return `
       <section class="card progress" aria-label="達成率">
         <div class="progress-num">${st.pct}<span>%</span></div>
@@ -431,15 +513,15 @@
         </div>
       </section>
       <div class="tools">
-        <label class="search">${I.search}<input id="tq" type="search" placeholder="項目を探す（例：看板、POP、保健所）" value="${esc(ui.tq)}" autocomplete="off" enterkeyhint="search"></label>
+        <label class="search">${I.search}<input id="tq" type="search" aria-label="項目を探す" placeholder="項目を探す（例：看板、POP、保健所）" value="${esc(ui.tq)}" autocomplete="off" enterkeyhint="search"></label>
         <div class="tool-row">
           <div class="segmented compact" role="group" aria-label="表示する項目">
-            <button data-act="status" data-k="open" aria-pressed="${ui.status === 'open'}">未完了 ${openOf('all')}</button>
+            <button data-act="status" data-k="open" aria-pressed="${ui.status === 'open'}">未完了 ${openOf(WHO_ALL)}</button>
             <button data-act="status" data-k="all" aria-pressed="${ui.status === 'all'}">すべて ${tasks.length}</button>
           </div>
           <label class="select-wrap"><span class="sr-only">担当</span>
             <select id="who-sel">
-              <option value="all">担当：全員</option>
+              <option value="${WHO_ALL}">担当：全員</option>
               ${whos.map((w) => `<option value="${esc(w)}" ${ui.who === w ? 'selected' : ''}>担当：${esc(w || 'なし')}（${openOf(w)}）</option>`).join('')}
             </select>
           </label>
@@ -504,7 +586,7 @@
     return `
       <div class="topbar">
         <div class="appbar has-back">
-          <a class="icon-btn" href="#/" data-act="go" data-to="#/" aria-label="一覧へ戻る">${I.back}</a>
+          <a class="icon-btn" href="#/" data-act="back" aria-label="一覧へ戻る">${I.back}</a>
           <h1>${esc(s.name || '(店舗名なし)')}</h1>
           <button class="icon-btn" data-act="more" aria-label="メニュー">${I.more}</button>
         </div>
@@ -518,31 +600,62 @@
   // ---------- 描画 ----------
   const app = $('#app');
 
+  // 横スクロールのチップ行は、再描画で先頭に戻らないよう位置を引き継ぎ、選択中のチップが見えるようにする
+  const revealPressed = (row) => {
+    const on = row.querySelector('[aria-pressed="true"]');
+    if (!on) return;
+    const rr = row.getBoundingClientRect();
+    const cr = on.getBoundingClientRect();
+    if (cr.left < rr.left + 8) row.scrollLeft += cr.left - rr.left - 16;
+    else if (cr.right > rr.right - 8) row.scrollLeft += cr.right - rr.right + 16;
+  };
+  const chipOffsets = (root) => [...root.querySelectorAll('.chips')].map((c) => c.scrollLeft);
+  const restoreChips = (root, xs) =>
+    root.querySelectorAll('.chips').forEach((c, i) => {
+      c.scrollLeft = xs[i] || 0;
+      revealPressed(c);
+    });
+  const setLaunchList = (s) => {
+    const box = $('#launch-list');
+    const xs = chipOffsets(box);
+    box.innerHTML = launchListHtml(s);
+    restoreChips(box, xs);
+  };
+
   const render = ({ scroll = true, focus = '' } = {}) => {
     const y = window.scrollY;
     const r = route();
     const s = r.name === 'store' ? getStore(r.id) : null;
     if (r.name === 'store' && !s) {
-      navigate('#/');
+      navigate('#/', { replace: true });
       return;
     }
+    const viewKey = s ? `store:${s.id}:${ui.tab}` : 'home';
+    const xs = app.dataset.view === viewKey ? chipOffsets(app) : [];
+    app.dataset.view = viewKey;
     app.innerHTML = s ? viewStore(s) : viewHome();
+    restoreChips(app, xs);
     if (!DEMO) document.title = s ? `${s.name || '店舗'} | らくらく立ち上げチェック` : 'らくらく立ち上げチェック';
     if (scroll) window.scrollTo(0, y);
     if (focus) $(focus)?.focus({ preventScroll: true });
   };
 
   let lastRoute = 'home';
+  let booted = false;
   const onRoute = () => {
     closeSheet(true);
     const r = route();
     if (lastRoute === 'home' && r.name === 'store') {
       ui.homeY = window.scrollY;
       resetStoreView();
+      ui.entered = booted;
+      const st = getStore(r.id);
+      if (st && !st.launch) ui.tab = 'permit'; // チェックリストが無い店舗は、まず届出・許可を見せる
     }
     render({ scroll: false });
     window.scrollTo(0, r.name === 'home' && lastRoute === 'store' ? ui.homeY : 0);
     lastRoute = r.name;
+    booted = true;
   };
   if (!DEMO) window.addEventListener('hashchange', onRoute);
 
@@ -554,10 +667,13 @@
     new Promise((resolve) => {
       if (confirmResolve) confirmResolve(false);
       confirmResolve = resolve;
+      ui.confirmBack = ui.trigger;
+      app.inert = true;
+      sheetRoot.inert = true;
       confirmRoot.innerHTML = `
         <div class="scrim dialog-scrim" data-act="confirm-no"></div>
-        <div class="dialog" role="alertdialog" aria-modal="true" aria-label="確認">
-          <p>${esc(message)}</p>
+        <div class="dialog" role="alertdialog" aria-modal="true" aria-label="確認" aria-describedby="confirm-msg">
+          <p id="confirm-msg">${esc(message)}</p>
           <div class="dialog-actions">
             <button class="btn" data-act="confirm-no" id="confirm-cancel">キャンセル</button>
             <button class="btn danger-fill" data-act="confirm-yes">${esc(okLabel)}</button>
@@ -568,40 +684,69 @@
 
   const closeConfirm = (result) => {
     confirmRoot.innerHTML = '';
+    sheetRoot.inert = false;
+    app.inert = !!sheetRoot.firstChild;
+    guardTaps();
     const r = confirmResolve;
     confirmResolve = null;
+    if (!result && ui.confirmBack) $(ui.confirmBack)?.focus({ preventScroll: true });
     if (r) r(result);
   };
 
   // ---------- ボトムシート ----------
   const sheetRoot = $('#sheet-root');
 
+  // シートやダイアログを閉じた直後の連打が、下の画面を押してしまわないよう、短時間だけタップを受け止める
+  function guardTaps() {
+    const g = document.createElement('div');
+    g.className = 'tap-guard';
+    document.body.appendChild(g);
+    setTimeout(() => g.remove(), 300);
+  }
+
   const openSheet = (title, bodyHtml, onClose) => {
-    closeSheet(true);
+    if (!sheetRoot.firstChild) ui.returnFocus = ui.trigger;
+    closeSheet(true, true);
     ui.sheetClose = onClose || null;
     sheetRoot.innerHTML = `
       <div class="scrim" data-act="close-sheet"></div>
-      <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
         <div class="sheet-handle"></div>
         <div class="sheet-head"><h2>${esc(title)}</h2><button class="text-btn" data-act="close-sheet">閉じる</button></div>
         <div class="sheet-body">${bodyHtml}</div>
       </div>`;
     document.body.classList.add('sheet-open');
+    app.inert = true;
+    $('.sheet', sheetRoot).focus({ preventScroll: true });
   };
 
-  function closeSheet(silent) {
+  function closeSheet(silent, replacing) {
     if (!sheetRoot.firstChild) return;
     sheetRoot.innerHTML = '';
     document.body.classList.remove('sheet-open');
+    if (!replacing) {
+      app.inert = false;
+      guardTaps();
+    }
     const cb = ui.sheetClose;
     ui.sheetClose = null;
     if (cb && !silent) cb();
+    if (!silent && !replacing && ui.returnFocus) $(ui.returnFocus)?.focus({ preventScroll: true });
   }
 
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (confirmResolve) closeConfirm(false);
-    else closeSheet();
+    if (e.key === 'Escape') {
+      if (confirmResolve) closeConfirm(false);
+      else closeSheet();
+      return;
+    }
+    // 日本語入力の変換確定の Enter では送信しない
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+    const submit = { 'ns-name': 'create-store', 'at-title': 'save-task', 'at-who': 'save-task', rn: 'save-rename' }[e.target.id];
+    if (submit) {
+      e.preventDefault();
+      actions[submit]();
+    }
   });
 
   const curStore = () => {
@@ -711,7 +856,7 @@
     state = next;
     save();
     closeSheet(true);
-    navigate('#/');
+    navigate('#/', { replace: true });
     render();
     toast('バックアップを読み込みました');
   };
@@ -730,6 +875,19 @@
         <button class="btn danger" data-act="reset">初期データに戻す</button>
       </div>`,
     );
+  };
+
+  // 完了/未完了の切り替え。未完了表示でも、いま切り替えた項目は次の絞り込み操作まで元の位置に残す（行がずれて押し間違えないように）
+  const toggleTask = (t) => {
+    t.done = !t.done;
+    if (t.done) {
+      if (ui.keepDone.has(t.id)) ui.keepDone.delete(t.id);
+      else ui.keep.add(t.id);
+    } else if (ui.keep.has(t.id)) {
+      ui.keep.delete(t.id);
+    } else if (ui.status === 'open') {
+      ui.keepDone.add(t.id);
+    }
   };
 
   // ---------- 操作 ----------
@@ -759,7 +917,7 @@
     },
     tab: (el) => {
       ui.tab = el.dataset.k;
-      ui.keep = new Set();
+      clearKeep();
       render({ scroll: false, focus: `[data-act="tab"][data-k="${ui.tab}"]` });
       window.scrollTo(0, 0);
     },
@@ -783,7 +941,7 @@
       state.stores = state.stores.filter((x) => x.id !== s.id);
       save();
       closeSheet(true);
-      navigate('#/');
+      goHome();
     },
     'delete-launch': async () => {
       const s = curStore();
@@ -802,10 +960,7 @@
     },
     'toggle-task': (el) => {
       const t = curStore().launch.tasks.find((x) => x.id === el.dataset.id);
-      t.done = !t.done;
-      // 未完了表示でも、いま完了にした項目は次の操作まで元の位置に残す（行がずれて押し間違えないように）
-      if (t.done) ui.keep.add(t.id);
-      else ui.keep.delete(t.id);
+      toggleTask(t);
       save();
       render({ focus: `[data-act="toggle-task"][data-id="${t.id}"]` });
     },
@@ -814,10 +969,7 @@
       editTaskSheet(s, s.launch.tasks.find((x) => x.id === el.dataset.id));
     },
     'sheet-toggle-task': (el) => {
-      const t = curStore().launch.tasks.find((x) => x.id === el.dataset.id);
-      t.done = !t.done;
-      if (t.done) ui.keep.add(t.id);
-      else ui.keep.delete(t.id);
+      toggleTask(curStore().launch.tasks.find((x) => x.id === el.dataset.id));
       closeSheet();
     },
     'delete-task': async (el) => {
@@ -834,7 +986,7 @@
         '項目を追加',
         `<label class="field"><span>項目名</span><input id="at-title" autocomplete="off" enterkeyhint="done"></label>
          <label class="field"><span>カテゴリ</span><select id="at-cat">${[...CATS, OTHER].map((c) => `<option value="${esc(c === OTHER ? '' : c)}" ${ui.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-         <label class="field"><span>担当</span><input id="at-who" list="whos" autocomplete="off"></label>
+         <label class="field"><span>担当</span><input id="at-who" list="whos" value="${esc(ui.who === WHO_ALL ? '' : ui.who)}" autocomplete="off"></label>
          <datalist id="whos">${whos.map((w) => `<option value="${esc(w)}">`).join('')}</datalist>
          <button class="btn primary" data-act="save-task">追加する</button>`,
       );
@@ -843,20 +995,28 @@
     'save-task': () => {
       const title = $('#at-title').value.trim();
       if (!title) return toast('項目名を入力してください');
-      curStore().launch.tasks.push({ id: uid(), t: title, c: $('#at-cat').value, who: $('#at-who').value.trim(), done: false, date: '', person: '', memo: '' });
+      const task = { id: uid(), t: title, c: $('#at-cat').value, who: $('#at-who').value.trim(), done: false, date: '', person: '', memo: '' };
+      curStore().launch.tasks.push(task);
+      // いまの絞り込みでは見えない項目を足したときは、絞り込みを外して見えるようにする
+      if (!whoOk(task) || !matchTask(task) || (ui.cat !== 'all' && catOf(task) !== ui.cat)) {
+        ui.who = WHO_ALL;
+        ui.tq = '';
+        ui.cat = 'all';
+      }
+      clearKeep();
       save();
       closeSheet(true);
       render();
+      toast(`「${title}」を追加しました`);
     },
     status: (el) => {
       ui.status = el.dataset.k;
-      ui.keep = new Set();
+      clearKeep();
       render({ focus: `[data-act="status"][data-k="${el.dataset.k}"]` });
     },
     cat: (el) => {
       ui.cat = el.dataset.k;
-      ui.tq = '';
-      ui.keep = new Set();
+      clearKeep();
       render({ focus: `[data-act="cat"][data-k="${CSS.escape(el.dataset.k)}"]` });
     },
     'toggle-done': () => {
@@ -904,20 +1064,30 @@
       e.preventDefault();
       navigate(el.dataset.to);
     },
+    back: (el, e) => {
+      e.preventDefault();
+      goHome();
+    },
     reset: async () => {
       if (!(await confirmDialog('すべての入力内容を消して、スプレッドシート由来の初期データに戻します。', '初期化する'))) return;
       state = seedState();
       save();
       closeSheet(true);
-      navigate('#/');
+      navigate('#/', { replace: true });
       render();
       toast('初期データに戻しました');
     },
   };
 
   document.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-act]');
-    if (!el) return;
+    let el = e.target.closest('[data-act]');
+    if (!el) {
+      // 行の文字の部分をタップしても、その行のスイッチ/チェックを切り替える
+      const row = e.target.closest('.row');
+      el = row && row.querySelector('[data-act]');
+      if (!el) return;
+    }
+    ui.trigger = focusKey(el);
     const fn = actions[el.dataset.act];
     if (fn) fn(el, e);
   });
@@ -927,13 +1097,17 @@
     if (el.id === 'q') {
       ui.q = el.value;
       $('#list').innerHTML = listHtml();
+      const chips = $('#home-chips');
+      const x = chips.scrollLeft;
+      chips.innerHTML = homeChipsHtml();
+      chips.scrollLeft = x;
       return;
     }
     if (el.id === 'tq') {
       ui.tq = el.value;
-      ui.keep = new Set();
+      clearKeep();
       const s = curStore();
-      if (s && s.launch) $('#launch-list').innerHTML = launchListHtml(s);
+      if (s && s.launch) setLaunchList(s);
       return;
     }
     const sc = el.dataset && el.dataset.scope;
@@ -944,13 +1118,16 @@
     if (sc === 'store') s[f] = el.value;
     else if (sc === 'info') s.info[f] = el.value;
     else if (sc === 'name') {
-      s.name = el.value;
-      const h1 = $('.appbar h1');
-      if (h1) h1.textContent = el.value || '(店舗名なし)';
+      const v = el.value.trim();
+      if (v) {
+        s.name = v;
+        const h1 = $('.appbar h1');
+        if (h1) h1.textContent = v;
+      }
     } else if (sc === 'task') {
       const t = s.launch.tasks.find((x) => x.id === el.dataset.id);
       if (!t) return;
-      t[f] = f === 'h' ? (el.value === '' ? undefined : Number(el.value)) : el.value;
+      t[f] = f === 'h' ? (el.value === '' ? undefined : Number(el.value)) : f === 'who' ? el.value.trim() : el.value;
     }
     saveSoon();
   });
@@ -958,8 +1135,14 @@
   document.addEventListener('change', (e) => {
     if (e.target.id === 'who-sel') {
       ui.who = e.target.value;
-      ui.keep = new Set();
+      clearKeep();
       render({ focus: '#who-sel' });
+      return;
+    }
+    if (e.target.dataset && e.target.dataset.scope === 'name') {
+      const s = curStore();
+      if (s && !e.target.value.trim()) toast('店舗名は空にできません');
+      if (s) e.target.value = s.name;
       return;
     }
     if (e.target.id !== 'import-file') return;

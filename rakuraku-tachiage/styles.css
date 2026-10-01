@@ -84,6 +84,7 @@ a { color: inherit; text-decoration: none; }
 svg { display: block; }
 
 :focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
 
 #app {
   max-width: 560px;
@@ -150,9 +151,12 @@ svg { display: block; }
   border-bottom: 3px solid transparent;
   background: transparent;
   color: inherit;
-  opacity: .78;
+  opacity: .9;
   font-weight: 600;
 }
+
+.tab:focus-visible { outline-offset: -3px; }
+.topbar :focus-visible { outline-color: var(--on-brand); }
 
 .tab[aria-selected="true"] { opacity: 1; border-bottom-color: currentColor; }
 
@@ -160,6 +164,7 @@ svg { display: block; }
 .page {
   padding: 16px 16px calc(112px + env(safe-area-inset-bottom));
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-content: start;
 }
@@ -208,8 +213,8 @@ svg { display: block; }
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  margin: 0 -16px;
-  padding: 2px 16px 4px;
+  margin: -3px -16px -1px;
+  padding: 5px 16px;
   scrollbar-width: none;
 }
 
@@ -328,7 +333,7 @@ svg { display: block; }
 .btn.danger { color: var(--danger); }
 .btn:active { filter: brightness(.94); }
 .btn small { display: block; font-weight: 400; color: var(--muted); }
-.btn.primary small { color: inherit; opacity: .85; }
+.btn.primary small { color: inherit; opacity: .95; }
 .btn-stack { display: grid; gap: 10px; }
 
 .text-btn {
@@ -420,6 +425,7 @@ svg { display: block; }
 .task-text { flex: 1; min-width: 0; }
 .task-title { font-weight: 600; overflow-wrap: anywhere; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+.task-meta span { min-width: 0; overflow-wrap: anywhere; }
 .task.done .task-title { color: var(--muted); text-decoration: line-through; }
 .task-main > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 
@@ -436,6 +442,7 @@ svg { display: block; }
 }
 
 .rows .row:first-child { border-top: 0; }
+.row { cursor: pointer; }
 .row-label { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .row-label.plain { font-weight: 400; }
 
@@ -495,6 +502,7 @@ svg { display: block; }
 /* ---------- フォーム ---------- */
 .field { display: grid; gap: 6px; }
 .field + .field { margin-top: 14px; }
+.sheet-body .field + .field { margin-top: 0; }
 .field > span { font-size: 13px; font-weight: 700; color: var(--muted); }
 
 .field input,
@@ -529,6 +537,7 @@ svg { display: block; }
 .radio:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
 .radio b { display: block; }
 .radio small { color: var(--muted); }
+.radio:has(input:checked) small { color: var(--text); }
 
 /* ---------- ボトムシート ---------- */
 .scrim {
@@ -557,6 +566,7 @@ svg { display: block; }
   animation: rise .2s ease;
 }
 
+.sheet:focus { outline: none; }
 .sheet-handle { width: 40px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: var(--line); }
 .sheet-head { display: flex; align-items: center; padding: 4px 8px 4px 20px; }
 .sheet-head h2 { flex: 1; font-size: 17px; }
@@ -624,7 +634,7 @@ svg { display: block; }
   border-radius: 12px;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: 16px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   resize: vertical;
 }
 
@@ -635,11 +645,11 @@ svg { display: block; }
 
 /* ---------- チェックリストの検索・絞り込み ---------- */
 .tools { display: grid; gap: 10px; }
-.tool-row { display: flex; gap: 10px; align-items: center; }
-.tool-row .segmented { flex: none; }
+.tool-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tool-row .segmented { flex: 1 1 auto; }
 .segmented.compact button { min-height: 40px; padding: 0 12px; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-.select-wrap { flex: 1; min-width: 0; }
+.select-wrap { flex: 1 1 200px; min-width: 200px; }
 
 .select-wrap select {
   width: 100%;
@@ -662,7 +672,7 @@ svg { display: block; }
 }
 
 .launch-list { display: grid; gap: 16px; }
-.launch-list > .chips { margin-bottom: -4px; }
+.launch-list > .chips { margin-bottom: -5px; }
 
 .done-toggle {
   min-height: 48px;
@@ -695,3 +705,6 @@ svg { display: block; }
 .acc svg { width: 20px; height: 20px; color: var(--muted); transition: transform .15s; }
 .acc[aria-expanded="true"] svg { transform: rotate(90deg); }
 .acc-card .rows { padding-bottom: 8px; }
+
+/* シートやダイアログを閉じた直後の連打を受け止める透明な膜 */
+.tap-guard { position: fixed; inset: 0; z-index: 90; }

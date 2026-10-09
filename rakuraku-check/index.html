@@ -691,7 +691,7 @@ const INTERVIEW_QS=[
 
 /* ================= 状態・保存 ================= */
 let db=null;
-const state = { view:"home", catIndex:0, draft:null, inspections:[], reportId:null, fb:null, chat:[], metrics:null };
+const state = { view:"home", catIndex:0, draft:null, drafts:[], inspections:[], reportId:null, fb:null, chat:[], metrics:null };
 
 function openDB(){return new Promise((res,rej)=>{
   const r=indexedDB.open("rakuraku-check",2);
@@ -720,11 +720,66 @@ function uuid(){
   catch(e){ return "id-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10); }
 }
 
-let saveTimer=null;
-function persistDraft(){
-  if(!state.draft) return;
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>kvSet("draft",state.draft).then(markSaved).catch(()=>{}),400);
+/* 下書き（進行中のチェック）は店舗ごとに別々のキー draft:<id> に保存する。
+   state.drafts＝進行中の下書きの一覧、state.draft＝いま開いている（直近に開いた）1件。 */
+const DRAFT_PFX="draft:";
+const kvRange=(lo,hi)=>tx("kv","readonly",s=>s.getAll(IDBKeyRange.bound(lo,hi)));
+const draftTimers=new Map();   // 下書きid → 保存待ちのタイマー
+let draftSaveWarnAt=0;
+function persistDraft(d){
+  d=d||state.draft;
+  if(!d||!state.drafts.includes(d)) return;       // 破棄・完了済みの下書きは書き戻さない
+  if(d===state.draft) d.catIndex=state.catIndex;
+  d.updatedAt=Date.now();
+  clearTimeout(draftTimers.get(d.id));
+  draftTimers.set(d.id,setTimeout(()=>{ draftTimers.delete(d.id); saveDraftNow(d); },400));
+}
+async function saveDraftNow(d){
+  if(!d||!state.drafts.includes(d)) return false;
+  clearTimeout(draftTimers.get(d.id)); draftTimers.delete(d.id);
+  try{ await kvSet(DRAFT_PFX+d.id,d); if(d===state.draft) markSaved(); return true; }
+  catch(e){
+    if(Date.now()-draftSaveWarnAt>20000){ draftSaveWarnAt=Date.now(); showToast("⚠ この端末に保存できませんでした（容量不足の可能性）。写真を減らすか、不要な下書きを破棄してください"); }
+    return false;
+  }
+}
+// 保存待ちの下書きをすぐ書き出す（店舗の切替・画面を閉じる前など）
+async function flushDrafts(){
+  const pend=[...draftTimers.keys()];
+  for(const id of pend){ const d=state.drafts.find(x=>x.id===id); if(d) await saveDraftNow(d); else { clearTimeout(draftTimers.get(id)); draftTimers.delete(id); } }
+}
+async function removeDraft(d){
+  if(!d) return;
+  clearTimeout(draftTimers.get(d.id)); draftTimers.delete(d.id);
+  state.drafts=state.drafts.filter(x=>x!==d);
+  if(state.draft===d) state.draft=null;
+  await kvDel(DRAFT_PFX+d.id).catch(()=>{});
+}
+function normalizeDraft(d){
+  if(!d||typeof d!=="object"||typeof d.id!=="string"||!d.id||typeof d.store!=="string") return null;
+  if(!d.answers||typeof d.answers!=="object"||Array.isArray(d.answers)) d.answers={};
+  if(!d.pdca||typeof d.pdca!=="object") d.pdca={};
+  if(!Array.isArray(d.pdca.homework)) d.pdca.homework=[];
+  if(!d.pdca.interview||typeof d.pdca.interview!=="object") d.pdca.interview={};
+  if(typeof d.inspector!=="string") d.inspector="";
+  if(typeof d.date!=="string"||!d.date) d.date=todayStr();
+  d.updatedAt=Number(d.updatedAt)||Date.parse(d.startedAt)||0;
+  d.catIndex=Math.max(0,Math.min(REPORT_CAT,Math.floor(Number(d.catIndex))||0));
+  return d;
+}
+// 端末に保存されている下書きを全部読み込む（旧版の1件だけの下書き "draft" もここで移行する）
+async function loadDrafts(){
+  const out=[];
+  const rows=(await kvRange(DRAFT_PFX,DRAFT_PFX+"\uffff").catch(()=>[]))||[];
+  for(const r of rows){ const d=normalizeDraft(r); if(d&&!out.some(x=>x.id===d.id)) out.push(d); }
+  const legacy=await kvGet("draft").catch(()=>null);
+  if(legacy){
+    const d=normalizeDraft(legacy);
+    if(d&&!out.some(x=>x.id===d.id)){
+      try{ await kvSet(DRAFT_PFX+d.id,d); out.push(d); await kvDel("draft"); }catch(e){ out.push(d); }
+    }else{ await kvDel("draft").catch(()=>{}); }
+  }
+  return out.sort((a,b)=>b.updatedAt-a.updatedAt);
 }
 function markSaved(){
   const el=document.getElementById("save-state");
@@ -747,6 +802,7 @@ function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMo
 function fmtDate(s){if(!s)return "—";const [y,m,d]=s.split("-");return `${y}/${+m}/${+d}`;}
 function findItem(id){return ALL_ITEMS.find(i=>i.id===id);}
 function ans(id){if(!state.draft.answers[id])state.draft.answers[id]={photos:[],evals:{},fields:{}};return state.draft.answers[id];}
+const EMPTY_ANS=Object.freeze({photos:Object.freeze([]),evals:Object.freeze({}),fields:Object.freeze({})});
 function hasIssueEval(a,itemId){
   const item=findItem(itemId);
   return item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o&&o.issue;});
@@ -2122,7 +2178,7 @@ function itemVisibleFor(item,store,brand){return !item.storeMatch||brand===item.
 function draftItems(d){return ALL_ITEMS.filter(it=>itemVisibleFor(it,d&&d.store,d&&d.brand));}
 function progressRatio(draft){
   const list=draftItems(draft);
-  const done=list.filter(it=>itemComplete(it,ans(it.id))).length;
+  const done=list.filter(it=>itemComplete(it,(draft.answers&&draft.answers[it.id])||EMPTY_ANS)).length;
   return list.length?done/list.length:0;
 }
 function collectMissing(){
@@ -2175,7 +2231,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.53.0";
+const APP_VERSION="v7.54.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2192,7 +2248,8 @@ const KNOWN_MODELS=[
 ];
 let aiModels={}, lastAIError="", lastAIErrors={};
 const AI_MODEL_ROTATION=["gemini-3.1-flash-lite","gemini-3.5-flash"];
-const aiBusy=new Set(), aiErr=new Map();
+const aiBusy=new Set(), aiErr=new Map();   // キーは「下書きid:項目id」（店舗を切り替えても取り違えない）
+const aiKey=itemId=>(state.draft?state.draft.id:"")+":"+itemId;
 function aiConfigured(){return !!geminiKey()||!!(state.fb&&state.fb.config&&state.fb.config.apiKey);}
 function parseFirebaseConfig(text){
   text=String(text||"").trim(); if(!text) return null;
@@ -2335,9 +2392,11 @@ function shrinkForAI(dataUrl){
     img.src=dataUrl;
   });
 }
-let aiGen=0;  // まとめて判定の後に古い単体判定が上書きしないようにする世代番号
+const aiGens=new Map();  // 下書きid → まとめて判定の世代番号（後から実行したまとめ判定を、古い単体判定が上書きしないように）
+const aiGenOf=d=>aiGens.get(d.id)||0;
 // 写真のある全項目を、API呼び出し1回でまとめて判定する（利用制限の節約）
-let batchBusy=false, batchErr="";
+const batchBusyIds=new Set(), batchErrs=new Map();   // 下書きidごと
+const isBatchBusy=()=>!!state.draft&&batchBusyIds.has(state.draft.id);
 async function judgeAllItems(){
   const d=state.draft; if(!d) return;
   const targets=ALL_ITEMS.filter(it=>{const a=d.answers[it.id];return a&&(a.photos||[]).length&&it.groups.length;});
@@ -2356,9 +2415,9 @@ async function autoJudgeCategory(ci){
   if(targets.length) judgeBatch(targets,true);
 }
 async function judgeBatch(targets,silent){
-  const d=state.draft; if(!d||batchBusy) return;
-  aiGen++;
-  batchBusy=true; batchErr=""; if(!silent) render();
+  const d=state.draft; if(!d||batchBusyIds.has(d.id)) return;
+  aiGens.set(d.id,aiGenOf(d)+1);
+  batchBusyIds.add(d.id); batchErrs.delete(d.id); if(!silent) render();
   try{
     const parts=["あなたは飲食店の店舗巡回チェックの検査員です。以下の各チェック項目について、直後に添付された写真を確認して判定してください。"];
     for(const it of targets){
@@ -2375,14 +2434,14 @@ async function judgeBatch(targets,silent){
       const r=out.items[it.id];
       if(r&&r.judgments){ d.answers[it.id].ai={suggest:r.judgments,reason:String(r.reason||""),conf:String(r.confidence||""),at:todayStr()}; n++; }
     }
-    persistDraft();
-    showToast(`AI判定が完了しました（${n}項目・API呼び出し1回）`);
-    if(silent&&state.view==="check"){ for(const it of targets) refreshCard(it.id); }
+    persistDraft(d);
+    showToast(`${d.store}：AI判定が完了しました（${n}項目・API呼び出し1回）`);
+    if(silent&&state.view==="check"&&state.draft===d){ for(const it of targets) refreshCard(it.id); }
   }catch(err){
-    batchErr=friendlyAIError(err);
-    if(silent) showToast("AI判定を保留しました："+batchErr.slice(0,40));
+    const msg=friendlyAIError(err); batchErrs.set(d.id,msg);
+    if(silent) showToast("AI判定を保留しました："+msg.slice(0,40));
   }
-  finally{ batchBusy=false; if(!silent) render(); }
+  finally{ batchBusyIds.delete(d.id); if(!silent&&state.view==="check"&&state.draft===d) render(); }
 }
 async function judgeItem(itemId){
   if(!state.draft) return;
@@ -2390,24 +2449,26 @@ async function judgeItem(itemId){
   const a=ans(itemId);
   if(!a.photos.length){alert("先に写真を追加してください。");return;}
   if(!aiConfigured()){alert("管理画面の「写真AI自動判定の設定」でFirebase設定を登録すると利用できます。");return;}
-  if(aiBusy.has(itemId)) return;
-  aiBusy.add(itemId); aiErr.delete(itemId); refreshCard(itemId);
-  const gen=aiGen;
+  const d=state.draft, key=aiKey(itemId);
+  if(aiBusy.has(key)) return;
+  aiBusy.add(key); aiErr.delete(key); refreshCard(itemId);
+  const gen=aiGenOf(d);
   try{
     const parts=[];
     for(const p of a.photos){ parts.push({inlineData:{mimeType:"image/jpeg",data:await shrinkForAI(p)}}); }
     const out=parseAIJson(await aiGenerate([...parts,buildJudgePrompt(item)]));
     if(!out||!out.judgments) throw new Error("AIの応答を解釈できませんでした。もう一度お試しください。");
-    if(gen!==aiGen) return; // まとめて判定が後から実行された場合は、こちらの結果は破棄
+    if(gen!==aiGenOf(d)) return; // まとめて判定が後から実行された場合は、こちらの結果は破棄
     a.ai={suggest:out.judgments,reason:out.reason||"",conf:out.confidence||"",at:todayStr()};
-    persistDraft();
+    persistDraft(d);
   }catch(err){
-    aiErr.set(itemId,friendlyAIError(err));
+    aiErr.set(key,friendlyAIError(err));
   }finally{
-    aiBusy.delete(itemId); refreshCard(itemId);
+    aiBusy.delete(key); if(state.draft===d&&state.view==="check") refreshCard(itemId);
   }
 }
-let ivBusy=false, ivErr="";
+const ivBusyIds=new Set(), ivErrs=new Map();   // 下書きidごと
+const isIvBusy=()=>!!state.draft&&ivBusyIds.has(state.draft.id);
 async function analyzeInterview(store,iv){
   const mx=storeMetricsLine(store);
   const qs=INTERVIEW_QS.map(q=>({q,t:String(iv[q.key]||"").trim()}));
@@ -2434,13 +2495,14 @@ async function judgeInterview(){
   const iv=state.draft.pdca.interview||(state.draft.pdca.interview={});
   if(!INTERVIEW_QS.some(q=>String(iv[q.key]||"").trim())){alert("面談内容が未入力です。5つの質問のいずれかに入力してから実行してください。");return;}
   if(!aiConfigured()){alert("AI設定が見つかりません。管理画面を確認してください。");return;}
-  if(ivBusy) return;
-  ivBusy=true; ivErr=""; render();
+  const d=state.draft;
+  if(ivBusyIds.has(d.id)) return;
+  ivBusyIds.add(d.id); ivErrs.delete(d.id); render();
   try{
-    iv.ai=await analyzeInterview(state.draft.store,iv);
-    persistDraft();
-  }catch(err){ ivErr=friendlyAIError(err); }
-  finally{ ivBusy=false; render(); }
+    iv.ai=await analyzeInterview(d.store,iv);
+    persistDraft(d);
+  }catch(err){ ivErrs.set(d.id,friendlyAIError(err)); }
+  finally{ ivBusyIds.delete(d.id); if(state.draft===d&&state.view==="check") render(); }
 }
 // 保存済み報告書の面談を後からAI分析し、記録（端末・クラウド）に保存する
 let repIvBusy=false;
@@ -2522,7 +2584,7 @@ function riskBadge(ai){
 }
 function ivAiBox(iv){
   if(!AI_ENABLED) return "";
-  if(ivBusy) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが面談内容を分析しています…</div>`;
+  if(isIvBusy()) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが面談内容を分析しています…</div>`;
   if(iv.ai){
     return `<div class="ai-box">
       <div class="ttl">AI要約・リスク判定（補助）</div>
@@ -2534,7 +2596,7 @@ function ivAiBox(iv){
     </div>`;
   }
   return `<div class="ai-box">
-    ${ivErr?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(ivErr)}</div>`:""}
+    ${state.draft&&ivErrs.get(state.draft.id)?`<div class="rsn" style="color:var(--bad);margin-bottom:6px">${esc(ivErrs.get(state.draft.id))}</div>`:""}
     <button class="chip" id="iv-ai">AIで面談内容を要約・リスク判定</button>
     <div class="rsn">チェックを完了して保存すると、面談の回答をAIが自動で要約し、リスクを点数化します（補助）。ここで先に実行もできます。</div>
   </div>`;
@@ -2563,8 +2625,8 @@ function applyAISuggestion(itemId){
 function aiSection(item,a){
   if(!AI_ENABLED) return "";
   if(!a.photos.length||!item.groups.length) return "";
-  if(aiBusy.has(item.id)) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが写真を判定しています…</div>`;
-  const err=aiErr.get(item.id);
+  if(aiBusy.has(aiKey(item.id))) return `<div class="ai-box"><span class="spin" aria-hidden="true"></span>AIが写真を判定しています…</div>`;
+  const err=aiErr.get(aiKey(item.id));
   if(a.ai&&a.ai.suggest){
     const rows=item.groups.map(g=>{
       const v=a.ai.suggest[g.key];
@@ -2686,6 +2748,35 @@ function dashboardHtml(){
     <div class="tile"><div class="tl">面談リスク店舗</div><div class="tv">${risk}<small>店</small></div>${stateHtml(risk)}</div>
   </div>`;
 }
+// 進行中（下書き）のチェック一覧。店舗ごとに途中保存され、いくつでも並行して進められる
+function draftsCardHtml(){
+  const list=[...state.drafts].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  if(!list.length) return "";
+  const fmtAt=t=>{ if(!t) return ""; const x=new Date(t); return `${x.getMonth()+1}/${x.getDate()} ${String(x.getHours()).padStart(2,"0")}:${String(x.getMinutes()).padStart(2,"0")}`; };
+  return `<div class="card" id="drafts-card" style="border-color:var(--accent)">
+    <h3>進行中のチェック（${list.length}件） <span class="badge todo">下書き</span></h3>
+    <p class="desc">店舗ごとに途中保存されています。別の店舗を始めても消えません。いくつでも並行して進められます。</p>
+    ${list.map(d=>{
+      const items=draftItems(d), pct=Math.round(progressRatio(d)*100);
+      const done=items.filter(it=>itemComplete(it,(d.answers&&d.answers[it.id])||EMPTY_ANS)).length;
+      return `<div class="hw-item draft-row" data-draft-id="${esc(d.id)}">
+        <div><b>${d.brand?`<span class="hw-meta">${esc(d.brand)}</span> `:""}${esc(d.store)}</b> <span class="badge todo">${pct}%</span>${state.draft===d?` <span class="badge done">直前に開いていた</span>`:""}</div>
+        <div class="hw-meta">${fmtDate(d.date)}／${esc(d.inspector)}／${done}/${items.length}項目${d.updatedAt?`／最終保存 ${fmtAt(d.updatedAt)}`:""}</div>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button class="btn" data-draft-resume="${esc(d.id)}">続きから再開</button>
+          <button class="btn ghost" data-draft-del="${esc(d.id)}">破棄</button>
+        </div>
+      </div>`;}).join("")}
+  </div>`;
+}
+// 下書きを開く（いま開いている下書きは先に保存してから切り替える）
+async function openDraft(d){
+  if(!d||!state.drafts.includes(d)) return;
+  if(state.draft&&state.draft!==d) await saveDraftNow(state.draft);
+  state.draft=d;
+  state.catIndex=Math.max(0,Math.min(REPORT_CAT,Math.floor(Number(d.catIndex))||0));
+  state.view="check"; render(); scrollTo(0,0);
+}
 function viewHome(){
   const stores=[...new Set(state.inspections.map(i=>i.store))];
   const past=[...state.inspections].sort((a,b)=>(b.date+(b.completedAt||"")).localeCompare(a.date+(a.completedAt||"")));
@@ -2704,15 +2795,7 @@ function viewHome(){
   </div>
   ${dashboardHtml()}
   <div class="wrap">
-    ${state.draft?`
-    <div class="card" style="border-color:var(--accent)">
-      <h3>進行中のチェックがあります <span class="badge todo">下書き</span></h3>
-      <p class="desc">${esc(state.draft.store)}／${fmtDate(state.draft.date)}／${esc(state.draft.inspector)}</p>
-      <div style="display:flex;gap:10px;margin-top:12px">
-        <button class="btn" id="resume">続きから再開</button>
-        <button class="btn ghost" id="discard">破棄</button>
-      </div>
-    </div>`:""}
+    ${draftsCardHtml()}
     <div class="card">
       <h3>新しいチェックを開始</h3>
       <div class="field"><label>屋号（ブランド）</label>
@@ -3213,23 +3296,32 @@ function bindHome(){
   $("#start")?.addEventListener("click",async()=>{
     const store=storeIn.value.trim(), inspector=$("#f-inspector").value.trim(), date=$("#f-date").value||todayStr();
     if(!store||!inspector){alert("店舗名と確認者を入力してください。");return;}
-    if(state.draft && !confirm("進行中の下書きを破棄して新しく開始しますか？")) return;
+    // 同じ店舗の進行中がすでにあれば、続きを再開するかどうかを確認（別の店舗の下書きはそのまま残る）
+    const same=state.drafts.find(d=>d.store===store);
+    if(same&&!confirm(`「${store}」はすでに進行中のチェックがあります。\n\nOK＝新しく別のチェックを開始（進行中のものも残ります）\nキャンセル＝やめて、進行中の一覧から続きを再開`)) return;
     const last=lastInspectionFor(store);
-    state.draft={
+    const nd={
       id:uuid(), store, inspector, date, brand:state.startBrand||"",
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
+      catIndex:0, updatedAt:Date.now(),
     };
-    persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+    if(state.draft) await saveDraftNow(state.draft);
+    state.drafts.push(nd); state.draft=nd;
+    await saveDraftNow(nd);
+    state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
     const alerts=storeAlerts(store);
     if(alerts.length){ showToast(`⚠ 3点以下が${ALERT_COUNT}回以上の項目が${alerts.length}件あります`); beep(); }
   });
-  $("#resume")?.addEventListener("click",()=>{state.view="check";render();scrollTo(0,0);});
-  $("#discard")?.addEventListener("click",async()=>{
-    if(!confirm("下書きを破棄しますか？入力内容と写真は失われます。"))return;
-    state.draft=null; await kvDel("draft"); render();
-  });
+  document.querySelectorAll("[data-draft-resume]").forEach(b=>b.addEventListener("click",()=>{
+    openDraft(state.drafts.find(d=>d.id===b.dataset.draftResume));
+  }));
+  document.querySelectorAll("[data-draft-del]").forEach(b=>b.addEventListener("click",async()=>{
+    const d=state.drafts.find(x=>x.id===b.dataset.draftDel); if(!d) return;
+    if(!confirm(`「${d.store}」の進行中のチェックを破棄しますか？入力内容と写真は失われます。`)) return;
+    await removeDraft(d); render();
+  }));
   document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",async()=>{
     state.reportId=b.dataset.open; state.view="report"; render(); scrollTo(0,0);
     const insp=state.inspections.find(i=>i.id===state.reportId);
@@ -3635,6 +3727,8 @@ function viewCheck(){
       <span class="save-state" id="save-state">入力内容はこの端末に自動保存されます</span>
       <button class="save-btn" id="save-now">保存して中断</button>
     </div>
+    ${state.drafts.length>1?`<div class="save-row"><label for="draft-switch" class="save-state" style="white-space:nowrap">進行中 ${state.drafts.length}店舗</label>
+      <select id="draft-switch" aria-label="進行中の店舗を切り替える" style="flex:1;min-width:0;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit">${state.drafts.map(x=>`<option value="${esc(x.id)}"${x===d?" selected":""}>${esc((x.brand?x.brand+" ":"")+x.store)}（${Math.round(progressRatio(x)*100)}%）</option>`).join("")}</select></div>`:""}
     <nav class="cats">${CAT_NAMES.map((n,i)=>`<button class="cat-chip${i===state.catIndex?" on":""}" data-cat="${i}">${i+1}. ${esc(n)}${catDoneMark(i)}</button>`).join("")}</nav>
   </header>
   <div class="wrap">${body}</div>
@@ -3744,8 +3838,8 @@ function finishView(){
   <div class="card no-print">
     <h3>まとめてAI判定（補助）</h3>
     <p class="desc">写真のある全項目を、API呼び出し<b>1回</b>でまとめてAI判定します。1項目ずつ判定するより利用制限にかかりにくくなります。<b>AI判定はあくまで補助なので、判定していなくても提出できます。</b></p>
-    <button class="btn sub" id="ai-batch" ${batchBusy?"disabled":""}>${batchBusy?"AIが判定中…":"写真のある項目をまとめてAI判定"}</button>
-    ${batchErr?`<p class="note" style="color:var(--bad)">${esc(batchErr)}</p>`:""}
+    <button class="btn sub" id="ai-batch" ${isBatchBusy()?"disabled":""}>${isBatchBusy()?"AIが判定中…":"写真のある項目をまとめてAI判定"}</button>
+    ${batchErrs.get(state.draft.id)?`<p class="note" style="color:var(--bad)">${esc(batchErrs.get(state.draft.id))}</p>`:""}
   </div>`:"";
   if(missing.length){
     return `
@@ -3980,14 +4074,13 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(t.id==="save-now"){
-    clearTimeout(saveTimer);
-    try{ await kvSet("draft",state.draft); }catch(e){}
+    if(state.draft) await saveDraftNow(state.draft);
     state.view="home"; render(); scrollTo(0,0);
-    showToast("保存しました。「続きから再開」でいつでも再開できます。");
+    showToast("保存しました。ほかの店舗を始めても、「進行中のチェック」からいつでも再開できます。");
     return;
   }
-  if(t.dataset.cat!=null){const prev=state.catIndex;state.catIndex=+t.dataset.cat;render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
-  if(t.dataset.nav){const prev=state.catIndex;state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
+  if(t.dataset.cat!=null){const prev=state.catIndex;state.catIndex=+t.dataset.cat;persistDraft();render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
+  if(t.dataset.nav){const prev=state.catIndex;state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));persistDraft();render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
   if(t.dataset.eval){
     const [id,gk,...v]=t.dataset.eval.split(":");
     const a=ans(id); const val=v.join(":");
@@ -4060,7 +4153,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
   if(t.dataset.jump){
     const [ci,id]=t.dataset.jump.split(":");
-    state.catIndex=+ci; render();
+    state.catIndex=+ci; persistDraft(); render();
     requestAnimationFrame(()=>document.getElementById("card-"+id)?.scrollIntoView({behavior:"smooth",block:"start"}));
     return;
   }
@@ -4069,10 +4162,11 @@ document.addEventListener("click",async e=>{
     const missing=collectMissing();
     if(!partial&&missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     if(partial&&!confirm("入力途中のまま「一時保存」として提出します。続きは報告書画面の「続きを入力する」から再開できます。よろしいですか？")) return;
-    const insp=buildInspection(state.draft,false,partial);
+    const fd=state.draft;
+    const insp=buildInspection(fd,false,partial);
     await putInspection(insp).catch(()=>{});
     await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});
-    await kvDel("draft");
+    await removeDraft(fd);            // この店舗の下書きだけを消す（ほかの店舗の下書きは残る）
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
     render(); scrollTo(0,0);
@@ -4084,20 +4178,23 @@ document.addEventListener("click",async e=>{
   if(t.id==="rep-resume"){
     const insp=state.inspections.find(i=>i.id===state.reportId);
     if(!insp) return;
-    if(state.draft&&state.draft.id!==insp.id&&!confirm("進行中の別の下書きがあります。破棄してこの報告書の続きを入力しますか？")) return;
+    const existing=state.drafts.find(d=>d.id===insp.id);
+    if(existing){ await openDraft(existing); return; }
     await hydratePhotos(insp).catch(()=>{});
     const lost=Object.values(insp.answers||{}).some(a=>(a.photoCount||0)>0&&!(a.photos||[]).filter(Boolean).length);
     if(lost&&!confirm("一部の写真をクラウドから読み込めませんでした。このまま続きを入力して提出すると、その写真が消える可能性があります。通信のよい場所でやり直すのがおすすめです。続けますか？")) return;
-    state.draft={
+    const rd=normalizeDraft({
       id:insp.id, store:insp.store, inspector:insp.inspector, date:insp.date, brand:insp.brand||"",
       startedAt:insp.startedAt||insp.enteredAt||new Date().toISOString(),
       answers:JSON.parse(JSON.stringify(insp.answers||{})),
       pdca:JSON.parse(JSON.stringify(insp.pdca||{homework:[],interview:{}})),
       prevDate:insp.prevDate||"",
-    };
-    if(!Array.isArray(state.draft.pdca.homework)) state.draft.pdca.homework=[];
-    if(!state.draft.pdca.interview) state.draft.pdca.interview={};
-    persistDraft(); state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+      catIndex:0, updatedAt:Date.now(),
+    });
+    if(state.draft) await saveDraftNow(state.draft);
+    state.drafts.push(rd); state.draft=rd;
+    await saveDraftNow(rd);
+    state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
     showToast("一時保存した内容を読み込みました。続きを入力してください");
     return;
   }
@@ -4111,6 +4208,7 @@ document.addEventListener("keydown",e=>{
 });
 document.addEventListener("change",async e=>{
   const t=e.target;
+  if(t.id==="draft-switch"){ await openDraft(state.drafts.find(d=>d.id===t.value)); return; }
   if(t.dataset.photo!=null){
     const files=Array.from(t.files||[]); if(!files.length) return;
     const id=t.dataset.photo; const a=ans(id);
@@ -4148,8 +4246,7 @@ document.addEventListener("input",e=>{
       if(ok!==ACCESS_CODE_HASH) state.locked=true;
     }
     state.inspections=(await allInspections())||[];
-    const draft=await kvGet("draft");
-    if(draft) state.draft=draft;
+    state.drafts=await loadDrafts();          // 店舗ごとの進行中チェック（旧版の1件だけの下書きも引き継ぐ）
     state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
     deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
@@ -4190,7 +4287,8 @@ document.addEventListener("input",e=>{
   // 通信復帰・画面再表示のたびに自動再送
   window.addEventListener("online",()=>{updateSyncBar("オンラインに戻りました");syncOutbox();});
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
-  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); } });
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); } else flushDrafts(); });
+  window.addEventListener("pagehide",()=>{ flushDrafts(); });
   syncOutbox(); // アプリ起動時の自動再送
   setTimeout(()=>autoIvEnqueue(autoIvPending(5)),12000); // 面談の未判定分を自動でAI判定（最近の記録・最大5件）
   // 更新の見張り：60秒ごと＋画面再表示時に新バージョンを確認

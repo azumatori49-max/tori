@@ -72,8 +72,8 @@ input[type=number]{font-variant-numeric:tabular-nums}
 .save-btn{font-size:12px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 14px;background:var(--card);white-space:nowrap}
 #toast{
   position:fixed;bottom:96px;left:50%;transform:translateX(-50%);z-index:60;
-  background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;
-  font-size:13px;max-width:90vw;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;
+  background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:18px;
+  font-size:13px;width:max-content;max-width:90vw;line-height:1.5;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none;
 }
 #toast.show{opacity:1}
 .progress{height:4px;background:var(--line);border-radius:2px;margin:10px 0 0;overflow:hidden}
@@ -704,7 +704,8 @@ function openDB(){return new Promise((res,rej)=>{
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
 function tx(store,mode,fn){return new Promise((res,rej)=>{
   const t=db.transaction(store,mode),s=t.objectStore(store),q=fn(s);
-  t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error);});}
+  t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error);
+  t.onabort=()=>rej(t.error||new Error("transaction aborted"));});}   // 容量超過などで中止された時に待ち続けない
 const kvGet=k=>tx("kv","readonly",s=>s.get(k));
 const kvSet=(k,v)=>tx("kv","readwrite",s=>s.put(v,k));
 const kvDel=k=>tx("kv","readwrite",s=>s.delete(k));
@@ -725,32 +726,38 @@ function uuid(){
 const DRAFT_PFX="draft:";
 const kvRange=(lo,hi)=>tx("kv","readonly",s=>s.getAll(IDBKeyRange.bound(lo,hi)));
 const draftTimers=new Map();   // 下書きid → 保存待ちのタイマー
+const lastSaved=new Map();    // 下書きid → 端末に書いた時点の印（変わっていなければ書き直さない）
+const draftStamp=d=>d.updatedAt+":"+d.catIndex;
 let draftSaveWarnAt=0;
 function persistDraft(d){
   d=d||state.draft;
   if(!d||!state.drafts.includes(d)) return;       // 破棄・完了済みの下書きは書き戻さない
-  if(d===state.draft) d.catIndex=state.catIndex;
   d.updatedAt=Date.now();
   clearTimeout(draftTimers.get(d.id));
   draftTimers.set(d.id,setTimeout(()=>{ draftTimers.delete(d.id); saveDraftNow(d); },400));
 }
-async function saveDraftNow(d){
+// 端末に保存する。変更が無ければ書き込まない（force=true なら必ず書く）。成功したら true
+async function saveDraftNow(d,force){
   if(!d||!state.drafts.includes(d)) return false;
   clearTimeout(draftTimers.get(d.id)); draftTimers.delete(d.id);
-  try{ await kvSet(DRAFT_PFX+d.id,d); if(d===state.draft) markSaved(); return true; }
+  if(d===state.draft) d.catIndex=state.catIndex;
+  const stamp=draftStamp(d);
+  if(!force&&lastSaved.get(d.id)===stamp) return true;
+  try{ await kvSet(DRAFT_PFX+d.id,d); lastSaved.set(d.id,stamp); if(d===state.draft) markSaved(); return true; }
   catch(e){
     if(Date.now()-draftSaveWarnAt>20000){ draftSaveWarnAt=Date.now(); showToast("⚠ この端末に保存できませんでした（容量不足の可能性）。写真を減らすか、不要な下書きを破棄してください"); }
     return false;
   }
 }
-// 保存待ちの下書きをすぐ書き出す（店舗の切替・画面を閉じる前など）
+// 保存待ちの下書きと、いま開いている下書きの画面位置をすぐ書き出す（店舗の切替・画面を閉じる・更新の前など）
 async function flushDrafts(){
   const pend=[...draftTimers.keys()];
   for(const id of pend){ const d=state.drafts.find(x=>x.id===id); if(d) await saveDraftNow(d); else { clearTimeout(draftTimers.get(id)); draftTimers.delete(id); } }
+  if(state.draft) await saveDraftNow(state.draft);
 }
 async function removeDraft(d){
   if(!d) return;
-  clearTimeout(draftTimers.get(d.id)); draftTimers.delete(d.id);
+  clearTimeout(draftTimers.get(d.id)); draftTimers.delete(d.id); lastSaved.delete(d.id);
   state.drafts=state.drafts.filter(x=>x!==d);
   if(state.draft===d) state.draft=null;
   await kvDel(DRAFT_PFX+d.id).catch(()=>{});
@@ -758,6 +765,13 @@ async function removeDraft(d){
 function normalizeDraft(d){
   if(!d||typeof d!=="object"||typeof d.id!=="string"||!d.id||typeof d.store!=="string") return null;
   if(!d.answers||typeof d.answers!=="object"||Array.isArray(d.answers)) d.answers={};
+  for(const k of Object.keys(d.answers)){      // 壊れた項目があっても画面が止まらないように整える
+    const a=d.answers[k];
+    if(!a||typeof a!=="object"||Array.isArray(a)){ delete d.answers[k]; continue; }
+    if(!Array.isArray(a.photos)) a.photos=[];
+    if(!a.evals||typeof a.evals!=="object"||Array.isArray(a.evals)) a.evals={};
+    if(!a.fields||typeof a.fields!=="object"||Array.isArray(a.fields)) a.fields={};
+  }
   if(!d.pdca||typeof d.pdca!=="object") d.pdca={};
   if(!Array.isArray(d.pdca.homework)) d.pdca.homework=[];
   if(!d.pdca.interview||typeof d.pdca.interview!=="object") d.pdca.interview={};
@@ -768,18 +782,70 @@ function normalizeDraft(d){
   return d;
 }
 // 端末に保存されている下書きを全部読み込む（旧版の1件だけの下書き "draft" もここで移行する）
-async function loadDrafts(){
+async function readDraftRows(){
+  const rows=(await kvRange(DRAFT_PFX,DRAFT_PFX+"\uffff"))||[];
   const out=[];
-  const rows=(await kvRange(DRAFT_PFX,DRAFT_PFX+"\uffff").catch(()=>[]))||[];
   for(const r of rows){ const d=normalizeDraft(r); if(d&&!out.some(x=>x.id===d.id)) out.push(d); }
+  return out;
+}
+async function loadDrafts(){
+  const out=await readDraftRows().catch(()=>[]);
   const legacy=await kvGet("draft").catch(()=>null);
   if(legacy){
     const d=normalizeDraft(legacy);
     if(d&&!out.some(x=>x.id===d.id)){
-      try{ await kvSet(DRAFT_PFX+d.id,d); out.push(d); await kvDel("draft"); }catch(e){ out.push(d); }
-    }else{ await kvDel("draft").catch(()=>{}); }
+      try{ await kvSet(DRAFT_PFX+d.id,d); }catch(e){}
+      out.push(d);
+    }
+    await kvDel("draft").catch(()=>{});
   }
+  out.forEach(d=>lastSaved.set(d.id,draftStamp(d)));
   return out.sort((a,b)=>b.updatedAt-a.updatedAt);
+}
+// 完了済みの記録と同じidの下書き（提出の直後に止まった・別画面で提出された取り残し）は不要なので消す
+async function dropFinishedDrafts(){
+  for(const d of [...state.drafts]){
+    if(state.inspections.some(i=>i.id===d.id&&i.completedAt&&!i.provisional)) await removeDraft(d);
+  }
+}
+// 別のタブ・画面で下書きが増減・更新されていたら取り込む（画面を開き直した時だけ）
+let reconciling=false;
+async function reconcileDrafts(){
+  if(reconciling||draftTimers.size||state.locked) return;
+  reconciling=true;
+  try{
+    const rows=await readDraftRows();
+    if(draftTimers.size) return;                       // 読み込み中に入力があれば、この回は見送る
+    const byId=new Map(rows.map(r=>[r.id,r]));
+    let changed=false, lostActive=false;
+    for(const d of [...state.drafts]){
+      const r=byId.get(d.id);
+      if(!r){
+        if(!lastSaved.has(d.id)) continue;             // まだ一度も書いていない（作成中）
+        state.drafts=state.drafts.filter(x=>x!==d); lastSaved.delete(d.id);
+        if(state.draft===d){ state.draft=null; lostActive=true; }
+        changed=true;
+      }else if(r.updatedAt>d.updatedAt){
+        for(const k of Object.keys(d)) delete d[k];
+        Object.assign(d,r); lastSaved.set(d.id,draftStamp(d));
+        if(state.draft===d) state.catIndex=d.catIndex;
+        changed=true;
+      }
+    }
+    for(const r of rows){
+      if(state.drafts.some(x=>x.id===r.id)) continue;
+      if(state.inspections.some(i=>i.id===r.id&&i.completedAt&&!i.provisional)) continue;
+      state.drafts.push(r); lastSaved.set(r.id,draftStamp(r)); changed=true;
+    }
+    if(!changed) return;
+    if(lostActive&&state.view==="check"){ state.view="home"; showToast("このチェックは別の画面で完了または破棄されました"); }
+    if(state.view==="check") render();
+    else if(state.view==="home"){
+      const dirty=[...document.querySelectorAll("#app input,#app textarea")].some(el=>el.value!==el.defaultValue);
+      if(!dirty) render();
+    }
+  }catch(e){ /* 取り込めなくても今の画面はそのまま使える */ }
+  finally{ reconciling=false; }
 }
 function markSaved(){
   const el=document.getElementById("save-state");
@@ -2758,10 +2824,11 @@ function draftsCardHtml(){
     <p class="desc">店舗ごとに途中保存されています。別の店舗を始めても消えません。いくつでも並行して進められます。</p>
     ${list.map(d=>{
       const items=draftItems(d), pct=Math.round(progressRatio(d)*100);
+      const iv=(d.pdca&&d.pdca.interview)||{}, ivOk=filled(iv.interviewee)&&INTERVIEW_QS.every(q=>filled(iv[q.key]));
       const done=items.filter(it=>itemComplete(it,(d.answers&&d.answers[it.id])||EMPTY_ANS)).length;
       return `<div class="hw-item draft-row" data-draft-id="${esc(d.id)}">
         <div><b>${d.brand?`<span class="hw-meta">${esc(d.brand)}</span> `:""}${esc(d.store)}</b> <span class="badge todo">${pct}%</span>${state.draft===d?` <span class="badge done">直前に開いていた</span>`:""}</div>
-        <div class="hw-meta">${fmtDate(d.date)}／${esc(d.inspector)}／${done}/${items.length}項目${d.updatedAt?`／最終保存 ${fmtAt(d.updatedAt)}`:""}</div>
+        <div class="hw-meta">${fmtDate(d.date)}／${esc(d.inspector)}／${done}/${items.length}項目／面談${ivOk?"済":"未"}${d.updatedAt?`／最終保存 ${fmtAt(d.updatedAt)}`:""}</div>
         <div style="display:flex;gap:10px;margin-top:8px">
           <button class="btn" data-draft-resume="${esc(d.id)}">続きから再開</button>
           <button class="btn ghost" data-draft-del="${esc(d.id)}">破棄</button>
@@ -2769,10 +2836,17 @@ function draftsCardHtml(){
       </div>`;}).join("")}
   </div>`;
 }
+// 店舗切替の選択肢の表示（同じ店舗名が複数あれば確認者・日付も付けて区別する）
+function draftOptLabel(x){
+  const dup=state.drafts.filter(y=>y.store===x.store&&(y.brand||"")===(x.brand||"")).length>1;
+  return `${x.brand?x.brand+" ":""}${x.store}${dup?`（${x.inspector||"—"}・${fmtDate(x.date).slice(5)}）`:""}（${Math.round(progressRatio(x)*100)}%）`;
+}
 // 下書きを開く（いま開いている下書きは先に保存してから切り替える）
+let startBusy=false;
 async function openDraft(d){
   if(!d||!state.drafts.includes(d)) return;
   if(state.draft&&state.draft!==d) await saveDraftNow(state.draft);
+  if(!state.drafts.includes(d)) return;            // 待っている間に消えた
   state.draft=d;
   state.catIndex=Math.max(0,Math.min(REPORT_CAT,Math.floor(Number(d.catIndex))||0));
   state.view="check"; render(); scrollTo(0,0);
@@ -3294,6 +3368,8 @@ function bindHome(){
   };
   storeIn?.addEventListener("input",renderPrev);
   $("#start")?.addEventListener("click",async()=>{
+    if(startBusy) return; startBusy=true;
+    try{
     const store=storeIn.value.trim(), inspector=$("#f-inspector").value.trim(), date=$("#f-date").value||todayStr();
     if(!store||!inspector){alert("店舗名と確認者を入力してください。");return;}
     // 同じ店舗の進行中がすでにあれば、続きを再開するかどうかを確認（別の店舗の下書きはそのまま残る）
@@ -3313,6 +3389,7 @@ function bindHome(){
     state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
     const alerts=storeAlerts(store);
     if(alerts.length){ showToast(`⚠ 3点以下が${ALERT_COUNT}回以上の項目が${alerts.length}件あります`); beep(); }
+    }finally{ startBusy=false; }
   });
   document.querySelectorAll("[data-draft-resume]").forEach(b=>b.addEventListener("click",()=>{
     openDraft(state.drafts.find(d=>d.id===b.dataset.draftResume));
@@ -3728,7 +3805,7 @@ function viewCheck(){
       <button class="save-btn" id="save-now">保存して中断</button>
     </div>
     ${state.drafts.length>1?`<div class="save-row"><label for="draft-switch" class="save-state" style="white-space:nowrap">進行中 ${state.drafts.length}店舗</label>
-      <select id="draft-switch" aria-label="進行中の店舗を切り替える" style="flex:1;min-width:0;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit">${state.drafts.map(x=>`<option value="${esc(x.id)}"${x===d?" selected":""}>${esc((x.brand?x.brand+" ":"")+x.store)}（${Math.round(progressRatio(x)*100)}%）</option>`).join("")}</select></div>`:""}
+      <select id="draft-switch" aria-label="進行中の店舗を切り替える" style="flex:1;min-width:0;padding:6px 10px">${state.drafts.map(x=>`<option value="${esc(x.id)}"${x===d?" selected":""}>${esc(draftOptLabel(x))}</option>`).join("")}</select></div>`:""}
     <nav class="cats">${CAT_NAMES.map((n,i)=>`<button class="cat-chip${i===state.catIndex?" on":""}" data-cat="${i}">${i+1}. ${esc(n)}${catDoneMark(i)}</button>`).join("")}</nav>
   </header>
   <div class="wrap">${body}</div>
@@ -3851,6 +3928,7 @@ function finishView(){
     <div class="card no-print">
       <h3>一時保存して提出</h3>
       <p class="desc">未入力の項目があっても、いったん提出してクラウドに保存できます（AI判定は不要）。続きは報告書画面の「続きを入力する」からいつでも再開でき、完了するまでランキング・推移には集計されません。</p>
+      <p class="desc">※あとで続けるだけなら、画面上部の「保存して中断」で十分です（提出はされません）。</p>
       <button class="btn sub" id="finalize-partial">入力途中のまま一時保存して提出</button>
     </div>
     ${reportBody(previewInspection(),true)}`;
@@ -3990,6 +4068,7 @@ function refreshCard(itemId){
 }
 function refreshHeader(){
   const d=state.draft; if(!d) return;
+  const sw=$("#draft-switch"); if(sw&&sw.selectedOptions[0]) sw.selectedOptions[0].textContent=draftOptLabel(d);
   const bar=$(".progress i"); if(bar) bar.style.width=Math.round(progressRatio(d)*100)+"%";
   const meta=$(".hd .meta");
   if(meta){const list=draftItems(d);const done=list.filter(it=>itemComplete(it,ans(it.id))).length;
@@ -4029,7 +4108,7 @@ document.addEventListener("click",async e=>{
     document.querySelectorAll("[data-brandsel]").forEach(b=>b.classList.toggle("on-good",b.dataset.brandsel===state.startBrand));
     return;
   }
-  if(t.id==="upd-go"){location.reload();return;}
+  if(t.id==="upd-go"){ await flushDrafts().catch(()=>{}); location.reload(); return; }
   if(t.id==="upd-close"){document.getElementById("upd-bar")?.remove();return;}
   if(t.id==="rank-prev"||t.id==="rank-next"){
     const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
@@ -4074,13 +4153,16 @@ document.addEventListener("click",async e=>{
     return;
   }
   if(t.id==="save-now"){
-    if(state.draft) await saveDraftNow(state.draft);
+    if(state.draft&&!(await saveDraftNow(state.draft,true))){
+      alert("この端末に保存できませんでした（容量不足の可能性）。入力内容は画面に残してあります。写真を減らすか、不要な下書きを破棄してから、もう一度お試しください。");
+      return;
+    }
     state.view="home"; render(); scrollTo(0,0);
-    showToast("保存しました。ほかの店舗を始めても、「進行中のチェック」からいつでも再開できます。");
+    showToast("保存しました。「進行中のチェック」からいつでも再開できます。");
     return;
   }
-  if(t.dataset.cat!=null){const prev=state.catIndex;state.catIndex=+t.dataset.cat;persistDraft();render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
-  if(t.dataset.nav){const prev=state.catIndex;state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));persistDraft();render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
+  if(t.dataset.cat!=null){const prev=state.catIndex;state.catIndex=+t.dataset.cat;render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
+  if(t.dataset.nav){const prev=state.catIndex;state.catIndex=Math.max(0,Math.min(REPORT_CAT,state.catIndex+ +t.dataset.nav));render();scrollTo(0,0);if(prev!==state.catIndex)autoJudgeCategory(prev);return;}
   if(t.dataset.eval){
     const [id,gk,...v]=t.dataset.eval.split(":");
     const a=ans(id); const val=v.join(":");
@@ -4153,7 +4235,7 @@ document.addEventListener("click",async e=>{
   if(t.dataset.aiapply){applyAISuggestion(t.dataset.aiapply);return;}
   if(t.dataset.jump){
     const [ci,id]=t.dataset.jump.split(":");
-    state.catIndex=+ci; persistDraft(); render();
+    state.catIndex=+ci; render();
     requestAnimationFrame(()=>document.getElementById("card-"+id)?.scrollIntoView({behavior:"smooth",block:"start"}));
     return;
   }
@@ -4162,10 +4244,20 @@ document.addEventListener("click",async e=>{
     const missing=collectMissing();
     if(!partial&&missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     if(partial&&!confirm("入力途中のまま「一時保存」として提出します。続きは報告書画面の「続きを入力する」から再開できます。よろしいですか？")) return;
-    const fd=state.draft;
+    const fd=state.draft; if(!fd) return;
+    // すでに完了・提出済みの記録と同じidの下書き（別の画面で提出した取り残し）は、提出済みの記録を上書きしない
+    const prevRec=await getInspection(fd.id).catch(()=>null);
+    if(prevRec&&prevRec.completedAt&&!prevRec.provisional){
+      alert("この店舗のチェックは、すでに完了・提出済みです（別の画面で提出された可能性があります）。この下書きは破棄します。");
+      await removeDraft(fd); state.view="home"; render(); scrollTo(0,0); return;
+    }
     const insp=buildInspection(fd,false,partial);
-    await putInspection(insp).catch(()=>{});
-    await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).catch(()=>{});
+    const saved=await putInspection(insp).then(()=>true,()=>false);
+    const queued=saved&&await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).then(()=>true,()=>false);
+    if(!saved||!queued){      // 端末に記録できていないのに下書きを消さない
+      alert("この端末に保存できませんでした（容量不足の可能性）。入力内容は下書きに残してあります。写真を減らすか、不要な下書きを破棄してから、もう一度お試しください。");
+      return;
+    }
     await removeDraft(fd);            // この店舗の下書きだけを消す（ほかの店舗の下書きは残る）
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
     state.draft=null; state.reportId=insp.id; state.view="report";
@@ -4181,6 +4273,8 @@ document.addEventListener("click",async e=>{
     const existing=state.drafts.find(d=>d.id===insp.id);
     if(existing){ await openDraft(existing); return; }
     await hydratePhotos(insp).catch(()=>{});
+    const again=state.drafts.find(d=>d.id===insp.id);   // 待っている間にもう一度押されていたら、重ねて作らない
+    if(again){ await openDraft(again); return; }
     const lost=Object.values(insp.answers||{}).some(a=>(a.photoCount||0)>0&&!(a.photos||[]).filter(Boolean).length);
     if(lost&&!confirm("一部の写真をクラウドから読み込めませんでした。このまま続きを入力して提出すると、その写真が消える可能性があります。通信のよい場所でやり直すのがおすすめです。続けますか？")) return;
     const rd=normalizeDraft({
@@ -4211,13 +4305,13 @@ document.addEventListener("change",async e=>{
   if(t.id==="draft-switch"){ await openDraft(state.drafts.find(d=>d.id===t.value)); return; }
   if(t.dataset.photo!=null){
     const files=Array.from(t.files||[]); if(!files.length) return;
-    const id=t.dataset.photo; const a=ans(id);
+    const id=t.dataset.photo, d=state.draft, a=ans(id);   // 圧縮の待ち中に店舗を切り替えても、元の店舗に保存する
     let failed=0;
     for(const file of files){
       if(a.photos.length>=4) break;
       try{ a.photos.push(await compressPhoto(file)); }catch(err){ failed++; }
     }
-    persistDraft(); refreshCard(id);
+    persistDraft(d); if(state.draft===d&&state.view==="check") refreshCard(id);
     if(failed) alert("一部の写真の読み込みに失敗しました。もう一度お試しください。");
     return;
   }
@@ -4247,6 +4341,7 @@ document.addEventListener("input",e=>{
     }
     state.inspections=(await allInspections())||[];
     state.drafts=await loadDrafts();          // 店舗ごとの進行中チェック（旧版の1件だけの下書きも引き継ぐ）
+    await dropFinishedDrafts();
     state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
     deviceMcpUrl=(await kvGet("mcpUrl").catch(()=>null))||null;
@@ -4287,7 +4382,7 @@ document.addEventListener("input",e=>{
   // 通信復帰・画面再表示のたびに自動再送
   window.addEventListener("online",()=>{updateSyncBar("オンラインに戻りました");syncOutbox();});
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
-  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); } else flushDrafts(); });
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); reconcileDrafts(); } else flushDrafts(); });
   window.addEventListener("pagehide",()=>{ flushDrafts(); });
   syncOutbox(); // アプリ起動時の自動再送
   setTimeout(()=>autoIvEnqueue(autoIvPending(5)),12000); // 面談の未判定分を自動でAI判定（最近の記録・最大5件）

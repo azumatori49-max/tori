@@ -78,6 +78,7 @@ export default function BillingScreen() {
   const lastMonth = monthRange(-1);
   const [company, setCompany] = useState(ALL);
   const [technician, setTechnician] = useState(ALL);
+  const [kind, setKind] = useState(ALL); // すべて / メンテナンス / オーダー工事
   const [from, setFrom] = useState(lastMonth.from);
   const [to, setTo] = useState(lastMonth.to);
   const [busy, setBusy] = useState(false);
@@ -87,6 +88,8 @@ export default function BillingScreen() {
     return reports
       .filter((r) => {
         if (company !== ALL && (r.company || '未分類') !== company) return false;
+        if (kind === 'メンテナンス' && r.reportType === 'order') return false;
+        if (kind === 'オーダー工事' && r.reportType !== 'order') return false;
         if (technician !== ALL && !r.technician.includes(technician)) return false;
         const d = reportDateKey(r);
         if (from && d < from) return false;
@@ -94,7 +97,7 @@ export default function BillingScreen() {
         return true;
       })
       .sort((a, b) => reportDateKey(a).localeCompare(reportDateKey(b)));
-  }, [reports, company, technician, from, to]);
+  }, [reports, company, technician, kind, from, to]);
 
   const total = useMemo(
     () => matched.reduce((sum, r) => sum + calcBilling(r).taxIncluded, 0),
@@ -178,6 +181,13 @@ export default function BillingScreen() {
             <View style={{ flex: 1 }}>
               <DatePicker value={to} onChange={setTo} />
             </View>
+          </View>
+
+          <Text style={styles.fLabel}>種類</Text>
+          <View style={styles.chipWrap}>
+            {[ALL, 'メンテナンス', 'オーダー工事'].map((k) => (
+              <Chip key={k} label={k} active={kind === k} onPress={() => setKind(k)} />
+            ))}
           </View>
 
           <Text style={styles.fLabel}>会社名</Text>

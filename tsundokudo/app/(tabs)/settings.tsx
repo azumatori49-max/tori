@@ -62,19 +62,25 @@ async function copyText(text: string, label: string): Promise<void> {
   notify(label, text);
 }
 
-/** 追加・削除できる文字列リスト（担当者・店舗・会社・御請求先マスタ用） */
+/** 追加・編集・削除できる文字列リスト（担当者・店舗・会社・御請求先マスタ用） */
 function EditableList({
   items,
   placeholder,
   onChange,
+  onRename,
   multiline,
 }: {
   items: string[];
   placeholder: string;
   onChange: (items: string[]) => void;
+  /** 名前を変更したときに呼ばれる（既存データへの反映用） */
+  onRename?: (oldValue: string, newValue: string) => void;
   multiline?: boolean;
 }) {
   const [draft, setDraft] = useState('');
+  // 編集中の項目（元の値）と編集内容
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
 
   function add() {
     const v = draft.trim();
@@ -83,12 +89,55 @@ function EditableList({
     setDraft('');
   }
 
+  function saveEdit() {
+    if (editing == null) return;
+    const v = editDraft.trim();
+    if (!v || v === editing) {
+      setEditing(null);
+      return;
+    }
+    if (items.includes(v)) {
+      notify('同じ名前がすでにあります', `「${v}」は登録済みです。`);
+      return;
+    }
+    onChange(items.map((x) => (x === editing ? v : x)));
+    onRename?.(editing, v);
+    setEditing(null);
+  }
+
   return (
     <>
-      {items.map((item) => (
+      {items.map((item) =>
+        editing === item ? (
+          <View key={item} style={styles.addRow}>
+            <View style={{ flex: 1 }}>
+              <Input value={editDraft} onChangeText={setEditDraft} multiline={multiline} />
+            </View>
+            <Pressable style={styles.addBtn} onPress={saveEdit}>
+              <Text style={styles.addBtnText}>確定</Text>
+            </Pressable>
+            <Pressable
+              style={styles.cancelBtn}
+              onPress={() => setEditing(null)}
+              hitSlop={8}
+            >
+              <Text style={styles.cancelBtnText}>取消</Text>
+            </Pressable>
+          </View>
+        ) : (
         <View key={item} style={styles.listRow}>
           <Text style={styles.listDot}>•</Text>
           <Text style={styles.listText}>{item}</Text>
+          <Pressable
+            onPress={() => {
+              setEditing(item);
+              setEditDraft(item);
+            }}
+            hitSlop={8}
+            style={styles.editBtn}
+          >
+            <Text style={styles.editBtnText}>編集</Text>
+          </Pressable>
           <Pressable
             onPress={() => onChange(items.filter((x) => x !== item))}
             hitSlop={8}
@@ -97,7 +146,8 @@ function EditableList({
             <Text style={styles.removeBtnText}>✕</Text>
           </Pressable>
         </View>
-      ))}
+        ),
+      )}
       {items.length === 0 && <Text style={styles.emptyText}>まだ登録がありません</Text>}
       <View style={styles.addRow}>
         <View style={{ flex: 1 }}>
@@ -248,6 +298,24 @@ export default function SettingsScreen() {
   const rotateOrgCode = useAuthStore((s) => s.rotateOrgCode);
   const signOut = useAuthStore((s) => s.signOut);
   const isViewer = useIsViewer();
+
+  /** 会社マスタのリネームを既存レポートにも反映する */
+  async function renameCompanyInReports(oldV: string, newV: string) {
+    const targets = useReportStore.getState().reports.filter((r) => r.company === oldV);
+    if (targets.length === 0) return;
+    const go = await confirmAsync(
+      '既存レポートにも反映',
+      `会社名「${oldV}」のレポートが${targets.length}件あります。\nこれらの会社名も「${newV}」に変更しますか？`,
+      '変更する',
+    );
+    if (!go) return;
+    let done = 0;
+    for (const r of targets) {
+      const ok = await useReportStore.getState().updateReport(r.id, { company: newV });
+      if (ok) done += 1;
+    }
+    notify('会社名を変更しました', `${done}件のレポートを「${newV}」に更新しました。`);
+  }
 
   async function onSignOut() {
     const ok = isViewer
@@ -497,8 +565,12 @@ export default function SettingsScreen() {
             items={settings.companies}
             placeholder="会社名を入力"
             onChange={(companies) => updateSettings({ companies })}
+            onRename={(oldV, newV) => void renameCompanyInReports(oldV, newV)}
           />
-          <Text style={styles.hint}>※ レポート作成時に新しい会社名を入力すると自動で追加されます</Text>
+          <Text style={styles.hint}>
+            ※ レポート作成時に新しい会社名を入力すると自動で追加されます{'\n'}
+            ※ 「編集」で名前を変えると、既存レポートの会社名もまとめて変更できます
+          </Text>
         </Card>
 
             <SectionTitle>御請求先</SectionTitle>
@@ -554,6 +626,19 @@ const styles = StyleSheet.create({
   },
   priceLabel: { flex: 1, fontSize: 15, color: C.text, fontWeight: '600' },
   priceVal: { fontSize: 15, color: C.textSub },
+  editBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: C.primaryLight,
+    marginRight: 6,
+  },
+  editBtnText: { color: C.primaryDark, fontSize: 12, fontWeight: '700' },
+  cancelBtn: {
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  cancelBtnText: { color: C.textSub, fontSize: 13, fontWeight: '700' },
   removeBtn: {
     marginLeft: 10,
     width: 26,

@@ -751,9 +751,10 @@ async function saveDraftNow(d,force){
 }
 // 保存待ちの下書きと、いま開いている下書きの画面位置をすぐ書き出す（店舗の切替・画面を閉じる・更新の前など）
 async function flushDrafts(){
-  const pend=[...draftTimers.keys()];
-  for(const id of pend){ const d=state.drafts.find(x=>x.id===id); if(d) await saveDraftNow(d); else { clearTimeout(draftTimers.get(id)); draftTimers.delete(id); } }
-  if(state.draft) await saveDraftNow(state.draft);
+  const jobs=new Set();
+  for(const id of [...draftTimers.keys()]){ const d=state.drafts.find(x=>x.id===id); if(d) jobs.add(d); else { clearTimeout(draftTimers.get(id)); draftTimers.delete(id); } }
+  if(state.draft) jobs.add(state.draft);
+  await Promise.all([...jobs].map(d=>saveDraftNow(d)));   // 画面が閉じる前に間に合うよう、全部を同時に書き始める
 }
 async function removeDraft(d){
   if(!d) return;
@@ -793,13 +794,15 @@ async function loadDrafts(){
   const legacy=await kvGet("draft").catch(()=>null);
   if(legacy){
     const d=normalizeDraft(legacy);
+    let moved=true;
     if(d&&!out.some(x=>x.id===d.id)){
-      try{ await kvSet(DRAFT_PFX+d.id,d); }catch(e){}
+      moved=await kvSet(DRAFT_PFX+d.id,d).then(()=>true,()=>false);
       out.push(d);
+      if(moved) lastSaved.set(d.id,draftStamp(d));
     }
-    await kvDel("draft").catch(()=>{});
+    if(moved) await kvDel("draft").catch(()=>{});     // 新しい保存先に書けた時だけ旧データを消す
   }
-  out.forEach(d=>lastSaved.set(d.id,draftStamp(d)));
+  out.forEach(d=>{ if(!lastSaved.has(d.id)&&!(legacy&&d.id===legacy.id)) lastSaved.set(d.id,draftStamp(d)); });
   return out.sort((a,b)=>b.updatedAt-a.updatedAt);
 }
 // 完了済みの記録と同じidの下書き（提出の直後に止まった・別画面で提出された取り残し）は不要なので消す
@@ -807,6 +810,10 @@ async function dropFinishedDrafts(){
   for(const d of [...state.drafts]){
     if(state.inspections.some(i=>i.id===d.id&&i.completedAt&&!i.provisional)) await removeDraft(d);
   }
+}
+const photoBusy=new Map();   // 下書きid → 写真の取り込み中の数
+function draftInFlight(d){
+  return (photoBusy.get(d.id)||0)>0||batchBusyIds.has(d.id)||ivBusyIds.has(d.id)||[...aiBusy].some(k=>k.startsWith(d.id+":"));
 }
 // 別のタブ・画面で下書きが増減・更新されていたら取り込む（画面を開き直した時だけ）
 let reconciling=false;
@@ -826,6 +833,7 @@ async function reconcileDrafts(){
         if(state.draft===d){ state.draft=null; lostActive=true; }
         changed=true;
       }else if(r.updatedAt>d.updatedAt){
+        if(draftInFlight(d)) continue;                 // 写真の取り込み・AI判定の待ち中は差し替えない（次の機会に取り込む）
         for(const k of Object.keys(d)) delete d[k];
         Object.assign(d,r); lastSaved.set(d.id,draftStamp(d));
         if(state.draft===d) state.catIndex=d.catIndex;
@@ -838,7 +846,7 @@ async function reconcileDrafts(){
       state.drafts.push(r); lastSaved.set(r.id,draftStamp(r)); changed=true;
     }
     if(!changed) return;
-    if(lostActive&&state.view==="check"){ state.view="home"; showToast("このチェックは別の画面で完了または破棄されました"); }
+    if(lostActive&&state.view==="check"){ state.view="home"; showToast("このチェックは別の画面で完了または破棄されました"); render(); scrollTo(0,0); return; }
     if(state.view==="check") render();
     else if(state.view==="home"){
       const dirty=[...document.querySelectorAll("#app input,#app textarea")].some(el=>el.value!==el.defaultValue);
@@ -2761,6 +2769,7 @@ function bindLock(){
   $("#lock-code")?.addEventListener("keydown",e=>{if(e.key==="Enter")tryUnlock();});
   $("#lock-code")?.focus();
 }
+let rendering=false;
 function render(){
   let html="";
   if(state.locked){app.innerHTML=viewLock();bindLock();return;}
@@ -2770,7 +2779,7 @@ function render(){
   else if(state.view==="trends") html=viewTrends();
   else if(state.view==="assistant") html=viewAssistant();
   else if(state.view==="admin") html=viewAdmin();
-  app.innerHTML=html;
+  rendering=true; try{ app.innerHTML=html; } finally{ rendering=false; }   // 描き直しで外れた入力欄が発火する change は無視する
   app.insertAdjacentHTML("afterbegin",'<div id="sync-bar" class="sync-bar"></div>');
   updateSyncBar();
   if(state.view==="home") bindHome();
@@ -2842,13 +2851,15 @@ function draftOptLabel(x){
   return `${x.brand?x.brand+" ":""}${x.store}${dup?`（${x.inspector||"—"}・${fmtDate(x.date).slice(5)}）`:""}（${Math.round(progressRatio(x)*100)}%）`;
 }
 // 下書きを開く（いま開いている下書きは先に保存してから切り替える）
-let startBusy=false;
+let startBusy=false, resumeBusy=false, finalizeBusy=false;
 async function openDraft(d){
   if(!d||!state.drafts.includes(d)) return;
   if(state.draft&&state.draft!==d) await saveDraftNow(state.draft);
   if(!state.drafts.includes(d)) return;            // 待っている間に消えた
-  state.draft=d;
-  state.catIndex=Math.max(0,Math.min(REPORT_CAT,Math.floor(Number(d.catIndex))||0));
+  if(state.draft!==d){                                  // いま開いている下書きを再開する時は、直前の位置のまま
+    state.draft=d;
+    state.catIndex=Math.max(0,Math.min(REPORT_CAT,Math.floor(Number(d.catIndex))||0));
+  }
   state.view="check"; render(); scrollTo(0,0);
 }
 function viewHome(){
@@ -3384,18 +3395,21 @@ function bindHome(){
       catIndex:0, updatedAt:Date.now(),
     };
     if(state.draft) await saveDraftNow(state.draft);
-    state.drafts.push(nd); state.draft=nd;
+    state.drafts.push(nd); state.draft=nd; state.catIndex=0;
     await saveDraftNow(nd);
-    state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+    state.view="check"; render(); scrollTo(0,0);
     const alerts=storeAlerts(store);
     if(alerts.length){ showToast(`⚠ 3点以下が${ALERT_COUNT}回以上の項目が${alerts.length}件あります`); beep(); }
     }finally{ startBusy=false; }
   });
   document.querySelectorAll("[data-draft-resume]").forEach(b=>b.addEventListener("click",()=>{
-    openDraft(state.drafts.find(d=>d.id===b.dataset.draftResume));
+    const d=state.drafts.find(x=>x.id===b.dataset.draftResume);
+    if(!d){ showToast("この下書きは別の画面で変更されました。一覧を更新します"); render(); return; }
+    openDraft(d);
   }));
   document.querySelectorAll("[data-draft-del]").forEach(b=>b.addEventListener("click",async()=>{
-    const d=state.drafts.find(x=>x.id===b.dataset.draftDel); if(!d) return;
+    const d=state.drafts.find(x=>x.id===b.dataset.draftDel);
+    if(!d){ showToast("この下書きは別の画面で変更されました。一覧を更新します"); render(); return; }
     if(!confirm(`「${d.store}」の進行中のチェックを破棄しますか？入力内容と写真は失われます。`)) return;
     await removeDraft(d); render();
   }));
@@ -3659,6 +3673,7 @@ function syncBarHtml(){
     ${n>0&&!syncRunning?`<button class="save-btn" id="sync-now">今すぐ再送</button>`:""}
   </div>`;
 }
+const outboxPutSafe=o=>outboxPut(o).catch(()=>{});
 async function syncOutbox(){
   if(syncRunning) return;
   const run=async()=>{
@@ -3670,16 +3685,16 @@ async function syncOutbox(){
       let ok=0,ng=0;
       for(const o of list){
         if(!navigator.onLine){ ng++; break; }
-        o.status="syncing"; o.attempts=(o.attempts||0)+1; await outboxPut(o);
+        o.status="syncing"; o.attempts=(o.attempts||0)+1; await outboxPutSafe(o);
         try{
           const insp=await getInspection(o.id);
-          if(!insp){ o.status="synced"; o.syncedAt=new Date().toISOString(); await outboxPut(o); continue; }
+          if(!insp){ o.status="synced"; o.syncedAt=new Date().toISOString(); await outboxPutSafe(o); continue; }
           await cloudSave(insp,o); // タイムアウトは写真1枚ごと（大きな記録も再送で前進する）
           o.status="synced"; o.syncedAt=new Date().toISOString(); o.lastError="";
-          await outboxPut(o); ok++;
+          await outboxPutSafe(o); ok++;
         }catch(err){
           o.status="failed"; o.lastError=String(err&&err.message||err).slice(0,200);
-          await outboxPut(o); ng++;
+          await outboxPutSafe(o); ng++;
         }
       }
       if(ok&&!ng){ showToast("送信完了：クラウドに保存されました"); await updateSyncBar("送信完了"); }
@@ -3690,11 +3705,13 @@ async function syncOutbox(){
     }
   };
   // 排他制御：同時に複数の再送処理が走らないようにする
-  if(navigator.locks&&navigator.locks.request){
-    await navigator.locks.request("rakuraku-sync",{ifAvailable:true},async lock=>{ if(lock) await run(); });
-  }else{
-    await run();
-  }
+  try{
+    if(navigator.locks&&navigator.locks.request){
+      await navigator.locks.request("rakuraku-sync",{ifAvailable:true},async lock=>{ if(lock) await run(); });
+    }else{
+      await run();
+    }
+  }catch(e){ /* 送信キューの保存に失敗しても、次の機会に再送する */ }
 }
 // AIキーをクラウド（Firestore config/gemini）で全端末に共有する
 async function cloudSaveGeminiKey(key){
@@ -4244,7 +4261,9 @@ document.addEventListener("click",async e=>{
     const missing=collectMissing();
     if(!partial&&missing.length){alert("点数の未選択、または写真の未添付があります。");render();return;}
     if(partial&&!confirm("入力途中のまま「一時保存」として提出します。続きは報告書画面の「続きを入力する」から再開できます。よろしいですか？")) return;
-    const fd=state.draft; if(!fd) return;
+    const fd=state.draft; if(!fd||finalizeBusy) return;
+    finalizeBusy=true;
+    try{
     // すでに完了・提出済みの記録と同じidの下書き（別の画面で提出した取り残し）は、提出済みの記録を上書きしない
     const prevRec=await getInspection(fd.id).catch(()=>null);
     if(prevRec&&prevRec.completedAt&&!prevRec.provisional){
@@ -4252,9 +4271,12 @@ document.addEventListener("click",async e=>{
       await removeDraft(fd); state.view="home"; render(); scrollTo(0,0); return;
     }
     const insp=buildInspection(fd,false,partial);
-    const saved=await putInspection(insp).then(()=>true,()=>false);
-    const queued=saved&&await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).then(()=>true,()=>false);
+    const noDb=!db;           // この端末で保存機能が使えない場合は、従来どおり画面上だけで続ける
+    const saved=noDb||await putInspection(insp).then(()=>true,()=>false);
+    const queued=noDb||(saved&&await outboxPut({id:insp.id,status:"pending",attempts:0,queuedAt:new Date().toISOString()}).then(()=>true,()=>false));
     if(!saved||!queued){      // 端末に記録できていないのに下書きを消さない
+      // 記録だけ書けて送信キューに積めなかった時は元に戻す（やり直しが「提出済み」と誤判定されないように）
+      if(saved) await (prevRec?putInspection(prevRec):delInspection(insp.id)).catch(()=>{});
       alert("この端末に保存できませんでした（容量不足の可能性）。入力内容は下書きに残してあります。写真を減らすか、不要な下書きを破棄してから、もう一度お試しください。");
       return;
     }
@@ -4265,11 +4287,14 @@ document.addEventListener("click",async e=>{
     showToast(partial?"一時保存として提出しました。続きは報告書から再開できます":"記録を受け付けました。端末に保存し、通信回復後に送信します");
     syncOutbox();
     if(!partial) autoIvEnqueue([insp.id]);
+    }finally{ finalizeBusy=false; }
     return;
   }
   if(t.id==="rep-resume"){
     const insp=state.inspections.find(i=>i.id===state.reportId);
-    if(!insp) return;
+    if(!insp||resumeBusy) return;
+    resumeBusy=true;
+    try{
     const existing=state.drafts.find(d=>d.id===insp.id);
     if(existing){ await openDraft(existing); return; }
     await hydratePhotos(insp).catch(()=>{});
@@ -4286,10 +4311,11 @@ document.addEventListener("click",async e=>{
       catIndex:0, updatedAt:Date.now(),
     });
     if(state.draft) await saveDraftNow(state.draft);
-    state.drafts.push(rd); state.draft=rd;
+    state.drafts.push(rd); state.draft=rd; state.catIndex=0;
     await saveDraftNow(rd);
-    state.view="check"; state.catIndex=0; render(); scrollTo(0,0);
+    state.view="check"; render(); scrollTo(0,0);
     showToast("一時保存した内容を読み込みました。続きを入力してください");
+    }finally{ resumeBusy=false; }
     return;
   }
 });
@@ -4301,16 +4327,20 @@ document.addEventListener("keydown",e=>{
   }
 });
 document.addEventListener("change",async e=>{
+  if(rendering) return;
   const t=e.target;
   if(t.id==="draft-switch"){ await openDraft(state.drafts.find(d=>d.id===t.value)); return; }
   if(t.dataset.photo!=null){
     const files=Array.from(t.files||[]); if(!files.length) return;
     const id=t.dataset.photo, d=state.draft, a=ans(id);   // 圧縮の待ち中に店舗を切り替えても、元の店舗に保存する
     let failed=0;
-    for(const file of files){
-      if(a.photos.length>=4) break;
-      try{ a.photos.push(await compressPhoto(file)); }catch(err){ failed++; }
-    }
+    if(d) photoBusy.set(d.id,(photoBusy.get(d.id)||0)+1);
+    try{
+      for(const file of files){
+        if(a.photos.length>=4) break;
+        try{ a.photos.push(await compressPhoto(file)); }catch(err){ failed++; }
+      }
+    }finally{ if(d) photoBusy.set(d.id,Math.max(0,(photoBusy.get(d.id)||1)-1)); }
     persistDraft(d); if(state.draft===d&&state.view==="check") refreshCard(id);
     if(failed) alert("一部の写真の読み込みに失敗しました。もう一度お試しください。");
     return;

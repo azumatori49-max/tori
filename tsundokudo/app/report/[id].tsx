@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -67,6 +68,20 @@ function toNum(v: string): number {
 }
 
 export default function ReportFormScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const hydrated = useReportStore((s) => s.hydrated);
+  // 既存レポートは読み込み完了を待つ（読み込み前に空のフォームで初期化され、上書き保存されるのを防ぐ）
+  if (id !== 'new' && !hydrated) {
+    return (
+      <View style={[styles.root, styles.loading]}>
+        <ActivityIndicator color={C.primary} />
+      </View>
+    );
+  }
+  return <ReportForm key={id} />;
+}
+
+function ReportForm() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; store?: string; type?: string }>();
   const id = params.id;
@@ -1070,6 +1085,7 @@ export default function ReportFormScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  loading: { alignItems: 'center', justifyContent: 'center' },
   topbar: {
     flexDirection: 'row',
     alignItems: 'center',

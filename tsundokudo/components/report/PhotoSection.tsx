@@ -4,9 +4,8 @@
  * - 各写真に分類（店舗外観・施工前・施工中・施工後・その他）とメモを付与
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
-
 import { Input } from '@/components/ui';
+import { FitPhoto } from '@/components/report/FitPhoto';
 import { confirmAsync } from '@/lib/dialog';
 import { C } from '@/constants/colors';
 import { CAMERA_SUPPORTED, capturePhoto, selectPhoto } from '@/lib/photos';
@@ -59,7 +58,7 @@ export function PhotoSection({
       {photos.map((ph) => (
         <View key={ph.id} style={styles.photoCard}>
           <View style={styles.photoTop}>
-            <Image source={{ uri: ph.uri }} style={styles.thumb} contentFit="cover" />
+            <FitPhoto uri={ph.uri} height={88} />
             <View style={styles.photoMeta}>
               <View style={styles.catWrap}>
                 {CATEGORIES.map((cat) => {
@@ -119,7 +118,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FBFDFD',
   },
   photoTop: { flexDirection: 'row' },
-  thumb: { width: 88, height: 88, borderRadius: 8, backgroundColor: C.border },
   photoMeta: { flex: 1, marginLeft: 10, justifyContent: 'space-between' },
   catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   cat: {

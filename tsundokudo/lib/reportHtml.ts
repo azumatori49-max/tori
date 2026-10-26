@@ -35,7 +35,7 @@ function photoSheet(photos: { uri: string; category: string; caption: string }[]
       (p) => `
       <div class="sheet-cell">
         <div class="sheet-lbl">${esc(p.caption || p.category)}</div>
-        <img src="${p.uri}" />
+        <div class="sheet-img"><img src="${p.uri}" /></div>
       </div>`,
     )
     .join('');
@@ -281,7 +281,7 @@ const DOC_OPEN = `<!DOCTYPE html>
   .head .col-info { flex:1.3; }
   .head .col-bill { flex:1.05; border-left:1px solid var(--bd); }
   .head .col-photo { width:150px; border-left:1px solid var(--bd); padding:4px; display:flex; align-items:center; justify-content:center; }
-  .head .col-photo img { max-width:100%; max-height:120px; object-fit:cover; }
+  .head .col-photo img { width:auto; height:auto; max-width:100%; max-height:120px; object-fit:contain; }
   .kv { display:flex; border-bottom:1px solid var(--bd); }
   .kv:last-child { border-bottom:none; }
   .kv .k { width:74px; flex:none; background:#f2f2f2; font-weight:700; padding:4px 6px; border-right:1px solid var(--bd); }
@@ -344,7 +344,8 @@ const DOC_OPEN = `<!DOCTYPE html>
   .sheet { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .sheet-cell { page-break-inside:avoid; }
   .sheet-lbl { font-size:10.5px; font-weight:700; margin-bottom:3px; }
-  .sheet-cell img { width:100%; height:205px; object-fit:cover; display:block; border:1px solid #999; background:#eee; }
+  .sheet-img { height:205px; display:flex; align-items:flex-start; justify-content:flex-start; }
+  .sheet-img img { display:block; width:auto; height:auto; max-width:100%; max-height:205px; object-fit:contain; border:1px solid #999; }
 </style>
 </head>
 <body>

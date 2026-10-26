@@ -15,6 +15,7 @@ import { calcBilling, yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import { formatWorkDate } from '@/lib/format';
 import { confirmAsync, notify } from '@/lib/dialog';
+import { FitPhoto } from '@/components/report/FitPhoto';
 import logoAsset from '@/assets/logo.png';
 import type { MaintenanceReport } from '@/types/report';
 
@@ -102,7 +103,7 @@ function ReportCard({ r, readOnly }: { r: MaintenanceReport; readOnly: boolean }
       {allPhotos.length > 0 && (
         <View style={styles.thumbStrip}>
           {allPhotos.slice(0, 4).map((ph) => (
-            <Image key={ph.id} source={{ uri: ph.uri }} style={styles.thumb} contentFit="cover" />
+            <FitPhoto key={ph.id} uri={ph.uri} height={56} />
           ))}
         </View>
       )}
@@ -412,8 +413,7 @@ const styles = StyleSheet.create({
   itemDate: { fontSize: 13, color: C.primaryDark, fontWeight: '600' },
   itemRow: { flexDirection: 'row', gap: 16, marginTop: 6 },
   itemMeta: { fontSize: 12, color: C.textSub },
-  thumbStrip: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: C.border },
+  thumbStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   itemBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -5,12 +5,12 @@
  * PDF出力・共有は可能。
  */
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { Button, Card, SectionTitle } from '@/components/ui';
+import { FitPhoto } from '@/components/report/FitPhoto';
 import { C } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { formatWorkDate } from '@/lib/format';
@@ -33,7 +33,7 @@ function PhotoStrip({ photos }: { photos: ReportPhoto[] }) {
   return (
     <View style={styles.photoStrip}>
       {photos.map((p) => (
-        <Image key={p.id} source={{ uri: p.uri }} style={styles.photo} contentFit="cover" />
+        <FitPhoto key={p.id} uri={p.uri} height={110} />
       ))}
     </View>
   );
@@ -428,6 +428,5 @@ const styles = StyleSheet.create({
   supplyName: { fontSize: 14, fontWeight: '600', color: C.text, flex: 1 },
   supplyDetail: { fontSize: 13, color: C.textSub },
   photoStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  photo: { width: 76, height: 76, borderRadius: 8, backgroundColor: C.border },
   actions: { marginHorizontal: 12, marginTop: 16 },
 });

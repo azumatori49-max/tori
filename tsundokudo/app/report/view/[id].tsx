@@ -33,7 +33,7 @@ function PhotoStrip({ photos }: { photos: ReportPhoto[] }) {
   return (
     <View style={styles.photoStrip}>
       {photos.map((p) => (
-        <FitPhoto key={p.id} uri={p.uri} height={260} />
+        <FitPhoto key={p.id} uri={p.uri} height={110} />
       ))}
     </View>
   );

@@ -1,9 +1,9 @@
 /**
  * 写真を撮影したときの縦横比のまま表示する（枠に合わせて切り取らない）。
- * 横幅を使い、縦写真は高さも広げて表示する。
+ * 高さを固定し、幅は写真の比率に合わせる。読み込み前は正方形の枠で表示。
  */
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 
 import { C } from '@/constants/colors';
@@ -14,24 +14,18 @@ const MAX_RATIO = 1.8;
 
 export function FitPhoto({ uri, height }: { uri: string; height: number }) {
   const [ratio, setRatio] = useState(1);
-  const [width, setWidth] = useState(0);
   const boxRatio = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio));
 
   return (
-    <View style={{ width: '100%' }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <Image
-        source={{ uri }}
-        style={[
-          styles.img,
-          { height: Math.min(640, Math.max(height, width / boxRatio)), width: '100%' },
-        ]}
-        contentFit="contain"
-        onLoad={(e) => {
-          const { width, height: h } = e.source;
-          if (width > 0 && h > 0) setRatio(width / h);
-        }}
-      />
-    </View>
+    <Image
+      source={{ uri }}
+      style={[styles.img, { height, width: Math.round(height * boxRatio) }]}
+      contentFit="contain"
+      onLoad={(e) => {
+        const { width, height: h } = e.source;
+        if (width > 0 && h > 0) setRatio(width / h);
+      }}
+    />
   );
 }
 

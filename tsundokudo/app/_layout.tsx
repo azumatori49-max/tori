@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect } from 'react';
-import { ActivityIndicator, LogBox, Platform, View } from 'react-native';
+import { ActivityIndicator, LogBox, Platform, View, Text, Pressable } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -29,7 +29,12 @@ function setupWebAppIcons() {
     Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
     document.head.appendChild(el);
   };
-  add('link', { id: 'rr-touch-icon', rel: 'apple-touch-icon', sizes: '180x180', href: `${prefix}/apple-touch-icon.png` });
+  add('link', {
+    id: 'rr-touch-icon',
+    rel: 'apple-touch-icon',
+    sizes: '180x180',
+    href: `${prefix}/apple-touch-icon.png`,
+  });
   add('link', { rel: 'manifest', href: `${prefix}/manifest.json` });
   add('meta', { name: 'apple-mobile-web-app-title', content: 'らくらくメンテ' });
   add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
@@ -75,6 +80,8 @@ function MainStack() {
 export default function RootLayout() {
   const pathname = usePathname();
   const hydrate = useReportStore((s) => s.hydrate);
+  const hydrated = useReportStore((s) => s.hydrated);
+  const reportError = useReportStore((s) => s.error);
   const hydrateSettings = useReportStore((s) => s.hydrateSettings);
   const settingsLoaded = useReportStore((s) => s.settingsLoaded);
   const setupDone = useReportStore((s) => s.settings.setupDone);
@@ -120,7 +127,14 @@ export default function RootLayout() {
   let content: React.ReactNode;
   if (isCloudEnabled && (!authReady || (user && !orgChecked) || (user && org && !settingsLoaded))) {
     content = (
-      <View style={{ flex: 1, backgroundColor: C.headerBg, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: C.headerBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <ActivityIndicator color="#fff" />
       </View>
     );
@@ -134,6 +148,27 @@ export default function RootLayout() {
   } else if (isCloudEnabled && user && org && !org.active && !isOperatorUser(user)) {
     // 運営の利用開始承認待ち（請求書払いの承認制）
     content = <PendingScreen />;
+  } else if (!hydrated && !isViewerRoute) {
+    content = (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        {reportError ? (
+          <>
+            <Text>記録を読み込めませんでした。再読み込みしてください。</Text>
+            <Text>{reportError}</Text>
+            <Pressable
+              onPress={() => {
+                useReportStore.getState().clearError();
+                void hydrate();
+              }}
+            >
+              <Text style={{ padding: 20, color: C.primary }}>再読み込み</Text>
+            </Pressable>
+          </>
+        ) : (
+          <ActivityIndicator color={C.primary} />
+        )}
+      </View>
+    );
   } else {
     content = <MainStack />;
   }

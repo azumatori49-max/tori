@@ -10,22 +10,22 @@ import { create } from 'zustand';
 
 import { persist } from '@/lib/persist';
 import { isCloudEnabled } from '@/lib/firebase';
-import {
-  cloudDeleteReport,
-  cloudFetchReports,
-  cloudUpsertReport,
-} from '@/lib/cloudReports';
+import { cloudDeleteReport, cloudFetchReports, cloudUpsertReport } from '@/lib/cloudReports';
 import { useAuthStore } from '@/store/authStore';
 import { normalizeReport } from '@/lib/reportNormalize';
 import { DEFAULT_SETTINGS, makeDefaultReport } from '@/constants/hygiene';
-import type {
-  AppSettings,
-  MaintenanceReport,
-  MaintenanceReportInsert,
-} from '@/types/report';
+import type { AppSettings, MaintenanceReport, MaintenanceReportInsert } from '@/types/report';
 
 const REPORTS_KEY = 'hygiene:reports';
 const SETTINGS_KEY = 'hygiene:settings';
+let mutationPending = false;
+let hydrationVersion = 0;
+
+function dataScope(): string | undefined {
+  if (!isCloudEnabled) return 'local';
+  const a = useAuthStore.getState();
+  return a.guestOrg?.orgId ?? a.org?.id;
+}
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -122,117 +122,114 @@ export const useReportStore = create<ReportState>((set, get) => ({
 
   hydrate: async () => {
     if (get().hydrated) return;
-    // 設定（マスタ）は端末ローカルに保持
-    const settingsRaw = await persist.getItem(SETTINGS_KEY);
-    let settings = normalizeSettings(settingsRaw);
-
-    if (isCloudEnabled) {
-      // クラウド: 組織のレポートを取得（閲覧リンク時はゲスト組織のID）
-      try {
-        const auth = useAuthStore.getState();
-        const orgId = auth.guestOrg?.orgId ?? auth.org?.id;
-        const reports = orgId ? await cloudFetchReports(orgId) : [];
-        // 取得したレポートから店舗・担当者をマスタへ取り込む
-        for (const r of reports) settings = mergeMaster(settings, r);
-        set({ reports, settings, hydrated: true, settingsLoaded: true });
-      } catch (e) {
-        set({
-          hydrated: true,
-          settingsLoaded: true,
-          error: e instanceof Error ? e.message : 'データの取得に失敗しました。',
-        });
-      }
-      return;
+    const scope = dataScope();
+    const version = ++hydrationVersion;
+    if (!scope) return;
+    try {
+      const settingsRaw = await persist.getItem(SETTINGS_KEY);
+      let settings = normalizeSettings(settingsRaw);
+      const reports = isCloudEnabled
+        ? await cloudFetchReports(scope)
+        : (JSON.parse((await persist.getItem(REPORTS_KEY)) ?? '[]') as MaintenanceReport[]).map(
+            normalizeReport,
+          );
+      if (dataScope() !== scope || version !== hydrationVersion) return;
+      for (const r of reports) settings = mergeMaster(settings, r);
+      set({ reports, settings, hydrated: true, settingsLoaded: true, error: null });
+    } catch (e) {
+      if (dataScope() !== scope || version !== hydrationVersion) return;
+      set({ error: e instanceof Error ? e.message : 'データの取得に失敗しました。' });
     }
-
-    // ローカル: IndexedDB / MMKV から取得
-    const reportsRaw = await persist.getItem(REPORTS_KEY);
-    const reports = parse<MaintenanceReport[]>(reportsRaw, []).map(normalizeReport);
-    set({ reports, settings, hydrated: true, settingsLoaded: true });
   },
 
   getReport: (id) => get().reports.find((r) => r.id === id),
 
   reportsByStore: (storeName) => {
-    const list = storeName
-      ? get().reports.filter((r) => r.storeName === storeName)
-      : get().reports;
+    const list = storeName ? get().reports.filter((r) => r.storeName === storeName) : get().reports;
     return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
   createReport: async (data) => {
-    const now = new Date().toISOString();
-    const report: MaintenanceReport = {
-      ...data,
-      id: uuid(),
-      createdAt: now,
-      updatedAt: now,
-    };
-    const prev = get().reports;
-    const reports = [report, ...prev];
-    const settings = mergeMaster(get().settings, report);
-    const prevSettings = get().settings;
-    set({ reports, settings, error: null });
+    if (!get().hydrated || mutationPending) {
+      set({ error: '読み込み中または保存中です。完了後にもう一度保存してください。' });
+      return false;
+    }
+    mutationPending = true;
+    const scope = dataScope();
     try {
-      if (isCloudEnabled) {
-        // 写真アップロード後（URL置換済み）のレポートで差し替える
-        const saved = await cloudUpsertReport(report, requireOrgId());
-        set({ reports: get().reports.map((r) => (r.id === saved.id ? saved : r)) });
-      } else {
-        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
-      }
-      if (settings !== prevSettings) {
-        await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      const now = new Date().toISOString();
+      let report: MaintenanceReport = { ...data, id: uuid(), createdAt: now, updatedAt: now };
+      if (isCloudEnabled) report = await cloudUpsertReport(report, requireOrgId());
+      const reports = [report, ...get().reports];
+      if (!isCloudEnabled) await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (dataScope() === scope) {
+        const settings = mergeMaster(get().settings, report);
+        set({ reports, settings, error: null });
+        // 本文の保存成功をマスタ保存の失敗で取り消さない。
+        void persist.setItem(SETTINGS_KEY, JSON.stringify(settings)).catch(() => {
+          set({ error: '記録は保存済みですが、候補一覧の保存に失敗しました。' });
+        });
       }
       return true;
     } catch (e) {
-      set({ reports: prev, error: persistErrorMessage(e) });
+      set({ error: persistErrorMessage(e) });
       return false;
+    } finally {
+      mutationPending = false;
     }
   },
 
   updateReport: async (id, data) => {
-    const prev = get().reports;
-    const reports = prev.map((r) =>
-      r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r,
-    );
-    const updated = reports.find((r) => r.id === id);
-    const settings = updated ? mergeMaster(get().settings, updated) : get().settings;
-    const prevSettings = get().settings;
-    set({ reports, settings, error: null });
+    if (!get().hydrated || mutationPending) {
+      set({ error: '読み込み中または保存中です。完了後にもう一度保存してください。' });
+      return false;
+    }
+    const previous = get().reports.find((r) => r.id === id);
+    if (!previous) {
+      set({ error: '更新対象の記録が見つかりません。再読み込みしてください。' });
+      return false;
+    }
+    mutationPending = true;
+    const scope = dataScope();
     try {
-      if (isCloudEnabled) {
-        if (updated) {
-          const saved = await cloudUpsertReport(updated, requireOrgId());
-          set({ reports: get().reports.map((r) => (r.id === saved.id ? saved : r)) });
-        }
-      } else {
-        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
-      }
-      if (settings !== prevSettings) {
-        await persist.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      let report = { ...previous, ...data, updatedAt: new Date().toISOString() };
+      if (isCloudEnabled) report = await cloudUpsertReport(report, requireOrgId());
+      const reports = get().reports.map((r) => (r.id === id ? report : r));
+      if (!isCloudEnabled) await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (dataScope() === scope) {
+        const settings = mergeMaster(get().settings, report);
+        set({ reports, settings, error: null });
+        void persist.setItem(SETTINGS_KEY, JSON.stringify(settings)).catch(() => {
+          set({ error: '記録は保存済みですが、候補一覧の保存に失敗しました。' });
+        });
       }
       return true;
     } catch (e) {
-      set({ reports: prev, error: persistErrorMessage(e) });
+      set({ error: persistErrorMessage(e) });
       return false;
+    } finally {
+      mutationPending = false;
     }
   },
 
   deleteReport: async (id) => {
-    const prev = get().reports;
-    const reports = prev.filter((r) => r.id !== id);
-    set({ reports, error: null });
+    if (!get().hydrated || mutationPending) {
+      set({ error: '読み込み中または保存中です。完了後にもう一度操作してください。' });
+      return false;
+    }
+    mutationPending = true;
+    const scope = dataScope();
     try {
-      if (isCloudEnabled) {
-        await cloudDeleteReport(id, requireOrgId());
-      } else {
-        await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
-      }
+      if (isCloudEnabled) await cloudDeleteReport(id, requireOrgId());
+      const reports = get().reports.filter((r) => r.id !== id);
+      if (!isCloudEnabled) await persist.setItem(REPORTS_KEY, JSON.stringify(reports));
+      if (dataScope() === scope) set({ reports, error: null });
       return true;
     } catch (e) {
-      set({ reports: prev, error: persistErrorMessage(e) });
+      set({ error: persistErrorMessage(e) });
       return false;
+    } finally {
+      mutationPending = false;
     }
   },
 
@@ -271,7 +268,10 @@ function mergeMaster(settings: AppSettings, report: MaintenanceReport): AppSetti
     changed = true;
   }
   // 「、」区切りの複数担当者をそれぞれ取り込む
-  for (const name of report.technician.split('、').map((s) => s.trim()).filter(Boolean)) {
+  for (const name of report.technician
+    .split('、')
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     if (!technicians.includes(name)) {
       technicians.push(name);
       changed = true;

@@ -341,11 +341,11 @@ const DOC_OPEN = `<!DOCTYPE html>
   /* 写真ページ */
   .photo-page { page-break-before:always; }
   .ps-title { font-size:14px; font-weight:800; border-left:4px solid #333; padding-left:8px; margin-bottom:8px; }
-  .sheet { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .sheet { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
   .sheet-cell { page-break-inside:avoid; }
   .sheet-lbl { font-size:10.5px; font-weight:700; margin-bottom:3px; }
-  .sheet-img { height:205px; display:flex; align-items:flex-start; justify-content:flex-start; }
-  .sheet-img img { display:block; width:auto; height:auto; max-width:100%; max-height:205px; object-fit:contain; border:1px solid #999; }
+  .sheet-img { height:340px; display:flex; align-items:flex-start; justify-content:flex-start; }
+  .sheet-img img { display:block; width:auto; height:auto; max-width:100%; max-height:340px; object-fit:contain; border:1px solid #999; }
 </style>
 </head>
 <body>

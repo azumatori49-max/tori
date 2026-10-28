@@ -33,7 +33,7 @@ function PhotoStrip({ photos }: { photos: ReportPhoto[] }) {
   return (
     <View style={styles.photoStrip}>
       {photos.map((p) => (
-        <FitPhoto key={p.id} uri={p.uri} height={110} />
+        <FitPhoto key={p.id} uri={p.uri} height={260} />
       ))}
     </View>
   );
@@ -131,82 +131,82 @@ export default function ReportViewScreen() {
         {/* 定期点検〜トッピング（メンテナンスのみ） */}
         {!isOrder && (
           <>
-        <SectionTitle>
-          定期点検（実施 {checkedItems.length}/{report.checklist.length}）
-        </SectionTitle>
-        {report.checklist.map((c) => (
-          <Card key={c.name}>
-            <View style={styles.checkHead}>
-              <Text style={[styles.checkMark, !c.checked && styles.checkMarkOff]}>
-                {c.checked ? '✓' : '－'}
-              </Text>
-              <Text style={styles.checkName}>{c.name}</Text>
-              {c.condition ? (
-                <Text
-                  style={[
-                    styles.condPill,
-                    c.condition === 'できてない' && styles.condPillAlert,
-                  ]}
-                >
-                  {c.condition}
-                </Text>
-              ) : null}
-            </View>
-            {c.subChecks ? (
-              <Text style={styles.subChecksLine}>
-                {c.subChecks.map((sc) => `${sc.checked ? '✓' : '－'} ${sc.name}`).join('　')}
-              </Text>
-            ) : null}
-            {c.note ? <Text style={styles.note}>{c.note}</Text> : null}
-            <PhotoStrip photos={c.photos} />
-          </Card>
-        ))}
-
-        {/* 害虫駆除 */}
-        <SectionTitle>害虫駆除</SectionTitle>
-        <Card>
-          <Row label="実施内容" value={pestLabels.join('、')} />
-          <Row label="害虫の状況" value={pest.presence} />
-          <PhotoStrip photos={pest.photos} />
-        </Card>
-
-        {/* ネズミ駆除（実施時のみ） */}
-        {report.ratControl?.done && (
-          <>
-            <SectionTitle>ネズミ駆除</SectionTitle>
-            <Card>
-              {report.ratControl.work !== '' && (
-                <Text style={styles.note}>{report.ratControl.work}</Text>
-              )}
-              <Row label="発生状況" value={report.ratControl.presence} />
-              {report.ratControl.initialFee > 0 && (
-                <Row label="初回施工費" value={`¥${yen(report.ratControl.initialFee)}`} />
-              )}
-              {report.ratControl.monthlyFee > 0 && (
-                <Row label="月額料金" value={`¥${yen(report.ratControl.monthlyFee)}`} />
-              )}
-              <PhotoStrip photos={report.ratControl.photos} />
-            </Card>
-          </>
-        )}
-
-        {/* トッピング */}
-        <SectionTitle>トッピング（追加施工）</SectionTitle>
-        <Card>
-          {toppings.length === 0 ? (
-            <Text style={styles.empty}>なし</Text>
-          ) : (
-            toppings.map((t, i) => (
-              <View key={i} style={styles.subBlock}>
-                <View style={styles.subHead}>
-                  <Text style={styles.subName}>{t.name || '（名称なし）'}</Text>
-                  {t.fee ? <Text style={styles.subFee}>¥{yen(t.fee)}</Text> : null}
+            <SectionTitle>
+              定期点検（実施 {checkedItems.length}/{report.checklist.length}）
+            </SectionTitle>
+            {report.checklist.map((c) => (
+              <Card key={c.name}>
+                <View style={styles.checkHead}>
+                  <Text style={[styles.checkMark, !c.checked && styles.checkMarkOff]}>
+                    {c.checked ? '✓' : '－'}
+                  </Text>
+                  <Text style={styles.checkName}>{c.name}</Text>
+                  {c.condition ? (
+                    <Text
+                      style={[
+                        styles.condPill,
+                        c.condition === 'できてない' && styles.condPillAlert,
+                      ]}
+                    >
+                      {c.condition}
+                    </Text>
+                  ) : null}
                 </View>
-                {t.comment ? <Text style={styles.note}>{t.comment}</Text> : null}
-              </View>
-            ))
-          )}
-        </Card>
+                {c.subChecks ? (
+                  <Text style={styles.subChecksLine}>
+                    {c.subChecks.map((sc) => `${sc.checked ? '✓' : '－'} ${sc.name}`).join('　')}
+                  </Text>
+                ) : null}
+                {c.note ? <Text style={styles.note}>{c.note}</Text> : null}
+                <PhotoStrip photos={c.photos} />
+              </Card>
+            ))}
+
+            {/* 害虫駆除 */}
+            <SectionTitle>害虫駆除</SectionTitle>
+            <Card>
+              <Row label="実施内容" value={pestLabels.join('、')} />
+              <Row label="害虫の状況" value={pest.presence} />
+              <PhotoStrip photos={pest.photos} />
+            </Card>
+
+            {/* ネズミ駆除（実施時のみ） */}
+            {report.ratControl?.done && (
+              <>
+                <SectionTitle>ネズミ駆除</SectionTitle>
+                <Card>
+                  {report.ratControl.work !== '' && (
+                    <Text style={styles.note}>{report.ratControl.work}</Text>
+                  )}
+                  <Row label="発生状況" value={report.ratControl.presence} />
+                  {report.ratControl.initialFee > 0 && (
+                    <Row label="初回施工費" value={`¥${yen(report.ratControl.initialFee)}`} />
+                  )}
+                  {report.ratControl.monthlyFee > 0 && (
+                    <Row label="月額料金" value={`¥${yen(report.ratControl.monthlyFee)}`} />
+                  )}
+                  <PhotoStrip photos={report.ratControl.photos} />
+                </Card>
+              </>
+            )}
+
+            {/* トッピング */}
+            <SectionTitle>トッピング（追加施工）</SectionTitle>
+            <Card>
+              {toppings.length === 0 ? (
+                <Text style={styles.empty}>なし</Text>
+              ) : (
+                toppings.map((t, i) => (
+                  <View key={i} style={styles.subBlock}>
+                    <View style={styles.subHead}>
+                      <Text style={styles.subName}>{t.name || '（名称なし）'}</Text>
+                      {t.fee ? <Text style={styles.subFee}>¥{yen(t.fee)}</Text> : null}
+                    </View>
+                    {t.comment ? <Text style={styles.note}>{t.comment}</Text> : null}
+                  </View>
+                ))
+              )}
+            </Card>
           </>
         )}
 

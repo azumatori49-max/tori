@@ -71,7 +71,10 @@ function idbRequest<T>(
       new Promise<T>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, mode);
         const req = fn(tx.objectStore(STORE_NAME));
-        req.onsuccess = () => resolve(req.result as T);
+        // リクエスト成功後のコミット失敗も保存エラーとして扱う。
+        tx.oncomplete = () => resolve(req.result as T);
+        tx.onabort = () => reject(toError(tx.error, 'IndexedDB transaction aborted'));
+        tx.onerror = () => reject(toError(tx.error, 'IndexedDB transaction failed'));
         req.onerror = () => reject(toError(req.error, 'IndexedDB request failed'));
       }),
   );

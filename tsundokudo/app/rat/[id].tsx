@@ -1,10 +1,10 @@
 /**
  * ネズミ駆除契約の作成・編集
- * - 契約情報（店舗・坪数→料金自動表示・開始日→満了日自動計算）
+ * - 契約情報（店舗・坪数・料金手入力・開始日→満了日自動計算）
  * - 契約更新（6ヶ月/1年/2年の延長）
  * - 毎月の点検履歴（日付・作業内容・発生状況・写真無制限）
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRatStore } from '@/store/ratStore';
 import { useReportStore } from '@/store/reportStore';
 import { useIsViewer } from '@/store/authStore';
-import { addMonths, ratPricing, ratStatus, todayIso } from '@/lib/ratPlan';
+import { addMonths, ratStatus, todayIso } from '@/lib/ratPlan';
 import { yen } from '@/lib/billing';
 import { confirmAsync, notify } from '@/lib/dialog';
 import { Button, Card, ChipSelect, Field, Input, SectionTitle } from '@/components/ui';
@@ -84,7 +84,6 @@ export default function RatContractScreen() {
   const [visitPresence, setVisitPresence] = useState<PestPresence | ''>('');
   const [visitPhotos, setVisitPhotos] = useState<ReportPhoto[]>([]);
 
-  const price = useMemo(() => ratPricing(form.tsubo), [form.tsubo]);
   const status = form.endDate ? ratStatus(form) : null;
 
   if (isViewer) {
@@ -157,9 +156,7 @@ export default function RatContractScreen() {
       notify('契約開始日を選択してください');
       return;
     }
-    const ok = isNew
-      ? await store.createContract(form)
-      : await store.updateContract(id, form);
+    const ok = isNew ? await store.createContract(form) : await store.updateContract(id, form);
     if (ok) goBack();
     else notify('保存できませんでした', useRatStore.getState().error ?? '');
   }
@@ -230,16 +227,7 @@ export default function RatContractScreen() {
             <Field label="坪数">
               <Input
                 value={form.tsubo ? String(form.tsubo) : ''}
-                onChangeText={(v) => {
-                  const t = toNum(v);
-                  const table = ratPricing(t);
-                  // 坪数を変えたら料金表の金額を自動セット（下の欄で個別調整できる）
-                  patch({
-                    tsubo: t,
-                    initialFee: table?.initialFee ?? 0,
-                    monthlyFee: table?.monthlyFee ?? 0,
-                  });
-                }}
+                onChangeText={(v) => patch({ tsubo: toNum(v) })}
                 placeholder="例: 25"
                 keyboardType="number-pad"
               />
@@ -248,7 +236,7 @@ export default function RatContractScreen() {
               <Input
                 value={form.initialFee ? String(form.initialFee) : ''}
                 onChangeText={(v) => patch({ initialFee: toNum(v) })}
-                placeholder="坪数を入れると料金表から自動入力"
+                placeholder="請求金額を手入力（0円は請求なし）"
                 keyboardType="number-pad"
               />
             </Field>
@@ -256,21 +244,19 @@ export default function RatContractScreen() {
               <Input
                 value={form.monthlyFee ? String(form.monthlyFee) : ''}
                 onChangeText={(v) => patch({ monthlyFee: toNum(v) })}
-                placeholder="坪数を入れると料金表から自動入力"
+                placeholder="請求金額を手入力（0円は請求なし）"
                 keyboardType="number-pad"
               />
             </Field>
             <Text style={styles.hint}>
-              金額はこの契約だけに適用されます。毎月のレポートの請求にはここの金額が使われます。
+              契約の金額は参考情報です。請求金額は毎回のレポートで手入力してください。
             </Text>
 
-            {/* この契約の料金（料金表は坪数入力時の初期値） */}
+            {/* この契約の参考料金 */}
             <View style={styles.priceBox}>
               {form.initialFee > 0 || form.monthlyFee > 0 ? (
                 <>
-                  <Text style={styles.priceTier}>
-                    この契約の料金{price ? `（料金表: ${price.tier}）` : ''}・年間契約
-                  </Text>
+                  <Text style={styles.priceTier}>この契約の参考料金（手入力）・年間契約</Text>
                   <View style={styles.priceRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.priceLabel}>初回（税抜）</Text>
@@ -281,16 +267,16 @@ export default function RatContractScreen() {
                   <View style={styles.priceRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.priceLabel}>毎月（税抜）</Text>
-                      <Text style={styles.priceDesc}>点検、ベイト交換、トラップ設置、侵入口チェック</Text>
+                      <Text style={styles.priceDesc}>
+                        点検、ベイト交換、トラップ設置、侵入口チェック
+                      </Text>
                     </View>
                     <Text style={styles.priceVal}>¥{yen(form.monthlyFee)}</Text>
                   </View>
                 </>
               ) : (
                 <Text style={styles.priceNote}>
-                  {form.tsubo > 100
-                    ? '100坪を超える場合は個別見積です。下の欄に金額を入力してください'
-                    : '坪数を入力すると料金表から自動入力されます'}
+                  金額を手入力してください。0円の場合は請求しません。
                 </Text>
               )}
             </View>
@@ -376,10 +362,7 @@ export default function RatContractScreen() {
                     <Text style={styles.visitDate}>{fmtDate(v.date)}</Text>
                     {v.presence !== '' && (
                       <Text
-                        style={[
-                          styles.visitPresence,
-                          v.presence === '多い' && styles.presenceBad,
-                        ]}
+                        style={[styles.visitPresence, v.presence === '多い' && styles.presenceBad]}
                       >
                         {v.presence}
                       </Text>

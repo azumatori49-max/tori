@@ -58,7 +58,7 @@ export function PhotoSection({
       {photos.map((ph) => (
         <View key={ph.id} style={styles.photoCard}>
           <View style={styles.photoTop}>
-            <FitPhoto uri={ph.uri} height={88} />
+            <FitPhoto uri={ph.uri} height={260} />
             <View style={styles.photoMeta}>
               <View style={styles.catWrap}>
                 {CATEGORIES.map((cat) => {
@@ -117,8 +117,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#FBFDFD',
   },
-  photoTop: { flexDirection: 'row' },
-  photoMeta: { flex: 1, marginLeft: 10, justifyContent: 'space-between' },
+  photoTop: { alignItems: 'stretch' },
+  photoMeta: { marginTop: 10 },
   catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   cat: {
     paddingHorizontal: 10,

@@ -5,7 +5,7 @@
  *   /report/new   … 新規作成（任意で ?store= で店舗を初期指定）
  *   /report/:id   … 既存レポートの編集
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReportStore } from '@/store/reportStore';
 import { useRatStore } from '@/store/ratStore';
-import { addMonths, ratPricing, ratStatus } from '@/lib/ratPlan';
+import { addMonths, ratStatus } from '@/lib/ratPlan';
 import { useIsViewer } from '@/store/authStore';
 import { confirmAsync, notify } from '@/lib/dialog';
 import {
@@ -45,6 +45,7 @@ import {
 import { C, CONDITION_COLOR } from '@/constants/colors';
 import { calcBilling, supplyAmount, yen } from '@/lib/billing';
 import { exportReportPdf } from '@/lib/exportPdf';
+import { companyStores } from '@/lib/companyStores';
 import { pdfBlockReason } from '@/lib/reportValidation';
 import type {
   AnnualSchedule,
@@ -60,7 +61,10 @@ import type {
 /** 施工担当者は「、」区切りで複数名を保持する */
 const TECH_SEP = '、';
 function splitTech(value: string): string[] {
-  return value.split(TECH_SEP).map((s) => s.trim()).filter(Boolean);
+  return value
+    .split(TECH_SEP)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function toNum(v: string): number {
@@ -71,10 +75,18 @@ export default function ReportFormScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const hydrated = useReportStore((s) => s.hydrated);
   // 既存レポートは読み込み完了を待つ（読み込み前に空のフォームで初期化され、上書き保存されるのを防ぐ）
-  if (id !== 'new' && !hydrated) {
+  if (!hydrated) {
     return (
       <View style={[styles.root, styles.loading]}>
         <ActivityIndicator color={C.primary} />
+      </View>
+    );
+  }
+  if (id !== 'new' && !useReportStore.getState().getReport(id)) {
+    return (
+      <View style={styles.root}>
+        <Text>レポートが見つかりません。一覧に戻って再読み込みしてください。</Text>
+        <Button title="一覧へ戻る" onPress={() => router.replace('/reports')} />
       </View>
     );
   }
@@ -113,9 +125,19 @@ function ReportForm() {
   });
 
   const isOrder = form.reportType === 'order';
+  const companies = [
+    ...new Set(
+      [...store.settings.companies, ...store.reports.map((r) => r.company)].filter(Boolean),
+    ),
+  ];
+  const visibleStores = companyStores(store.reports, form.company);
+  function applyCompany(company: string) {
+    if (company !== form.company) patch({ company, storeName: '', prevIssues: [] });
+  }
 
   // 次回の課題の入力欄
   const [issueDraft, setIssueDraft] = useState('');
+  const saving = useRef(false);
 
   // ネズミ駆除: 店舗の契約照合（新規契約の自動作成用の坪数入力つき）
   const ratContracts = useRatStore((s) => s.contracts);
@@ -128,7 +150,6 @@ function ReportForm() {
   const ratContract = ratContracts.find(
     (c) => compactName(c.storeName) === compactName(form.storeName) && form.storeName.trim() !== '',
   );
-  const ratNewPrice = ratPricing(ratTsubo);
 
   /** 店舗の前回レポートの「次回の課題」を引き継ぐ（達成チェック用） */
   function issuesForStore(name: string) {
@@ -208,9 +229,7 @@ function ReportForm() {
   function toggleTechnician(name: string) {
     setForm((f) => {
       const list = splitTech(f.technician);
-      const next = list.includes(name)
-        ? list.filter((n) => n !== name)
-        : [...list, name];
+      const next = list.includes(name) ? list.filter((n) => n !== name) : [...list, name];
       return { ...f, technician: next.join(TECH_SEP) };
     });
   }
@@ -267,12 +286,11 @@ function ReportForm() {
           visits: [visit, ...contract.visits],
         });
       } else {
-        const table = ratPricing(ratTsubo);
         await useRatStore.getState().createContract({
           storeName: f.storeName.trim(),
           tsubo: ratTsubo,
-          initialFee: table?.initialFee ?? 0,
-          monthlyFee: table?.monthlyFee ?? 0,
+          initialFee: f.ratControl.initialFee,
+          monthlyFee: f.ratControl.monthlyFee,
           startDate: date,
           endDate: addMonths(date, 12),
           renewals: [],
@@ -291,9 +309,10 @@ function ReportForm() {
       notify('店舗名を入力してください');
       return;
     }
-    const ok = isNew
-      ? await store.createReport(form)
-      : await store.updateReport(id, form);
+    if (saving.current) return;
+    saving.current = true;
+    const ok = isNew ? await store.createReport(form) : await store.updateReport(id, form);
+    saving.current = false;
     if (ok) {
       // 新規保存時のみ履歴追加（編集の再保存で二重登録しない）
       if (isNew && form.reportType !== 'order' && form.ratControl.done) {
@@ -337,8 +356,12 @@ function ReportForm() {
         </Pressable>
         <Text style={styles.topbarTitle}>
           {isOrder
-            ? isNew ? '新規オーダー工事' : 'オーダー工事編集'
-            : isNew ? '新規レポート' : 'レポート編集'}
+            ? isNew
+              ? '新規オーダー工事'
+              : 'オーダー工事編集'
+            : isNew
+              ? '新規レポート'
+              : 'レポート編集'}
         </Text>
         <Pressable onPress={() => void onSave()} hitSlop={10}>
           <Text style={[styles.topbarBtn, styles.topbarSave]}>保存</Text>
@@ -356,6 +379,15 @@ function ReportForm() {
           {/* ── 基本情報 ── */}
           <SectionTitle>基本情報</SectionTitle>
           <Card>
+            <Field label="会社名">
+              <Input
+                value={form.company}
+                onChangeText={applyCompany}
+                placeholder="例: 株式会社鶏ヤロー"
+              />
+              <View style={{ height: 8 }} />
+              <ChipSelect options={companies} value={form.company} onChange={applyCompany} />
+            </Field>
             <Field label="施工店舗">
               <Input
                 value={form.storeName}
@@ -363,23 +395,15 @@ function ReportForm() {
                 placeholder="例: まる助東松山駅前店"
               />
               <View style={{ height: 8 }} />
+              {!form.company && (
+                <Text style={styles.hintText}>
+                  先に会社名を選択してください。新しい店舗は直接入力できます。
+                </Text>
+              )}
               <ChipSelect
-                options={store.settings.stores}
+                options={visibleStores}
                 value={form.storeName}
                 onChange={applyStoreName}
-              />
-            </Field>
-            <Field label="会社名">
-              <Input
-                value={form.company}
-                onChangeText={(v) => patch({ company: v })}
-                placeholder="例: 株式会社鶏ヤロー"
-              />
-              <View style={{ height: 8 }} />
-              <ChipSelect
-                options={store.settings.companies}
-                value={form.company}
-                onChange={(v) => patch({ company: v })}
               />
             </Field>
             <Field label="施工日">
@@ -470,10 +494,7 @@ function ReportForm() {
                 PDF出力（提出）には各項目の写真が必要です（「任意」表示の項目を除く）。
               </Text>
             )}
-            <PhotoSection
-              photos={form.photos}
-              onChange={(photos) => patch({ photos })}
-            />
+            <PhotoSection photos={form.photos} onChange={(photos) => patch({ photos })} />
           </Card>
 
           {/* ── 請求サマリ（自動計算） ── */}
@@ -537,328 +558,289 @@ function ReportForm() {
           {/* ── 定期点検〜トッピング（メンテナンスのみ） ── */}
           {!isOrder && (
             <>
-          <SectionTitle>
-            定期点検 <Text style={styles.required}>写真はPDF出力に必須</Text>
-            <Text style={styles.optionalTag}>（「任意」表示の項目を除く）</Text>
-          </SectionTitle>
-          {form.checklist.map((item, idx) => (
-            <Card key={item.name}>
-              <CheckBox
-                checked={item.checked}
-                onToggle={() => patchChecklist(idx, { checked: !item.checked })}
-                label={item.name}
-              />
-              {item.checked && (
-                <View style={styles.checklistBody}>
-                  {item.subChecks && (
-                    <View style={styles.subChecks}>
-                      {item.subChecks.map((sc, sIdx) => (
-                        <CheckBox
-                          key={sc.name}
-                          checked={sc.checked}
-                          label={sc.name}
-                          size={20}
-                          onToggle={() =>
-                            patchChecklist(idx, {
-                              subChecks: item.subChecks!.map((x, i) =>
-                                i === sIdx ? { ...x, checked: !x.checked } : x,
-                              ),
-                            })
-                          }
-                        />
-                      ))}
+              <SectionTitle>
+                定期点検 <Text style={styles.required}>写真はPDF出力に必須</Text>
+                <Text style={styles.optionalTag}>（「任意」表示の項目を除く）</Text>
+              </SectionTitle>
+              {form.checklist.map((item, idx) => (
+                <Card key={item.name}>
+                  <CheckBox
+                    checked={item.checked}
+                    onToggle={() => patchChecklist(idx, { checked: !item.checked })}
+                    label={item.name}
+                  />
+                  {item.checked && (
+                    <View style={styles.checklistBody}>
+                      {item.subChecks && (
+                        <View style={styles.subChecks}>
+                          {item.subChecks.map((sc, sIdx) => (
+                            <CheckBox
+                              key={sc.name}
+                              checked={sc.checked}
+                              label={sc.name}
+                              size={20}
+                              onToggle={() =>
+                                patchChecklist(idx, {
+                                  subChecks: item.subChecks!.map((x, i) =>
+                                    i === sIdx ? { ...x, checked: !x.checked } : x,
+                                  ),
+                                })
+                              }
+                            />
+                          ))}
+                        </View>
+                      )}
+                      <Text style={styles.subLabel}>状況</Text>
+                      <Dropdown
+                        options={CONDITION_OPTIONS}
+                        value={item.condition}
+                        onChange={(v) =>
+                          patchChecklist(idx, { condition: v as ChecklistItem['condition'] })
+                        }
+                        placeholder="状況を選択"
+                        colorMap={CONDITION_COLOR}
+                      />
+                      <View style={{ height: 8 }} />
+                      <Input
+                        value={item.note}
+                        onChangeText={(v) => patchChecklist(idx, { note: v })}
+                        placeholder="備考"
+                      />
+                      <Text style={styles.subLabel}>
+                        写真（最大6枚）
+                        {OPTIONAL_PHOTO_CHECK_NAMES.includes(item.name) && (
+                          <Text style={styles.optionalTag}>任意</Text>
+                        )}
+                      </Text>
+                      <PhotoSection
+                        photos={item.photos}
+                        onChange={(photos: ReportPhoto[]) => patchChecklist(idx, { photos })}
+                        max={6}
+                        defaultCategory="施工後"
+                      />
                     </View>
                   )}
-                  <Text style={styles.subLabel}>状況</Text>
-                  <Dropdown
-                    options={CONDITION_OPTIONS}
-                    value={item.condition}
-                    onChange={(v) => patchChecklist(idx, { condition: v as ChecklistItem['condition'] })}
-                    placeholder="状況を選択"
-                    colorMap={CONDITION_COLOR}
-                  />
-                  <View style={{ height: 8 }} />
-                  <Input
-                    value={item.note}
-                    onChangeText={(v) => patchChecklist(idx, { note: v })}
-                    placeholder="備考"
-                  />
-                  <Text style={styles.subLabel}>
-                    写真（最大6枚）
-                    {OPTIONAL_PHOTO_CHECK_NAMES.includes(item.name) && (
-                      <Text style={styles.optionalTag}>任意</Text>
-                    )}
-                  </Text>
-                  <PhotoSection
-                    photos={item.photos}
-                    onChange={(photos: ReportPhoto[]) => patchChecklist(idx, { photos })}
-                    max={6}
-                    defaultCategory="施工後"
+                </Card>
+              ))}
+
+              {/* ── 害虫駆除 ── */}
+              <SectionTitle>害虫駆除</SectionTitle>
+              <Card>
+                <View style={styles.pestRow}>
+                  <CheckBox
+                    checked={form.pestControl.basic}
+                    onToggle={() =>
+                      patch({
+                        pestControl: { ...form.pestControl, basic: !form.pestControl.basic },
+                      })
+                    }
+                    label="基本駆除"
                   />
                 </View>
-              )}
-            </Card>
-          ))}
-
-          {/* ── 害虫駆除 ── */}
-          <SectionTitle>害虫駆除</SectionTitle>
-          <Card>
-            <View style={styles.pestRow}>
-              <CheckBox
-                checked={form.pestControl.basic}
-                onToggle={() =>
-                  patch({ pestControl: { ...form.pestControl, basic: !form.pestControl.basic } })
-                }
-                label="基本駆除"
-              />
-            </View>
-            <View style={styles.pestRow}>
-              <CheckBox
-                checked={form.pestControl.antiDrug}
-                onToggle={() =>
-                  patch({
-                    pestControl: { ...form.pestControl, antiDrug: !form.pestControl.antiDrug },
-                  })
-                }
-                label="対抗薬剤使用"
-              />
-            </View>
-            <View style={styles.pestRow}>
-              <CheckBox
-                checked={form.pestControl.strongPesticide}
-                onToggle={() =>
-                  patch({
-                    pestControl: {
-                      ...form.pestControl,
-                      strongPesticide: !form.pestControl.strongPesticide,
-                    },
-                  })
-                }
-                label="強殺虫剤"
-              />
-            </View>
-            <Text style={styles.subLabel}>
-              害虫の状況（いるかいないか）<Text style={styles.required}>PDF出力に必須</Text>
-            </Text>
-            <ChipSelect
-              options={[...PEST_PRESENCE_OPTIONS]}
-              value={form.pestControl.presence}
-              allowEmpty={false}
-              onChange={(v) =>
-                patch({
-                  pestControl: {
-                    ...form.pestControl,
-                    presence: v as PestPresence | '',
-                  },
-                })
-              }
-            />
-            <Text style={styles.subLabel}>
-              写真（最大6枚）<Text style={styles.required}>PDF出力に必須</Text>
-            </Text>
-            <PhotoSection
-              photos={form.pestControl.photos}
-              onChange={(photos: ReportPhoto[]) =>
-                patch({ pestControl: { ...form.pestControl, photos } })
-              }
-              max={6}
-              defaultCategory="その他"
-            />
-          </Card>
-
-          {/* ── ネズミ駆除（任意） ── */}
-          <SectionTitle>
-            ネズミ駆除 <Text style={styles.optionalTag}>任意</Text>
-          </SectionTitle>
-          <Card>
-            <CheckBox
-              checked={form.ratControl.done}
-              label="ネズミ駆除を実施した"
-              onToggle={() => {
-                const next = !form.ratControl.done;
-                let rc = { ...form.ratControl, done: next };
-                // 契約済み店舗なら契約の月額料金を自動セット
-                if (next && ratContract && rc.monthlyFee === 0) {
-                  const fee = ratContract.monthlyFee || ratPricing(ratContract.tsubo)?.monthlyFee || 0;
-                  if (fee) rc = { ...rc, monthlyFee: fee };
-                }
-                patch({ ratControl: rc });
-              }}
-            />
-            {form.ratControl.done && (
-              <View style={styles.checklistBody}>
-                <Field label="作業内容">
-                  <Input
-                    value={form.ratControl.work}
-                    onChangeText={(v) => patch({ ratControl: { ...form.ratControl, work: v } })}
-                    placeholder="例: ベイト交換、トラップ2箇所設置、侵入口チェック"
-                    multiline
+                <View style={styles.pestRow}>
+                  <CheckBox
+                    checked={form.pestControl.antiDrug}
+                    onToggle={() =>
+                      patch({
+                        pestControl: { ...form.pestControl, antiDrug: !form.pestControl.antiDrug },
+                      })
+                    }
+                    label="対抗薬剤使用"
                   />
-                </Field>
-                <Text style={styles.subLabel}>発生状況</Text>
+                </View>
+                <View style={styles.pestRow}>
+                  <CheckBox
+                    checked={form.pestControl.strongPesticide}
+                    onToggle={() =>
+                      patch({
+                        pestControl: {
+                          ...form.pestControl,
+                          strongPesticide: !form.pestControl.strongPesticide,
+                        },
+                      })
+                    }
+                    label="強殺虫剤"
+                  />
+                </View>
+                <Text style={styles.subLabel}>
+                  害虫の状況（いるかいないか）<Text style={styles.required}>PDF出力に必須</Text>
+                </Text>
                 <ChipSelect
                   options={[...PEST_PRESENCE_OPTIONS]}
-                  value={form.ratControl.presence}
+                  value={form.pestControl.presence}
                   allowEmpty={false}
                   onChange={(v) =>
                     patch({
-                      ratControl: { ...form.ratControl, presence: v as PestPresence | '' },
+                      pestControl: {
+                        ...form.pestControl,
+                        presence: v as PestPresence | '',
+                      },
                     })
                   }
                 />
-                {(form.ratControl.initialFee > 0 || form.ratControl.monthlyFee > 0) && (
-                  <View style={styles.ratFeeBox}>
-                    {form.ratControl.initialFee > 0 && (
-                      <View style={styles.ratFeeRow}>
-                        <Text style={styles.ratFeeLabel}>初回施工費（税抜）</Text>
-                        <Text style={styles.ratFeeVal}>¥{yen(form.ratControl.initialFee)}</Text>
-                      </View>
-                    )}
-                    {form.ratControl.monthlyFee > 0 && (
-                      <View style={styles.ratFeeRow}>
-                        <Text style={styles.ratFeeLabel}>月額料金（税抜）</Text>
-                        <Text style={styles.ratFeeVal}>¥{yen(form.ratControl.monthlyFee)}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.hintText}>
-                      料金表から自動計算され、請求額（税込）とPDFの請求内訳に反映されます。
-                    </Text>
-                  </View>
-                )}
+                <Text style={styles.subLabel}>
+                  写真（最大6枚）<Text style={styles.required}>PDF出力に必須</Text>
+                </Text>
+                <PhotoSection
+                  photos={form.pestControl.photos}
+                  onChange={(photos: ReportPhoto[]) =>
+                    patch({ pestControl: { ...form.pestControl, photos } })
+                  }
+                  max={6}
+                  defaultCategory="その他"
+                />
+              </Card>
+
+              {/* ── ネズミ駆除（任意） ── */}
+              <SectionTitle>
+                ネズミ駆除 <Text style={styles.optionalTag}>任意</Text>
+              </SectionTitle>
+              <Card>
                 <CheckBox
-                  checked={form.ratControl.initialFee === 0 && form.ratControl.monthlyFee === 0}
-                  label="今回は料金を請求しない"
-                  size={20}
+                  checked={form.ratControl.done}
+                  label="ネズミ駆除を実施した"
                   onToggle={() => {
-                    const off =
-                      form.ratControl.initialFee === 0 && form.ratControl.monthlyFee === 0;
-                    if (!off) {
-                      patch({ ratControl: { ...form.ratControl, initialFee: 0, monthlyFee: 0 } });
-                    } else {
-                      // 復元（契約あり: 契約の月額 / なし: 坪数から料金表の初回＋月額）
-                      const p = ratPricing(ratTsubo);
-                      patch({
-                        ratControl: {
-                          ...form.ratControl,
-                          initialFee: ratContract ? 0 : (p?.initialFee ?? 0),
-                          monthlyFee: ratContract
-                            ? ratContract.monthlyFee ||
-                              (ratPricing(ratContract.tsubo)?.monthlyFee ?? 0)
-                            : (p?.monthlyFee ?? 0),
-                        },
-                      });
-                    }
+                    const next = !form.ratControl.done;
+                    const rc = { ...form.ratControl, done: next };
+                    patch({ ratControl: rc });
                   }}
                 />
-                <Text style={styles.subLabel}>写真（枚数無制限）</Text>
-                <PhotoSection
-                  photos={form.ratControl.photos}
-                  onChange={(photos: ReportPhoto[]) =>
-                    patch({ ratControl: { ...form.ratControl, photos } })
-                  }
-                  defaultCategory="施工後"
-                />
-                {ratContract ? (
-                  <View style={styles.ratInfoBox}>
-                    <Text style={styles.ratInfoTitle}>
-                      この店舗は契約{ratStatus(ratContract).key === 'expired' ? '終了' : '中'}
-                      （{ratStatus(ratContract).key === 'expired'
-                        ? `満了から${-ratStatus(ratContract).daysLeft}日`
-                        : `満了まで残り${ratStatus(ratContract).daysLeft}日`}）
-                    </Text>
-                    <Text style={styles.hintText}>
-                      保存すると、ネズミタブの点検履歴に自動で追加されます。
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.ratInfoBox}>
-                    <Text style={styles.ratInfoTitle}>この店舗はまだネズミ駆除契約がありません</Text>
-                    <Field label="坪数（契約の自動作成用）">
-                      <Input
-                        value={ratTsubo ? String(ratTsubo) : ''}
-                        onChangeText={(v) => {
-                          const t = toNum(v);
-                          setRatTsubo(t);
-                          const p = ratPricing(t);
-                          patch({
-                            ratControl: {
-                              ...form.ratControl,
-                              initialFee: p ? p.initialFee : 0,
-                              monthlyFee: p ? p.monthlyFee : 0,
-                            },
-                          });
-                        }}
-                        placeholder="例: 25"
-                        keyboardType="number-pad"
-                      />
-                    </Field>
-                    {ratNewPrice && (
-                      <Text style={styles.ratPriceLine}>
-                        {ratNewPrice.tier}：初回 ¥{yen(ratNewPrice.initialFee)} ／ 月額 ¥
-                        {yen(ratNewPrice.monthlyFee)}（税抜・年間契約）
-                      </Text>
-                    )}
-                    <Text style={styles.hintText}>
-                      保存すると年間契約を自動作成します（開始日＝施工日、満了日＝1年後）。
-                      管理はネズミタブで行えます。
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </Card>
-
-          {/* ── トッピング ── */}
-          <SectionTitle>トッピング（追加施工）</SectionTitle>
-          {form.toppings.map((t, idx) => {
-            const isCustom = !DEFAULT_TOPPING_NAMES.includes(t.name);
-            return (
-              <Card key={`top-${idx}`}>
-                <View style={styles.rowInline}>
-                  <CheckBox
-                    checked={t.checked}
-                    onToggle={() => patchTopping(idx, { checked: !t.checked })}
-                    label={isCustom ? undefined : t.name}
-                  />
-                  {isCustom && (
-                    <>
-                      <Input
-                        value={t.name}
-                        onChangeText={(v) => patchTopping(idx, { name: v })}
-                        placeholder="項目名（自由入力）"
-                        style={styles.inlineInput}
-                      />
-                      <Pressable onPress={() => removeTopping(idx)} hitSlop={8}>
-                        <Text style={styles.removeBtn}>削除</Text>
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-                {t.checked && (
+                {form.ratControl.done && (
                   <View style={styles.checklistBody}>
-                    <Input
-                      value={t.comment}
-                      onChangeText={(v) => patchTopping(idx, { comment: v })}
-                      placeholder="コメント"
-                      multiline
-                    />
-                    <View style={{ height: 8 }} />
-                    <Field label="追加費用（税抜・円）">
+                    <Field label="作業内容">
                       <Input
-                        value={String(t.fee)}
-                        onChangeText={(v) => patchTopping(idx, { fee: toNum(v) })}
+                        value={form.ratControl.work}
+                        onChangeText={(v) => patch({ ratControl: { ...form.ratControl, work: v } })}
+                        placeholder="例: ベイト交換、トラップ2箇所設置、侵入口チェック"
+                        multiline
+                      />
+                    </Field>
+                    <Text style={styles.subLabel}>発生状況</Text>
+                    <ChipSelect
+                      options={[...PEST_PRESENCE_OPTIONS]}
+                      value={form.ratControl.presence}
+                      allowEmpty={false}
+                      onChange={(v) =>
+                        patch({
+                          ratControl: { ...form.ratControl, presence: v as PestPresence | '' },
+                        })
+                      }
+                    />
+                    <Field label="初回施工費（税抜・円）">
+                      <Input
+                        value={String(form.ratControl.initialFee || 0)}
+                        onChangeText={(v) =>
+                          patch({ ratControl: { ...form.ratControl, initialFee: toNum(v) } })
+                        }
                         keyboardType="number-pad"
                       />
                     </Field>
+                    <Field label="今回の駆除料金（税抜・円）">
+                      <Input
+                        value={String(form.ratControl.monthlyFee || 0)}
+                        onChangeText={(v) =>
+                          patch({ ratControl: { ...form.ratControl, monthlyFee: toNum(v) } })
+                        }
+                        keyboardType="number-pad"
+                      />
+                    </Field>
+                    <Text style={styles.hintText}>
+                      請求する金額を手入力してください。0円の場合は請求しません。
+                    </Text>
+                    <Text style={styles.subLabel}>写真（枚数無制限）</Text>
+                    <PhotoSection
+                      photos={form.ratControl.photos}
+                      onChange={(photos: ReportPhoto[]) =>
+                        patch({ ratControl: { ...form.ratControl, photos } })
+                      }
+                      defaultCategory="施工後"
+                    />
+                    {ratContract ? (
+                      <View style={styles.ratInfoBox}>
+                        <Text style={styles.ratInfoTitle}>
+                          この店舗は契約{ratStatus(ratContract).key === 'expired' ? '終了' : '中'}（
+                          {ratStatus(ratContract).key === 'expired'
+                            ? `満了から${-ratStatus(ratContract).daysLeft}日`
+                            : `満了まで残り${ratStatus(ratContract).daysLeft}日`}
+                          ）
+                        </Text>
+                        <Text style={styles.hintText}>
+                          保存すると、ネズミタブの点検履歴に自動で追加されます。
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.ratInfoBox}>
+                        <Text style={styles.ratInfoTitle}>
+                          この店舗はまだネズミ駆除契約がありません
+                        </Text>
+                        <Field label="坪数（契約の自動作成用）">
+                          <Input
+                            value={ratTsubo ? String(ratTsubo) : ''}
+                            onChangeText={(v) => setRatTsubo(toNum(v))}
+                            placeholder="例: 25"
+                            keyboardType="number-pad"
+                          />
+                        </Field>
+                        <Text style={styles.hintText}>
+                          保存すると年間契約を自動作成します（開始日＝施工日、満了日＝1年後）。
+                          管理はネズミタブで行えます。
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </Card>
-            );
-          })}
-          <View style={styles.addInline}>
-            <Button title="＋ トッピングを追加" variant="ghost" onPress={addTopping} />
-          </View>
 
+              {/* ── トッピング ── */}
+              <SectionTitle>トッピング（追加施工）</SectionTitle>
+              {form.toppings.map((t, idx) => {
+                const isCustom = !DEFAULT_TOPPING_NAMES.includes(t.name);
+                return (
+                  <Card key={`top-${idx}`}>
+                    <View style={styles.rowInline}>
+                      <CheckBox
+                        checked={t.checked}
+                        onToggle={() => patchTopping(idx, { checked: !t.checked })}
+                        label={isCustom ? undefined : t.name}
+                      />
+                      {isCustom && (
+                        <>
+                          <Input
+                            value={t.name}
+                            onChangeText={(v) => patchTopping(idx, { name: v })}
+                            placeholder="項目名（自由入力）"
+                            style={styles.inlineInput}
+                          />
+                          <Pressable onPress={() => removeTopping(idx)} hitSlop={8}>
+                            <Text style={styles.removeBtn}>削除</Text>
+                          </Pressable>
+                        </>
+                      )}
+                    </View>
+                    {t.checked && (
+                      <View style={styles.checklistBody}>
+                        <Input
+                          value={t.comment}
+                          onChangeText={(v) => patchTopping(idx, { comment: v })}
+                          placeholder="コメント"
+                          multiline
+                        />
+                        <View style={{ height: 8 }} />
+                        <Field label="追加費用（税抜・円）">
+                          <Input
+                            value={String(t.fee)}
+                            onChangeText={(v) => patchTopping(idx, { fee: toNum(v) })}
+                            keyboardType="number-pad"
+                          />
+                        </Field>
+                      </View>
+                    )}
+                  </Card>
+                );
+              })}
+              <View style={styles.addInline}>
+                <Button title="＋ トッピングを追加" variant="ghost" onPress={addTopping} />
+              </View>
             </>
           )}
 
@@ -918,40 +900,38 @@ function ReportForm() {
           {/* ── 年間スケジュール（メンテナンスのみ） ── */}
           {!isOrder && (
             <>
-          <SectionTitle>年間スケジュール</SectionTitle>
-          <Card>
-            <Field label="コメント">
-              <Input
-                value={form.annualSchedule.comment}
-                onChangeText={(v) => patchAnnual({ comment: v })}
-                placeholder="例: 12月 冷蔵庫パッキン / 4月エアコン清掃 / 9月排水管清掃 …"
-                multiline
-              />
-            </Field>
-            <Field label="追加費用（税抜・円）">
-              <Input
-                value={String(form.annualSchedule.fee)}
-                onChangeText={(v) => patchAnnual({ fee: toNum(v) })}
-                keyboardType="number-pad"
-              />
-            </Field>
-            <Text style={styles.subLabel}>写真（最大6枚）</Text>
-            <PhotoSection
-              photos={form.annualSchedule.photos}
-              onChange={(photos: ReportPhoto[]) => patchAnnual({ photos })}
-              max={6}
-              defaultCategory="その他"
-            />
-          </Card>
+              <SectionTitle>年間スケジュール</SectionTitle>
+              <Card>
+                <Field label="コメント">
+                  <Input
+                    value={form.annualSchedule.comment}
+                    onChangeText={(v) => patchAnnual({ comment: v })}
+                    placeholder="例: 12月 冷蔵庫パッキン / 4月エアコン清掃 / 9月排水管清掃 …"
+                    multiline
+                  />
+                </Field>
+                <Field label="追加費用（税抜・円）">
+                  <Input
+                    value={String(form.annualSchedule.fee)}
+                    onChangeText={(v) => patchAnnual({ fee: toNum(v) })}
+                    keyboardType="number-pad"
+                  />
+                </Field>
+                <Text style={styles.subLabel}>写真（最大6枚）</Text>
+                <PhotoSection
+                  photos={form.annualSchedule.photos}
+                  onChange={(photos: ReportPhoto[]) => patchAnnual({ photos })}
+                  max={6}
+                  defaultCategory="その他"
+                />
+              </Card>
             </>
           )}
 
           {/* ── 備品資材 ── */}
           <SectionTitle>使用備品資材</SectionTitle>
           <Card>
-            {form.supplies.length === 0 && (
-              <Text style={styles.emptyLine}>明細はありません</Text>
-            )}
+            {form.supplies.length === 0 && <Text style={styles.emptyLine}>明細はありません</Text>}
             {form.supplies.map((s, idx) => (
               <View key={idx} style={styles.supplyRow}>
                 <Input
@@ -1073,7 +1053,11 @@ function ReportForm() {
                   onPress={() => router.push(`/report/view/${id}`)}
                 />
                 <View style={{ height: 10 }} />
-                <Button title="このレポートを削除" variant="danger" onPress={() => void onDelete()} />
+                <Button
+                  title="このレポートを削除"
+                  variant="danger"
+                  onPress={() => void onDelete()}
+                />
               </>
             )}
           </View>

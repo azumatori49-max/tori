@@ -13,7 +13,6 @@ import * as Sharing from 'expo-sharing';
 import { buildReportHtml, buildReportsHtml, reportFileName } from '@/lib/reportHtml';
 import { officialStoreName } from '@/lib/storeNames';
 import { useReportStore } from '@/store/reportStore';
-import { useAuthStore } from '@/store/authStore';
 import type { MaintenanceReport, MaintenanceReportInsert } from '@/types/report';
 
 type ReportLike = MaintenanceReport | MaintenanceReportInsert;
@@ -29,10 +28,9 @@ function withOfficialName<T extends ReportLike>(report: T): T {
   return { ...report, storeName: officialStoreName(report.storeName, master) };
 }
 
-/** 発行元（自社名）。ログイン組織 or 閲覧リンクの組織名 */
+/** PDFの発行元 */
 function issuerName(): string {
-  const a = useAuthStore.getState();
-  return a.org?.name ?? a.guestOrg?.name ?? '';
+  return '株式会社店舗ドクター';
 }
 
 export interface ExportResult {
@@ -54,10 +52,7 @@ function printOnWeb(html: string, fileName: string): ExportResult {
     };
   }
   // 印刷ダイアログのデフォルトファイル名に使われる
-  const titledHtml = html.replace(
-    '<head>',
-    `<head><title>${fileName}</title>`,
-  );
+  const titledHtml = html.replace('<head>', `<head><title>${fileName}</title>`);
   w.document.open();
   w.document.write(titledHtml);
   w.document.close();

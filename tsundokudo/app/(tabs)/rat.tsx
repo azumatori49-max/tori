@@ -9,7 +9,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useRatStore } from '@/store/ratStore';
-import { ratPricing, ratStatus, type RatStatusKey } from '@/lib/ratPlan';
+import { ratStatus, type RatStatusKey } from '@/lib/ratPlan';
 import { yen } from '@/lib/billing';
 import { C } from '@/constants/colors';
 import type { RatContract } from '@/types/rat';
@@ -29,7 +29,6 @@ const STATUS_STYLE: Record<RatStatusKey, { bg: string; fg: string }> = {
 
 function ContractCard({ c }: { c: RatContract }) {
   const st = ratStatus(c);
-  const price = ratPricing(c.tsubo);
   const sty = STATUS_STYLE[st.key];
   return (
     <Pressable
@@ -46,18 +45,12 @@ function ContractCard({ c }: { c: RatContract }) {
       </View>
       <Text style={styles.itemMeta}>
         {c.tsubo ? `${c.tsubo}坪` : '坪数未設定'}
-        {c.monthlyFee || price
-          ? `　月額 ¥${yen(c.monthlyFee || price?.monthlyFee || 0)}`
-          : c.tsubo > 100
-            ? '　要見積'
-            : ''}
+        {`　参考月額 ¥${yen(c.monthlyFee || 0)}`}
         {`　点検 ${c.visits.length}回`}
       </Text>
       <Text style={styles.itemMeta}>
         {fmtDate(c.startDate)} 〜 {fmtDate(c.endDate)}
-        {st.key === 'expired'
-          ? `　満了から${-st.daysLeft}日`
-          : `　残り${st.daysLeft}日`}
+        {st.key === 'expired' ? `　満了から${-st.daysLeft}日` : `　残り${st.daysLeft}日`}
       </Text>
     </Pressable>
   );
@@ -126,7 +119,6 @@ export default function RatScreen() {
           sorted.map((c) => <ContractCard key={c.id} c={c} />)
         )}
       </ScrollView>
-
     </View>
   );
 }

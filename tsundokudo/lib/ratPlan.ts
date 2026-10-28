@@ -1,28 +1,5 @@
-/**
- * ネズミ駆除サービスの料金表・契約状態の計算
- *
- * 料金（税抜）:
- *   〜30坪    初回10万円 / 月額7,500円
- *   31〜60坪  初回15万円 / 月額9,800円
- *   61〜100坪 初回20万円 / 月額14,800円
- * 年間契約（開始日の1年後が満了日）。
- */
+/** ネズミ駆除契約の日付・状態計算。料金は手入力。 */
 import type { RatContract } from '@/types/rat';
-
-export interface RatPricing {
-  tier: string;
-  initialFee: number;
-  monthlyFee: number;
-}
-
-/** 坪数から料金を求める（100坪超は要見積のため null） */
-export function ratPricing(tsubo: number): RatPricing | null {
-  if (!tsubo || tsubo <= 0) return null;
-  if (tsubo <= 30) return { tier: '〜30坪', initialFee: 100000, monthlyFee: 7500 };
-  if (tsubo <= 60) return { tier: '31〜60坪', initialFee: 150000, monthlyFee: 9800 };
-  if (tsubo <= 100) return { tier: '61〜100坪', initialFee: 200000, monthlyFee: 14800 };
-  return null;
-}
 
 /** YYYY-MM-DD にヶ月数を足す（末日超過は月末に丸め） */
 export function addMonths(iso: string, months: number): string {

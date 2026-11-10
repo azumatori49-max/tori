@@ -2305,7 +2305,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.54.0";
+const APP_VERSION="v7.54.1";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2313,6 +2313,10 @@ const ADMIN_VISIBLE=new URLSearchParams(location.search).has("admin");
 // アクセスコード（SHA-256ハッシュ）。設定すると、コードを入力しないとアプリを開けない。
 // 有効にするには、管理画面の「セットアップ支援」で生成したハッシュに置き換える。null でゲート無効。
 const ACCESS_CODE_HASH=null;
+// 認証後も Firestore のルールでこのアカウントだけにアクセスを限定する。
+const PASSWORD_PROTECTED=SHARED_FB_CONFIG.config.projectId==="rakuraku-check";
+const PASSWORD_ACCOUNT="app-access@rakuraku-check.com";
+const PASSWORD_UID="rinten-staff-nov26-v1";
 const FB_SDK_VERSION="11.10.0";
 const DEFAULT_AI_MODEL="gemini-3.5-flash";
 const KNOWN_MODELS=[
@@ -2735,7 +2739,52 @@ async function sha256hex(s){
   const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
   return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
+let passwordAuthPromise;
+let resolvePasswordGate;
+function passwordAuth(){
+  if(!passwordAuthPromise){
+    const V=FB_SDK_VERSION;
+    passwordAuthPromise=Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
+    ]).then(async ([appMod,authMod])=>{
+      const firebase=appMod.getApps().length?appMod.getApp():appMod.initializeApp(SHARED_FB_CONFIG.config);
+      const auth=authMod.getAuth(firebase);
+      await auth.authStateReady();
+      await authMod.setPersistence(auth,authMod.browserSessionPersistence);
+      return {auth,authMod};
+    }).catch(e=>{passwordAuthPromise=undefined;throw e;});
+  }
+  return passwordAuthPromise;
+}
+function isPasswordUser(user){
+  return user?.uid===PASSWORD_UID&&user.providerData.some(p=>p.providerId==="password");
+}
+async function awaitPasswordAccess(){
+  state.locked=true;
+  const gate=new Promise(resolve=>{resolvePasswordGate=resolve;});
+  render();
+  try{
+    const {auth}=await passwordAuth();
+    if(isPasswordUser(auth.currentUser)) resolvePasswordGate();
+  }catch(e){ /* パスワードの再入力時に接続を再試行できる */ }
+  await gate;
+  state.locked=false;
+}
 function viewLock(){
+  if(PASSWORD_PROTECTED) return `
+  <div class="home-hero" style="text-align:center;padding-top:64px">
+    <div style="display:flex;justify-content:center">${LOGO_SVG.replace("<svg ","<svg style=\"width:88px;height:88px\" ")}</div>
+    <h1 style="margin-top:12px">${esc(APP_NAME)}</h1>
+    <p style="margin:8px auto 0">パスワードを入力してください。</p>
+  </div>
+  <div class="wrap"><form class="card" id="password-form">
+    <div class="field"><label for="lock-code">パスワード</label>
+      <input type="password" id="lock-code" autocomplete="current-password" required>
+    </div>
+    <div style="margin-top:12px"><button class="btn" id="lock-go" type="submit">ログイン</button></div>
+    <p class="note" id="lock-msg" role="status">パスワードは管理者にお問い合わせください。</p>
+  </form></div>`;
   return `
   <div class="home-hero" style="text-align:center;padding-top:64px">
     <div style="display:flex;justify-content:center">${LOGO_SVG.replace("<svg ","<svg style=\"width:88px;height:88px\" ")}</div>
@@ -2753,6 +2802,30 @@ function viewLock(){
   </div>`;
 }
 function bindLock(){
+  if(PASSWORD_PROTECTED){
+    $("#password-form").addEventListener("submit",async e=>{
+      e.preventDefault();
+      const input=$("#lock-code"), button=$("#lock-go"), msg=$("#lock-msg");
+      if(button.disabled||!input.value) return;
+      button.disabled=true;
+      msg.textContent="認証中…";
+      try{
+        const {auth,authMod}=await passwordAuth();
+        const {user}=await authMod.signInWithEmailAndPassword(auth,PASSWORD_ACCOUNT,input.value);
+        if(!isPasswordUser(user)){
+          await authMod.signOut(auth);
+          throw new Error("unauthorized account");
+        }
+        input.value="";
+        resolvePasswordGate();
+      }catch(err){
+        msg.textContent=err?.code==="auth/network-request-failed"?"接続できません。通信状況をご確認ください。":err?.code==="auth/too-many-requests"?"しばらく時間をおいてからお試しください。":"ログインできません。パスワードをご確認ください。";
+        button.disabled=false;
+        input.select();
+      }
+    });
+    return;
+  }
   const tryUnlock=async()=>{
     const code=$("#lock-code").value.trim();
     if(!code) return;
@@ -3011,6 +3084,7 @@ function viewHome(){
       <p class="hw-meta" style="margin-top:8px">使い方：コピー → ChatGPTを開く → そのまま貼り付けて送信。CSVはExcelでも開けます</p>
     </div>
     ${ADMIN_VISIBLE?`<button class="btn ghost" id="to-admin">管理画面（AI判定の設定）</button>`:""}
+    ${PASSWORD_PROTECTED?`<button class="btn ghost" id="password-logout">ログアウト</button>`:""}
     <p class="hw-meta" style="text-align:center;margin-top:10px">${esc(APP_NAME)} ${APP_VERSION}</p>
   </div>`;
 }
@@ -3367,6 +3441,19 @@ function bindAdmin(){
   });
 }
 function bindHome(){
+  $("#password-logout")?.addEventListener("click",async e=>{
+    const button=e.currentTarget;
+    button.disabled=true;
+    try{
+      const {auth,authMod}=await passwordAuth();
+      await flushDrafts();
+      await authMod.signOut(auth);
+      location.reload();
+    }catch(e){
+      button.disabled=false;
+      showToast("ログアウトできませんでした。もう一度お試しください。");
+    }
+  });
   const storeIn=$("#f-store");
   const renderPrev=()=>{
     const box=$("#prev-hw"); if(!box) return;
@@ -3533,8 +3620,13 @@ async function initCloud(){
       import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
     ]);
     const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(SHARED_FB_CONFIG.config);
-    try{ await authMod.signInAnonymously(authMod.getAuth(app)); }
-    catch(e){ /* 匿名認証が無効でも、テストモードのルールなら動作する */ }
+    if(PASSWORD_PROTECTED){
+      const {auth}=await passwordAuth();
+      if(!isPasswordUser(auth.currentUser)) return;
+    }else{
+      try{ await authMod.signInAnonymously(authMod.getAuth(app)); }
+      catch(e){ /* 会社別 Firebase の既存の認証設定に従う */ }
+    }
     setTimeout(()=>syncOutbox(),0); // ログイン直後の自動再送
     setTimeout(()=>cloudFetchGeminiKey(),0); // 共有AIキーの取得
     setTimeout(()=>cloudFetchGptUrl(),0);    // 共有GPTリンクの取得
@@ -4363,9 +4455,10 @@ document.addEventListener("input",e=>{
 
 /* ================= 起動 ================= */
 (async function init(){
+  if(PASSWORD_PROTECTED) await awaitPasswordAccess();
   try{
     db=await openDB();
-    if(ACCESS_CODE_HASH){
+    if(!PASSWORD_PROTECTED&&ACCESS_CODE_HASH){
       const ok=await kvGet("access").catch(()=>null);
       if(ok!==ACCESS_CODE_HASH) state.locked=true;
     }
@@ -4405,7 +4498,7 @@ document.addEventListener("input",e=>{
     }
   }catch(e){
     /* プライベートモード等でIndexedDBが使えない場合も画面は動く（保存なし） */
-    if(ACCESS_CODE_HASH) state.locked=true;
+    if(!PASSWORD_PROTECTED&&ACCESS_CODE_HASH) state.locked=true;
   }
   render();
   initCloud();

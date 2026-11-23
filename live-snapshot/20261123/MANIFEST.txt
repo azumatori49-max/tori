@@ -1,0 +1,33 @@
+Snapshot of deployed static files: https://rakuraku-kanri.net
+Fetched (UTC): 2026-11-23T06:49:33Z
+Method: curl GET only (no browser, no login, no Firebase/Google API access)
+Layout: site/<path> mirrors the URL path; headers-index.txt = response headers of "/" (saved as site/index.html)
+
+Summary: 11 files saved, 1347294 bytes total, 4 missing, 0 failed
+
+== FILES (path | HTTP status | Content-Type | bytes | sha256 | Last-Modified | ETag) ==
+/apple-touch-icon-180-v2.png | 200 | image/png | 33428 | 8f09e1c8c161d39252e3d21731d1aa51829b7a5e4a41e30fd8f1f5312255b723 | Tue, 10 Nov 2026 08:15:24 GMT | "56058d694920b4ae129e13fcd4e87cdbb04b35d7b7ef139695763fe55e6209b3"
+/assets/browser-DMcW5KLn.js | 200 | text/javascript; charset=utf-8 | 8841 | ce598a3813ef4f5be59bb56d8fb12ec8d9566625663691a07ff76ead1d2f5af8 | Tue, 10 Nov 2026 08:15:24 GMT | "34a687f308ad0cf3670febce31cfc13fd8705f14ad23716419192b5658d5c32e"
+/assets/index-BZXkAT9o.css | 200 | text/css; charset=utf-8 | 26370 | 6dbee68124b745f25deaa81b9136f71f6e55d9a27bd67e8e7fabaf46b728e01a | Tue, 10 Nov 2026 08:15:24 GMT | "b1b40165804660026952733cf248affb65cb91d2d41d90dde9069e8f8ea34a63"
+/assets/index-CFCVjdjm.js | 200 | text/javascript; charset=utf-8 | 766337 | 725ad5ccd2e5a85a6999eb7234befcd386ea9802f36d768586bb7beb9563a34c | Tue, 10 Nov 2026 08:15:24 GMT | "08d54a74b43279db02d5310c8a1b2c1b23efc832e5a49a28de35c9b8cc55154b"
+/favicon-32-v2.png | 200 | image/png | 2732 | 9b89ddbe779f58805d72deb0376c866b88a98573c4d9456cd6ab5d194601d350 | Tue, 10 Nov 2026 08:15:24 GMT | "8a812bfef2323289f19be0e2fc2d04a6fa6580c5433cb865594ba5552dc9b26c"
+/index.html | 200 | text/html; charset=utf-8 | 1429 | 7d43904057019d0b08c8fa2bd42845ab1905bc80078b176505970aae5a15d546 | Tue, 10 Nov 2026 08:15:24 GMT | "cb03bc826e61703cdd0d16cb0784a9465c551d34a2dcf12285fc72737cb01a65"
+/logo.svg | 200 | image/svg+xml | 1386 | 81781d4ae3ca81eb81b213778251a8aa0924e48c7fd96fc7028a2e20f71049d6 | Tue, 10 Nov 2026 08:15:24 GMT | "74c1d4790281b1fa3afe2828120f85ed2e04d0772d6749f3b994466faa2713ce"
+/rakuraku.png | 200 | image/png | 129446 | 970e66fc36cfbb8c7e4ec4a3ff332b8ed466ce46a44eecff3ee1f72422e38a8a | Tue, 10 Nov 2026 08:15:24 GMT | "acfc0597d8029679ef7e0918772ffabb17f10a5674c3697e0944ed7a78803126"
+/ref/beer-gas.jpg | 200 | image/jpeg | 205859 | 17666a2af1806dbd12b7d2793e75a5aee150cb3673e7fd56e24bb3ed456d9304 | Tue, 10 Nov 2026 08:15:24 GMT | "0037322d0a64e394d7d8d96d44b1938a9e40fabc5928fd903566b2ab904ed84f"
+/ref/cola-gas.jpg | 200 | image/jpeg | 171440 | 001c2dc3043b760a2971ddb54349c3ba4c8aa210c983dbfbf633b47ca335131f | Tue, 10 Nov 2026 08:15:24 GMT | "8fad9ca0930a85ab3a899da15be3e34e0fe0441b3ad8ac9551e72570d50c0e7b"
+/robots.txt | 200 | text/plain; charset=utf-8 | 26 | 331ea9090db0c9f6f597bd9840fd5b171830f6e0b3ba1cb24dfa91f0c95aedc1 | Tue, 10 Nov 2026 08:15:24 GMT | "a3c1929c28e678a928feac1b745e72772cba91b26b4bf07beb0154e5ad4362cf"
+
+== MISSING (server returned index.html fallback: HTTP 200, text/html, body identical to index.html; not saved) ==
+/favicon.ico | 200 | text/html; charset=utf-8 | 1429
+/logo.png | 200 | text/html; charset=utf-8 | 1429
+/manifest.json | 200 | text/html; charset=utf-8 | 1429
+/manifest.webmanifest | 200 | text/html; charset=utf-8 | 1429
+
+== NOT FETCHED / FAILED ==
+(none)
+
+== NOTES ==
+- External (non-site) URLs referenced in the JS were intentionally not fetched: https://apis.google.com/js/api.js, https://www.google.com/recaptcha/api.js
+- Paths built at runtime in the JS (Firebase Storage object paths such as photos/..., referral-signs/..., schedule-refs/...) are not static site files and were not fetched.
+- Only lazy chunk referenced from the entry bundle: assets/browser-DMcW5KLn.js. No font or image references under assets/ were found in the JS/CSS.

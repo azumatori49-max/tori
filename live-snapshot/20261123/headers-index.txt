@@ -1,0 +1,18 @@
+HTTP/1.1 200 Connection Established
+
+HTTP/2 200 
+cache-control: max-age=3600
+content-type: text/html; charset=utf-8
+etag: "cb03bc826e61703cdd0d16cb0784a9465c551d34a2dcf12285fc72737cb01a65"
+last-modified: Tue, 10 Nov 2026 08:15:24 GMT
+strict-transport-security: max-age=31556926
+accept-ranges: bytes
+date: Mon, 23 Nov 2026 06:49:16 GMT
+x-served-by: cache-iad-kiad7000201-IAD
+x-cache: MISS
+x-cache-hits: 0
+x-timer: S1795416557.727558,VS0,VE110
+vary: x-fh-requested-host, accept-encoding
+alt-svc: h3=":443";ma=86400,h3-29=":443";ma=86400,h3-27=":443";ma=86400
+content-length: 1429
+

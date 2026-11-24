@@ -93,9 +93,13 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ uploaded: number; total: number } | null>(null);
+  // 送信中の1枚の進み具合（0〜100）
+  const [bytesPct, setBytesPct] = useState(0);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [helpImageUrl, setHelpImageUrl] = useState<string | null>(null);
+  // 複数枚OKの項目で「×」で外した、保存済み写真のURL（提出時にまとめて外す）
+  const removedUrlsRef = useRef<string[]>([]);
   const multiInputRef = useRef<HTMLInputElement>(null);
 
   const stateKey = `${type}:${dateOrWeekKey}`;
@@ -114,13 +118,17 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
     setFixedSlots(nextFixed);
     const nextMulti: SlotState[] = [];
     if (hasMulti) {
+      // 途中の番号が抜けていても、その後ろの写真を落とさない（抜けは空き枠として持つ）
       let i = fixedCount;
-      while (photos.has(i) && i < 20) {
-        nextMulti.push({ kind: 'existing', url: photos.get(i)! });
+      const end = Math.min(20, Math.max(fixedCount, ...photos.keys()) + 1);
+      while (i < end) {
+        const url = photos.get(i);
+        nextMulti.push(url ? { kind: 'existing', url } : { kind: 'empty' });
         i += 1;
       }
     }
     setMultiSlots(nextMulti);
+    removedUrlsRef.current = [];
     setHydratedKey(stateKey);
   }, [loading, hydratedKey, stateKey, existing, fixedCount, hasMulti]);
 
@@ -173,9 +181,14 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
     if (files.length === 0) return;
     setError(null);
     setMultiSlots((prev) => {
-      const remaining = 20 - fixedCount - prev.length;
-      const accepted = files.slice(0, Math.max(0, remaining));
-      return [...prev, ...accepted.map<SlotState>((f) => ({ kind: 'new', file: f }))];
+      const next = [...prev];
+      for (const file of files) {
+        // 空き枠があればそこに入れ、無ければ後ろに足す（合計20枚まで）
+        const emptyIdx = next.findIndex((s) => s.kind === 'empty');
+        if (emptyIdx >= 0) next[emptyIdx] = { kind: 'new', file };
+        else if (fixedCount + next.length < 20) next.push({ kind: 'new', file });
+      }
+      return next;
     });
   };
 
@@ -189,7 +202,10 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
   };
 
   const removeMultiSlot = (idx: number) => {
-    setMultiSlots((prev) => prev.filter((_, i) => i !== idx));
+    // 番号を詰めると他の写真の番号がずれるので、外した枠は空き枠として残す
+    const target = multiSlots[idx];
+    if (target.kind === 'existing') removedUrlsRef.current.push(target.url);
+    setMultiSlots((prev) => prev.map((s, i) => (i === idx ? { kind: 'empty' } : s)));
   };
 
   const onSubmit = async () => {
@@ -197,6 +213,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
     setError(null);
     setSubmitting(true);
     setProgress({ uploaded: 0, total: newCount });
+    setBytesPct(0);
     try {
       const payload: SubmitSlot[] = [
         ...fixedSlots.map(slotToSubmit),
@@ -208,7 +225,12 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
         type,
         dateOrWeekKey,
         slots: payload,
-        onProgress: (uploaded, total) => setProgress({ uploaded, total }),
+        removedPhotoUrls: removedUrlsRef.current,
+        onProgress: (uploaded, total) => {
+          setProgress({ uploaded, total });
+          setBytesPct(0);
+        },
+        onBytes: (loaded, total) => setBytesPct(total > 0 ? Math.min(100, (loaded / total) * 100) : 0),
       });
       setSuccess(true);
     } catch (err) {
@@ -234,7 +256,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
         title={type === 'daily' ? '毎日の衛生チェック' : type === 'weekly' ? '週次の衛生チェック' : '月次の衛生チェック'}
         subtitle={storeName}
         left={
-          <button type="button" onClick={onBack} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">←</button>
+          <button type="button" onClick={onBack} disabled={submitting} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">←</button>
         }
       />
       <main className="mx-auto w-full max-w-app px-4 py-5">
@@ -303,21 +325,27 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
               <span className="ml-2 text-[11px] font-normal text-text-muted">（複数枚OK）</span>
             </h3>
             <div className="grid grid-cols-3 gap-2.5">
-              {multiSlots.map((slot, i) => (
-                <MultiCell
-                  key={i}
-                  index={i}
-                  slot={slot}
-                  source={multiItem.source}
-                  disabled={submitting || morningLock}
-                  onReplace={(f) => replaceMultiSlot(i, f)}
-                  onRemove={() => removeMultiSlot(i)}
-                />
-              ))}
+              {multiSlots.map((slot, i) =>
+                slot.kind === 'empty' ? null : (
+                  <MultiCell
+                    key={i}
+                    index={i}
+                    slot={slot}
+                    source={multiItem.source}
+                    disabled={submitting || morningLock}
+                    onReplace={(f) => replaceMultiSlot(i, f)}
+                    onRemove={() => removeMultiSlot(i)}
+                  />
+                ),
+              )}
               <button
                 type="button"
                 onClick={() => multiInputRef.current?.click()}
-                disabled={submitting || morningLock || fixedCount + multiSlots.length >= 20}
+                disabled={
+                  submitting ||
+                  morningLock ||
+                  fixedCount + multiSlots.filter((s) => s.kind !== 'empty').length >= 20
+                }
                 className="flex aspect-square w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent/60 bg-accent/5 text-accent transition active:scale-95 disabled:opacity-50"
               >
                 <span className="text-2xl">＋</span>
@@ -344,6 +372,13 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
             )}
           </section>
         )}
+        {!morningLock && (
+          <p className="mt-4 text-xs text-text-muted">
+            {fixedSlots.filter((s) => s.kind === 'empty').length > 0
+              ? `未撮影の項目はあと${fixedSlots.filter((s) => s.kind === 'empty').length}件です。撮影できた分だけでも提出できます。`
+              : 'すべての項目の写真がそろっています。'}
+          </p>
+        )}
         {error && (
           <p className="mt-4 rounded-lg bg-ng-bg px-3 py-2 text-xs font-bold text-ng">{error}</p>
         )}
@@ -351,13 +386,13 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 backdrop-blur">
         <div className="mx-auto w-full max-w-app px-4 py-3">
           {progress && (
-            <div className="mb-2">
+            <div className="mb-2" role="status" aria-live="polite">
               <div className="flex justify-between text-[11px] font-bold text-text-muted">
-                <span>アップロード中…</span>
+                <span>{progress.uploaded === progress.total ? '保存を確認中…' : '写真を送信中…'}</span>
                 <span>{progress.uploaded} / {progress.total}</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface2">
-                <div className="h-full bg-accent transition-all" style={{ width: `${(progress.uploaded / progress.total) * 100}%` }} />
+                <div className="h-full bg-accent transition-all" style={{ width: `${Math.min(100, ((progress.uploaded + bytesPct / 100) / progress.total) * 100)}%` }} />
               </div>
             </div>
           )}

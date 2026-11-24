@@ -1,5 +1,6 @@
 import { useState, type FC } from 'react';
 import { useStores } from '../../hooks/useStores';
+import { getDateKey } from '../../lib/dateUtils';
 import type { Store, StoreKey } from '../../types';
 
 interface Props {
@@ -26,6 +27,8 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
 
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newOpeningDate, setNewOpeningDate] = useState(() => getDateKey(0, new Date()));
+  const [editingOpeningDate, setEditingOpeningDate] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [csv, setCsv] = useState('');
   const [showCsv, setShowCsv] = useState(false);
@@ -43,13 +46,14 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
     if (!newName.trim() || !newPassword.trim()) return;
     setBusy(true);
     try {
-      await addStore(newName.trim(), newPassword.trim());
+      await addStore(newName.trim(), newPassword.trim(), newOpeningDate);
       setNewName('');
       setNewPassword('');
+      setNewOpeningDate(getDateKey(0, new Date()));
       setShowAdd(false);
       setMessage('店舗を追加しました');
-    } catch {
-      setMessage('追加に失敗しました');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : '追加に失敗しました');
     } finally {
       setBusy(false);
     }
@@ -63,10 +67,16 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
       .filter((l) => !l.startsWith('店舗名,'));
     const rows = lines
       .map((l) => {
-        const [name, password] = l.split(',');
-        return name && password ? { name: name.trim(), password: password.trim() } : null;
+        const [name, password, openingDate] = l.split(',');
+        return name && password
+          ? {
+              name: name.trim(),
+              password: password.trim(),
+              openingDate: openingDate?.trim() || getDateKey(0, new Date()),
+            }
+          : null;
       })
-      .filter((r): r is { name: string; password: string } => !!r);
+      .filter((r): r is { name: string; password: string; openingDate: string } => !!r);
     if (rows.length === 0) {
       setMessage('CSVに有効な行がありません');
       return;
@@ -77,8 +87,8 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
       setCsv('');
       setShowCsv(false);
       setMessage(`${rows.length}店舗を追加しました`);
-    } catch {
-      setMessage('CSV追加に失敗しました');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'CSV追加に失敗しました');
     } finally {
       setBusy(false);
     }
@@ -100,6 +110,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
   const startEdit = (key: StoreKey) => {
     setEditingKey(key);
     setEditingName(stores[key].name);
+    setEditingOpeningDate(stores[key].createdAt?.slice(0, 10) ?? '');
   };
 
   const cancelEdit = () => {
@@ -109,14 +120,17 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
 
   const saveEdit = async () => {
     if (!editingKey) return;
-    if (editingName.trim() === stores[editingKey].name) {
+    if (
+      editingName.trim() === stores[editingKey].name &&
+      editingOpeningDate === (stores[editingKey].createdAt?.slice(0, 10) ?? '')
+    ) {
       cancelEdit();
       return;
     }
     setBusy(true);
     try {
-      await updateStoreName(editingKey, editingName);
-      setMessage('店舗名を更新しました');
+      await updateStoreName(editingKey, editingName, editingOpeningDate);
+      setMessage('店舗情報を更新しました');
       cancelEdit();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '更新に失敗しました');
@@ -168,6 +182,22 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
               ランダム生成
             </button>
           </div>
+          <label className="block text-xs font-bold">
+            オープン日
+            <input
+              type="date"
+              required
+              min="1900-01-01"
+              max="9999-12-31"
+              value={newOpeningDate}
+              onChange={(e) => setNewOpeningDate(e.target.value)}
+              disabled={busy}
+              className="mt-1 w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
+            />
+          </label>
+          <p className="text-[11px] text-text-muted">
+            未来の日付で事前登録できます。オープン日前は未提出回数に数えません。
+          </p>
           <p className="text-[11px] text-text-muted">
             登録後はパスワードを確認できないので控えてください。
           </p>
@@ -194,14 +224,14 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
       {showCsv && (
         <div className="space-y-2 rounded-2xl border border-border bg-surface p-3">
           <p className="text-[11px] text-text-muted">
-            形式: <code className="font-mono">店舗名,パスワード</code> （1行1店舗、ヘッダー行は無視）
+            形式: <code className="font-mono">店舗名,パスワード,オープン日</code> （日付は YYYY-MM-DD、省略時は今日。1行1店舗、ヘッダー行は無視）
           </p>
           <textarea
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
             rows={6}
             className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm font-mono"
-            placeholder="店舗名,パスワード&#10;サンプル1号店,パスワード例"
+            placeholder={'店舗名,パスワード,オープン日\nサンプル1号店,パスワード例,2026-12-01'}
           />
           <button
             type="button"
@@ -238,11 +268,24 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
                     className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
                     autoFocus
                   />
+                  <label className="block text-xs font-bold">
+                    オープン日
+                    <input
+                      type="date"
+                      required
+                      min="1900-01-01"
+                      max="9999-12-31"
+                      value={editingOpeningDate}
+                      onChange={(e) => setEditingOpeningDate(e.target.value)}
+                      disabled={busy}
+                      className="mt-1 w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
+                    />
+                  </label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={saveEdit}
-                      disabled={busy || !editingName.trim()}
+                      disabled={busy || !editingName.trim() || (!!stores[k].createdAt && !editingOpeningDate)}
                       className="flex-1 rounded-md bg-accent py-1.5 text-xs font-bold text-white disabled:opacity-50"
                     >
                       保存
@@ -261,6 +304,11 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{stores[k].name}</p>
+                    {stores[k].createdAt && (
+                      <p className="text-[11px] text-text-muted">
+                        オープン日：{stores[k].createdAt.slice(0, 10)}
+                      </p>
+                    )}
                     <p className="truncate font-mono text-[10px] text-text-muted">{k}</p>
                   </div>
                   <button

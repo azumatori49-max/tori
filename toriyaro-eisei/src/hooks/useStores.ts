@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { onValue, ref, remove, update } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { hashPassword } from '../lib/crypto';
+import { getDateKey } from '../lib/dateUtils';
+import { openingDateToIso } from '../lib/storeOpening';
 import type { Store, StoreKey } from '../types';
 
 const generateStoreKey = (): StoreKey => {
@@ -46,28 +48,31 @@ export const useStores = () => {
     };
   }, []);
 
-  const addStore = useCallback(async (name: string, password: string) => {
+  /** openingDate は YYYY-MM-DD（オープン日）。createdAt として保存する */
+  const addStore = useCallback(async (name: string, password: string, openingDate: string) => {
+    const createdAt = openingDateToIso(openingDate);
     const key = generateStoreKey();
     const passwordHash = await hashPassword(password, key);
     await update(ref(db, `stores/${key}`), {
       name,
       passwordHash,
-      createdAt: new Date().toISOString(),
+      createdAt,
     });
     return key;
   }, []);
 
     const addStoresBulk = useCallback(
-    async (rows: Array<{ name: string; password: string }>) => {
+    async (rows: Array<{ name: string; password: string; openingDate?: string }>) => {
       const updates: Record<string, Store> = {};
       await Promise.all(
         rows.map(async (row) => {
+          const createdAt = openingDateToIso(row.openingDate || getDateKey(0, new Date()));
           const key = generateStoreKey();
           const passwordHash = await hashPassword(row.password, key);
           updates[`stores/${key}`] = {
             name: row.name,
             passwordHash,
-            createdAt: new Date().toISOString(),
+            createdAt,
           };
         }),
       );
@@ -76,11 +81,15 @@ export const useStores = () => {
     [],
   );
 
-    const updateStoreName = useCallback(async (key: StoreKey, name: string) => {
+  /** 店舗名と（指定があれば）オープン日を更新する。openingDate は YYYY-MM-DD */
+  const updateStoreName = useCallback(async (key: StoreKey, name: string, openingDate?: string) => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('店舗名を入力してください');
     if (trimmed.length >= 80) throw new Error('店舗名が長すぎます（80文字未満）');
-    await update(ref(db, `stores/${key}`), { name: trimmed });
+    await update(ref(db, `stores/${key}`), {
+      name: trimmed,
+      ...(openingDate ? { createdAt: openingDateToIso(openingDate) } : {}),
+    });
   }, []);
 
   const deleteStore = useCallback(async (key: StoreKey) => {

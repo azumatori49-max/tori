@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FC } from 'react';
+import { confirmDialog, noticeDialog } from '../ui/ConfirmDialog';
 import { Lightbox } from '../ui/Lightbox';
 import { VideoModal } from '../ui/VideoModal';
 import { ScheduleItemStats, ScheduleStatsSummary } from './ScheduleStatsView';
@@ -181,12 +182,12 @@ export const ScheduleTab: FC<Props> = ({ stores }) => {
         <button
           type="button"
           onClick={() => setView({ kind: 'create' })}
-          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white"
+          className="inline-flex min-h-[44px] items-center rounded-lg bg-accent px-4 text-xs font-bold text-white"
         >
           ＋ 新規作成
         </button>
       </div>
-      <p className="text-[11px] text-text-muted">
+      <p className="text-xs text-text-muted">
         期間つきの撮影依頼（POP張り替え、消防設備点検、大掃除など）を作ると、対象店舗の店舗トップに「撮影して提出」のカードが出ます。
         デイリー・ウィークリー・マンスリーの集計には含まれません。
       </p>
@@ -241,9 +242,9 @@ const ScheduleListRow: FC<{
       >
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-bold">{schedule.title}</p>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.label}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
         </div>
-        <div className="mt-1 flex items-center justify-between text-[11px] text-text-muted">
+        <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
           <span>{formatScheduleRange(schedule.from, schedule.to)}</span>
           <span>
             提出 {loading ? '…' : doneCount}/{targetKeys.length}店舗
@@ -296,20 +297,30 @@ const ScheduleDetail: FC<{
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      alert('コピーできませんでした。文章を長押しして選択してください。');
+      await noticeDialog({ title: 'コピーできませんでした', message: '下の文章を長押し（PCはドラッグ）して選択し、コピーしてください。' });
     }
   };
 
   const handleArchive = async (archived: boolean) => {
-    const msg = archived
-      ? `「${schedule.title}」を非表示にしますか？\n店舗トップと一覧の「期間中」から消えます（提出データは残ります）。`
-      : `「${schedule.title}」を再表示しますか？`;
-    if (!confirm(msg)) return;
+    const ok = await confirmDialog(
+      archived
+        ? {
+            title: `「${schedule.title}」を非表示にしますか？`,
+            message: '店舗トップと、一覧の「期間中」から消えます。提出データは残り、あとから再表示できます。',
+            confirmLabel: '非表示にする',
+          }
+        : {
+            title: `「${schedule.title}」を再表示しますか？`,
+            message: '期間中であれば、対象店舗の店舗トップにもう一度表示されます。',
+            confirmLabel: '再表示する',
+          },
+    );
+    if (!ok) return;
     setBusy(true);
     try {
       await setScheduleArchived(id, archived);
     } catch (err) {
-      alert('更新に失敗しました: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '更新できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setBusy(false);
     }
@@ -317,13 +328,19 @@ const ScheduleDetail: FC<{
 
   const handleDelete = async () => {
     if (locked) return;
-    if (!confirm(`「${schedule.title}」を削除しますか？\n参考動画（アップロード分）も削除されます。この操作は元に戻せません。`)) return;
+    const ok = await confirmDialog({
+      title: `「${schedule.title}」を削除しますか？`,
+      message: 'スケジュールと、アップロードした参考動画を削除します。元に戻せません。',
+      confirmLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await deleteSchedule(id);
       onBack();
     } catch (err) {
-      alert('削除に失敗しました: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '削除できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setBusy(false);
     }
@@ -334,7 +351,7 @@ const ScheduleDetail: FC<{
       <button
         type="button"
         onClick={() => setPlaying(v)}
-        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent"
       >
         ▶ 動画（{VIDEO_TYPE_LABEL[v.type]}）
       </button>
@@ -343,11 +360,11 @@ const ScheduleDetail: FC<{
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={onBack} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">
+        <button type="button" onClick={onBack} className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40" aria-label="戻る">
           ←
         </button>
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold">{schedule.title}</h2>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.label}</span>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${st.cls}`}>{st.label}</span>
       </div>
 
       <div className="rounded-2xl border border-border bg-surface p-3 text-xs">
@@ -380,7 +397,7 @@ const ScheduleDetail: FC<{
                 {i + 1}. {it.label}（必要{it.required}／最大{it.max}・{sourceLabel(it.source)}）
                 {it.note ? ` ${it.note}` : ''}
                 {it.stores && (
-                  <span className="ml-1 rounded bg-surface2 px-1 text-[10px]">
+                  <span className="ml-1 rounded bg-surface2 px-1 text-xs">
                     {Object.keys(it.stores).length}店舗のみ
                   </span>
                 )}
@@ -399,13 +416,13 @@ const ScheduleDetail: FC<{
             </div>
           ))}
         </div>
-        <p className="mt-2 font-mono text-[10px] text-text-muted">{id}</p>
+        <p className="mt-2 font-mono text-xs text-text-muted">{id}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onEdit}
             disabled={busy}
-            className="rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50"
+            className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted disabled:opacity-50"
           >
             編集
           </button>
@@ -414,7 +431,7 @@ const ScheduleDetail: FC<{
               type="button"
               onClick={() => handleArchive(false)}
               disabled={busy}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted disabled:opacity-50"
             >
               再表示する
             </button>
@@ -423,7 +440,7 @@ const ScheduleDetail: FC<{
               type="button"
               onClick={() => handleArchive(true)}
               disabled={busy}
-              className="rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50"
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted disabled:opacity-50"
             >
               非表示にする
             </button>
@@ -433,13 +450,13 @@ const ScheduleDetail: FC<{
             onClick={handleDelete}
             disabled={busy || loading || locked}
             title={locked ? '提出がある場合は削除できません' : undefined}
-            className="rounded-md bg-ng-bg px-3 py-1.5 text-[11px] font-bold text-ng disabled:opacity-50"
+            className="rounded-md bg-ng-bg px-3 py-1.5 text-xs font-bold text-ng disabled:opacity-50"
           >
             削除
           </button>
         </div>
         {locked && (
-          <p className="mt-2 text-[11px] text-text-muted">
+          <p className="mt-2 text-xs text-text-muted">
             提出した店舗があるため削除はできません（「非表示にする」で店舗の画面から消せます）。項目・枚数・撮影方法の変更もできません。
           </p>
         )}
@@ -458,19 +475,19 @@ const ScheduleDetail: FC<{
           提出 {loading ? '…' : doneCount}/{targetKeys.length}店舗
         </span>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md border border-border text-[11px] font-bold">
+          <div className="inline-flex rounded-md border border-border text-xs font-bold">
             {(['stores', 'items'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`px-2.5 py-1 ${mode === m ? 'bg-accent text-white' : 'text-text-muted'} ${m === 'stores' ? 'rounded-l-md' : 'rounded-r-md'}`}
+                className={`min-h-[44px] px-3.5 py-1 ${mode === m ? 'bg-text text-white' : 'text-text-muted'} ${m === 'stores' ? 'rounded-l-md' : 'rounded-r-md'}`}
               >
                 {m === 'stores' ? '店舗別' : '項目別'}
               </button>
             ))}
           </div>
-          <button type="button" onClick={reload} className="text-[11px] font-bold text-text-muted hover:text-accent">
+          <button type="button" onClick={reload} className="inline-flex min-h-[44px] items-center px-2 text-xs font-bold text-text-muted hover:text-accent">
             ↻ 更新
           </button>
         </div>
@@ -490,7 +507,7 @@ const ScheduleDetail: FC<{
           <button
             type="button"
             onClick={handleCopy}
-            className="mt-2 rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted"
+            className="mt-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted"
           >
             {copied ? 'コピーしました' : '未提出店舗をコピー'}
           </button>
@@ -536,12 +553,12 @@ const ScheduleDetail: FC<{
               <li key={r.key} className="rounded-xl border border-border bg-surface px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="min-w-0 flex-1 truncate text-sm font-bold">{r.name}</p>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${chip.cls}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${chip.cls}`}>
                     {chip.label}
                   </span>
                 </div>
                 {r.sub && (
-                  <p className="mt-0.5 text-[10px] text-text-muted">
+                  <p className="mt-0.5 text-xs text-text-muted">
                     提出: {formatDateTimeJa(r.sub.submittedAt)}
                   </p>
                 )}
@@ -566,7 +583,7 @@ const ScheduleDetail: FC<{
                       if (urls.length === 0) return null;
                       return (
                         <div key={i} className="flex items-center gap-1.5">
-                          <span className="w-20 shrink-0 truncate text-[10px] text-text-muted">
+                          <span className="w-20 shrink-0 truncate text-xs text-text-muted">
                             {i + 1}. {it.label}
                           </span>
                           <div className="no-scrollbar flex gap-1 overflow-x-auto">
@@ -762,7 +779,7 @@ const VideoField: FC<{
 
   return (
     <div className="space-y-2 rounded-xl border border-border bg-surface2/60 p-2.5">
-      <p className="text-[11px] font-bold text-text-muted">{label}（任意）</p>
+      <p className="text-xs font-bold text-text-muted">{label}（任意）</p>
       <div className="flex gap-1.5">
         {(
           [
@@ -776,8 +793,8 @@ const VideoField: FC<{
             type="button"
             disabled={disabled}
             onClick={() => setMode(mode)}
-            className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-bold ${
-              draft.mode === mode ? 'bg-accent text-white' : 'border border-border bg-surface text-text-muted'
+            className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold ${
+              draft.mode === mode ? 'bg-text text-white' : 'border border-border bg-surface text-text-muted'
             } disabled:opacity-50`}
           >
             {text}
@@ -797,9 +814,9 @@ const VideoField: FC<{
           />
           {draft.urlInput.trim() &&
             (parsed ? (
-              <p className="text-[11px] font-bold text-ok">OK：{VIDEO_TYPE_LABEL[parsed.type]} の動画として保存します</p>
+              <p className="text-xs font-bold text-ok">OK：{VIDEO_TYPE_LABEL[parsed.type]} の動画として保存します</p>
             ) : (
-              <p className="text-[11px] font-bold text-ng">
+              <p className="text-xs font-bold text-ng">
                 対応していないURLです（youtube.com/watch?v=、youtu.be/、youtube.com/shorts/、vimeo.com/数字 に対応）
               </p>
             ))}
@@ -810,7 +827,7 @@ const VideoField: FC<{
         <div className="space-y-1">
           <label
             htmlFor={inputId}
-            className={`inline-block cursor-pointer rounded border border-border bg-surface px-2 py-1 text-[11px] font-bold text-text-muted ${disabled ? 'opacity-50' : ''}`}
+            className={`inline-block cursor-pointer rounded border border-border bg-surface px-2 py-1 text-xs font-bold text-text-muted ${disabled ? 'opacity-50' : ''}`}
           >
             {current?.type === 'upload' || draft.pendingFile ? '別のファイルにする' : '動画ファイルを選ぶ'}
           </label>
@@ -826,17 +843,17 @@ const VideoField: FC<{
               e.target.value = '';
             }}
           />
-          <p className="text-[10px] text-text-muted">
+          <p className="text-xs text-text-muted">
             mp4 を推奨します（iPhone の .mov は Android で再生できない場合があります）。100MB未満。
           </p>
           {draft.pendingFile && (
-            <p className="text-[11px] text-text-muted">
+            <p className="text-xs text-text-muted">
               選択中: {draft.pendingFile.name}（{formatMB(draft.pendingFile.size)}）。保存時にアップロードします
             </p>
           )}
           {pct !== null && (
             <div>
-              <div className="flex justify-between text-[10px] font-bold text-text-muted">
+              <div className="flex justify-between text-xs font-bold text-text-muted">
                 <span>アップロード中…</span>
                 <span>{pct}%</span>
               </div>
@@ -846,7 +863,7 @@ const VideoField: FC<{
             </div>
           )}
           {current?.type === 'upload' && (
-            <p className="text-[11px] text-ok">
+            <p className="text-xs text-ok">
               アップロード済み{typeof current.size === 'number' ? `（${formatMB(current.size)}）` : ''}
             </p>
           )}
@@ -865,14 +882,14 @@ const VideoField: FC<{
         />
       )}
 
-      {message && <p className="text-[11px] font-bold text-warn">{message}</p>}
+      {message && <p className="text-xs font-bold text-warn">{message}</p>}
 
       {current && (
         <div>
           <button
             type="button"
             onClick={() => setPreview((v) => !v)}
-            className="text-[11px] font-bold text-accent"
+            className="text-xs font-bold text-accent"
           >
             {preview ? 'プレビューを閉じる' : 'プレビュー再生'}
           </button>
@@ -915,21 +932,21 @@ const StoreSelector: FC<{
   const filtered = storeKeys.filter(
     (k) => !search || stores[k].name.toLowerCase().includes(search.toLowerCase()),
   );
-  const btn = compact ? 'py-1.5 text-[11px]' : 'py-2 text-xs';
+  const btn = compact ? 'py-1.5 text-xs' : 'py-2 text-xs';
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => onAllChange(true)}
-          className={`flex-1 rounded-lg font-bold ${btn} ${all ? 'bg-accent text-white' : 'border border-border bg-surface text-text-muted'}`}
+          className={`flex-1 rounded-lg font-bold ${btn} ${all ? 'bg-text text-white' : 'border border-border bg-surface text-text-muted'}`}
         >
           {allLabel}
         </button>
         <button
           type="button"
           onClick={() => onAllChange(false)}
-          className={`flex-1 rounded-lg font-bold ${btn} ${!all ? 'bg-accent text-white' : 'border border-border bg-surface text-text-muted'}`}
+          className={`flex-1 rounded-lg font-bold ${btn} ${!all ? 'bg-text text-white' : 'border border-border bg-surface text-text-muted'}`}
         >
           選択（{selected.size}店舗）
         </button>
@@ -945,12 +962,12 @@ const StoreSelector: FC<{
           />
           <div className={`${compact ? 'max-h-40' : 'max-h-56'} space-y-1 overflow-y-auto rounded-lg border border-border bg-bg p-2`}>
             {filtered.map((k) => (
-              <label key={k} className="flex items-center gap-2 text-xs">
+              <label key={k} className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded px-1 text-sm hover:bg-surface2">
                 <input type="checkbox" checked={selected.has(k)} onChange={() => onToggle(k)} />
                 <span className="truncate">{stores[k].name}</span>
               </label>
             ))}
-            {filtered.length === 0 && <p className="text-[11px] text-text-muted">該当する店舗がありません</p>}
+            {filtered.length === 0 && <p className="text-xs text-text-muted">該当する店舗がありません</p>}
           </div>
         </div>
       )}
@@ -1051,14 +1068,14 @@ const HelpImagePicker: FC<{
       {shown ? (
         <img src={shown} alt="参考画像" className="h-12 w-12 rounded border border-border object-cover" />
       ) : (
-        <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-border text-[10px] text-text-muted">
+        <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-border text-xs text-text-muted">
           なし
         </div>
       )}
       <div className="flex flex-col gap-1">
         <label
           htmlFor={inputId}
-          className={`cursor-pointer rounded border border-border bg-surface px-2 py-1 text-[11px] font-bold text-text-muted ${disabled ? 'opacity-50' : ''}`}
+          className={`cursor-pointer rounded border border-border bg-surface px-2 py-1 text-xs font-bold text-text-muted ${disabled ? 'opacity-50' : ''}`}
         >
           参考画像を{shown ? '変更' : '選ぶ'}（任意）
         </label>
@@ -1075,7 +1092,7 @@ const HelpImagePicker: FC<{
           }}
         />
         {shown && (
-          <button type="button" onClick={onClear} disabled={disabled} className="text-left text-[11px] font-bold text-ng disabled:opacity-50">
+          <button type="button" onClick={onClear} disabled={disabled} className="text-left text-xs font-bold text-ng disabled:opacity-50">
             参考画像を外す
           </button>
         )}
@@ -1310,7 +1327,7 @@ const ScheduleForm: FC<{
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => void handleCancel()} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">
+        <button type="button" onClick={() => void handleCancel()} className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40" aria-label="戻る">
           ←
         </button>
         <h2 className="text-sm font-bold">{initial ? 'スケジュールを編集' : 'スケジュールを新規作成'}</h2>
@@ -1335,7 +1352,7 @@ const ScheduleForm: FC<{
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`mt-1 ${inputCls}`} />
           </label>
         </div>
-        <p className="text-[11px] text-text-muted">期間は業務日（朝9時切替）で、開始日と終了日の両方を含みます。撮影方法「動画」は1枠に動画1本（撮影またはフォルダから選択。500MBまで、スマホの標準画質で5〜8分程度）です。</p>
+        <p className="text-xs text-text-muted">期間は業務日（朝9時切替）で、開始日と終了日の両方を含みます。撮影方法「動画」は1枠に動画1本（撮影またはフォルダから選択。500MBまで、スマホの標準画質で5〜8分程度）です。</p>
         <VideoField
           label="スケジュール全体の参考動画"
           draft={scheduleVideo}
@@ -1359,18 +1376,18 @@ const ScheduleForm: FC<{
           onAllChange={setAllStores}
           onToggle={toggleStore}
         />
-        <p className="text-[11px] text-text-muted">項目ごとに表示する店舗を絞りたいときは、各項目の「この項目を表示する店舗」で選べます。</p>
+        <p className="text-xs text-text-muted">項目ごとに表示する店舗を絞りたいときは、各項目の「この項目を表示する店舗」で選べます。</p>
       </div>
 
       <div className="space-y-3 rounded-2xl border border-border bg-surface p-3">
         <div className="flex items-center justify-between">
           <p className="text-xs font-bold">項目</p>
-          <span className={`text-[11px] font-bold ${currentTotal > SCHEDULE_MAX_PHOTOS ? 'text-ng' : 'text-text-muted'}`}>
+          <span className={`text-xs font-bold ${currentTotal > SCHEDULE_MAX_PHOTOS ? 'text-ng' : 'text-text-muted'}`}>
             上限の合計 {currentTotal}/{SCHEDULE_MAX_PHOTOS}枚
           </span>
         </div>
         {locked && (
-          <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] text-warn">
+          <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn">
             提出した店舗があるため、既存の項目の削除・並べ替え・枚数・撮影方法は変更できません（写真の番号がずれて対応が壊れるため）。項目名・注意書き・参考画像・参考動画は変更できます。
             新しい項目は末尾に追加できます（追加すると、提出済みの店舗も新しい項目ぶんが「一部提出」になります）。
           </p>
@@ -1380,30 +1397,30 @@ const ScheduleForm: FC<{
           return (
           <div key={idx} className="space-y-2 rounded-xl border border-border bg-bg p-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-text-muted">
+              <span className="text-xs font-bold text-text-muted">
                 項目 {idx + 1}
                 {fixed && <span className="ml-1 font-normal">（提出あり・固定）</span>}
                 {locked && !fixed && <span className="ml-1 font-normal text-accent">（追加分）</span>}
               </span>
               {!fixed && (
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => moveItem(idx, -1)} disabled={idx <= originalCount} className="rounded border border-border px-2 py-0.5 text-[11px] disabled:opacity-30" aria-label="上へ">↑</button>
-                  <button type="button" onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} className="rounded border border-border px-2 py-0.5 text-[11px] disabled:opacity-30" aria-label="下へ">↓</button>
-                  <button type="button" onClick={() => removeItem(idx)} disabled={items.length <= 1} className="rounded bg-ng-bg px-2 py-0.5 text-[11px] font-bold text-ng disabled:opacity-30">削除</button>
+                  <button type="button" onClick={() => moveItem(idx, -1)} disabled={idx <= originalCount} className="rounded border border-border px-2 py-0.5 text-xs disabled:opacity-30" aria-label="上へ">↑</button>
+                  <button type="button" onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} className="rounded border border-border px-2 py-0.5 text-xs disabled:opacity-30" aria-label="下へ">↓</button>
+                  <button type="button" onClick={() => removeItem(idx)} disabled={items.length <= 1} className="rounded bg-ng-bg px-2 py-0.5 text-xs font-bold text-ng disabled:opacity-30">削除</button>
                 </div>
               )}
             </div>
             <input type="text" value={it.label} onChange={(e) => updateItem(idx, { label: e.target.value })} placeholder="項目名（例: 入口のPOP）" maxLength={40} className={inputCls} />
             <div className="grid grid-cols-3 gap-2">
-              <label className="block text-[11px] font-bold text-text-muted">
+              <label className="block text-xs font-bold text-text-muted">
                 必要枚数
                 <input type="number" min={1} max={20} value={it.required} disabled={fixed} onChange={(e) => updateItem(idx, { required: e.target.value })} className={`mt-1 ${inputCls} disabled:opacity-60`} />
               </label>
-              <label className="block text-[11px] font-bold text-text-muted">
+              <label className="block text-xs font-bold text-text-muted">
                 上限枚数
                 <input type="number" min={1} max={20} value={it.max} disabled={fixed} onChange={(e) => updateItem(idx, { max: e.target.value })} className={`mt-1 ${inputCls} disabled:opacity-60`} />
               </label>
-              <label className="block text-[11px] font-bold text-text-muted">
+              <label className="block text-xs font-bold text-text-muted">
                 撮影方法
                 <select value={it.source} disabled={fixed} onChange={(e) => updateItem(idx, { source: e.target.value as 'camera' | 'library' | 'video' })} className={`mt-1 ${inputCls} disabled:opacity-60`}>
                   <option value="camera">撮影のみ</option>
@@ -1414,7 +1431,7 @@ const ScheduleForm: FC<{
             </div>
             <input type="text" value={it.note} onChange={(e) => updateItem(idx, { note: e.target.value })} placeholder="注意書き（任意）" maxLength={200} className={inputCls} />
             <div className="space-y-1 rounded-xl border border-border bg-surface2/60 p-2.5">
-              <p className="text-[11px] font-bold text-text-muted">この項目を表示する店舗</p>
+              <p className="text-xs font-bold text-text-muted">この項目を表示する店舗</p>
               <StoreSelector
                 stores={stores}
                 storeKeys={targetKeysForItems}

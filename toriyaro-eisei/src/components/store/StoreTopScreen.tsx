@@ -195,7 +195,7 @@ export const StoreTopScreen: FC<Props> = ({
             <span className="text-xs font-bold">{formatDateJa(dateKeyToDate(todayKey))}</span>
           </div>
           {missDates === null ? (
-            <span className="text-[11px] text-text-muted">集計中…</span>
+            <span className="text-xs text-text-muted">集計中…</span>
           ) : myMiss ? (
             <span
               className={`rounded-full px-3 py-1.5 text-xs font-bold ${
@@ -208,13 +208,13 @@ export const StoreTopScreen: FC<Props> = ({
         </div>
 
         {prevMonthlyMissing && (
-          <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng">
+          <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-sm font-bold text-ng">
             先月（{formatMonthKeyJa(getMonthKey(-1))}）のモップ交換が提出されていません。今月分は忘れずに提出してください。
           </div>
         )}
 
         {myMiss && myMiss.length > 0 && (
-          <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-[11px] text-ng">
+          <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-sm text-ng">
             <span className="font-bold">未提出の日：</span>
             {myMiss.map((m) => formatDateKeyShort(m.d) + (m.c > 0 ? `（${m.c}/${m.t}枚）` : '')).join('・')}
           </div>
@@ -265,15 +265,15 @@ export const StoreTopScreen: FC<Props> = ({
           <button
             type="button"
             onClick={onOpenSurvey}
-            className="mt-3 block w-full rounded-2xl border-2 border-accent/60 bg-surface px-4 py-3.5 text-center text-sm font-bold text-accent shadow-sm transition active:scale-[0.99]"
+            className="mt-3 block w-full rounded-2xl border border-border bg-surface px-4 py-3.5 text-center text-sm font-bold text-text shadow-sm transition active:scale-[0.99]"
           >
             アンケート
-            <span className="mt-1 block text-[11px] font-normal text-text-muted">お客様の回答を見る</span>
+            <span className="mt-1 block text-xs font-normal text-text-muted">お客様の回答を見る</span>
           </button>
         ) : (
           <div className="mt-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-center text-text-muted">
             <p className="text-sm font-bold">アンケート</p>
-            <p className="mt-1 text-[11px]">この店舗のアンケートは準備中です</p>
+            <p className="mt-1 text-xs">この店舗のアンケートは準備中です</p>
           </div>
         )}
 
@@ -282,7 +282,7 @@ export const StoreTopScreen: FC<Props> = ({
         <button
           type="button"
           onClick={() => onOpenReferral(null)}
-          className="mt-3 w-full rounded-2xl border-2 border-accent/60 bg-surface px-4 py-3.5 text-sm font-bold text-accent shadow-sm transition active:scale-[0.99]"
+          className="mt-3 w-full rounded-2xl border border-border bg-surface px-4 py-3.5 text-sm font-bold text-text shadow-sm transition active:scale-[0.99]"
         >
           紹介手当を申請する
         </button>
@@ -335,13 +335,13 @@ export const StoreTopScreen: FC<Props> = ({
                         <div className="flex items-center justify-between">
                           <span className="truncate text-xs font-bold">
                             {stores[k].name}
-                            {isMe && <span className="ml-1 text-[10px] text-ng">（自店）</span>}
+                            {isMe && <span className="ml-1 text-xs text-ng">（自店）</span>}
                           </span>
-                          <span className="ml-2 shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-ng">
+                          <span className="ml-2 shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-ng">
                             未提出：{dates.length}
                           </span>
                         </div>
-                        <p className="mt-1 text-[10px] text-text-muted">
+                        <p className="mt-1 text-xs text-text-muted">
                           {dates.map((m) => formatDateKeyShort(m.d) + (m.c > 0 ? `（${m.c}/${m.t}枚）` : '')).join('・')}
                         </p>
                       </div>
@@ -353,7 +353,7 @@ export const StoreTopScreen: FC<Props> = ({
           )}
         </div>
 
-        <p className="mt-8 text-center text-[11px] text-text-muted">
+        <p className="mt-8 text-center text-xs text-text-muted">
           店舗の毎日・毎週の衛生チェック写真を投稿し、本部がまとめて確認できる業務アプリ。
         </p>
       </main>
@@ -397,13 +397,13 @@ const ReferralHistory: FC<{
                   <div className="truncate font-bold">
                     {r.referredName}
                   </div>
-                  <div className="mt-0.5 text-[10px] text-text-muted">
+                  <div className="mt-0.5 text-xs text-text-muted">
                     {r.kind === 'employee' ? '社員（3ヶ月）' : 'スタッフ（50時間）'}
                     ・{applied} 申請
                   </div>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${style.cls}`}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${style.cls}`}
                 >
                   {style.label}
                 </span>
@@ -411,14 +411,14 @@ const ReferralHistory: FC<{
               {r.status === 'rejected' && (
                 <div className="mt-2 space-y-1.5">
                   {r.rejectReason && (
-                    <p className="rounded-lg bg-ng-bg px-2 py-1.5 text-[11px] font-bold text-ng">
+                    <p className="rounded-lg bg-ng-bg px-2 py-1.5 text-xs font-bold text-ng">
                       差戻し理由：{r.rejectReason}
                     </p>
                   )}
                   <button
                     type="button"
                     onClick={() => onReapply(r)}
-                    className="w-full rounded-lg border border-accent/50 bg-surface py-2 text-[11px] font-bold text-accent"
+                    className="min-h-[44px] w-full rounded-lg border border-border bg-surface py-2 text-xs font-bold text-text"
                   >
                     この内容を引き継いで再申請する
                   </button>

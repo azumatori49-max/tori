@@ -167,7 +167,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
         <button
           type="button"
           onClick={() => setShowAdd((s) => !s)}
-          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white"
+          className="inline-flex min-h-[44px] items-center rounded-lg bg-accent px-4 text-xs font-bold text-white"
         >
           ＋ 追加
         </button>
@@ -214,10 +214,10 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
               className="mt-1 w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
             />
           </label>
-          <p className="text-[11px] text-text-muted">
+          <p className="text-xs text-text-muted">
             未来の日付で事前登録できます。オープン日前は未提出回数に数えません。
           </p>
-          <p className="text-[11px] text-text-muted">
+          <p className="text-xs text-text-muted">
             登録後はパスワードを確認できないので控えてください。
           </p>
           <button
@@ -234,7 +234,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
         <button
           type="button"
           onClick={() => setShowCsv((s) => !s)}
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold"
+          className="min-h-[44px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold"
         >
           CSVで追加インポート
         </button>
@@ -242,7 +242,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
 
       {showCsv && (
         <div className="space-y-2 rounded-2xl border border-border bg-surface p-3">
-          <p className="text-[11px] text-text-muted">
+          <p className="text-xs text-text-muted">
             形式: <code className="font-mono">店舗名,パスワード,オープン日</code> （日付は YYYY-MM-DD、省略時は今日。1行1店舗、ヘッダー行は無視）
           </p>
           <textarea
@@ -351,7 +351,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{stores[k].name}</p>
                     {stores[k].createdAt && (
-                      <p className="text-[11px] text-text-muted">
+                      <p className="text-xs text-text-muted">
                         オープン日：{stores[k].createdAt.slice(0, 10)}
                       </p>
                     )}

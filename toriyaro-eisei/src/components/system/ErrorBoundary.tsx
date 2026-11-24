@@ -35,13 +35,13 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-xs text-text-muted">
             この内容をスクリーンショットして開発者にお知らせください。
           </p>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface p-3 text-[11px] leading-relaxed text-ng">
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface p-3 text-xs leading-relaxed text-ng">
             {this.state.error.message}
             {'\n\n'}
             {this.state.error.stack ?? '(no stack)'}
           </pre>
           {this.state.info?.componentStack && (
-            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface p-3 text-[10px] leading-relaxed text-text-muted">
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface p-3 text-xs leading-relaxed text-text-muted">
               {this.state.info.componentStack}
             </pre>
           )}

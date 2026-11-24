@@ -191,7 +191,7 @@ export const DashboardTab: FC<Props> = ({ stores }) => {
             onClick={() => setReportTab(t)}
             aria-pressed={reportTab === t}
             className={`min-h-[44px] flex-1 rounded-xl py-2 text-xs font-bold transition ${
-              reportTab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+              reportTab === t ? 'bg-text text-white shadow-sm' : 'text-text-muted'
             }`}
           >
             {TYPE_LABEL[t]}

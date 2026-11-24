@@ -167,7 +167,7 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
           <button
             type="button"
             onClick={onBack}
-            className="text-lg text-text-muted hover:text-accent"
+            className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40"
             aria-label="戻る"
           >
             ←
@@ -175,7 +175,7 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
         }
       />
       <main className="mx-auto w-full max-w-app space-y-4 px-4 py-4">
-        <div className="rounded-xl bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+        <div className="rounded-xl bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
           2026年7月11日から、未提出回数の記録を開始しました。未提出は月ごとに蓄積されます。
         </div>
 
@@ -183,7 +183,7 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
           <button
             type="button"
             onClick={() => setMissOpen((v) => !v)}
-            className="flex w-full items-center justify-between"
+            className="flex min-h-[44px] w-full items-center justify-between text-left"
           >
             <h2 className="text-xs font-bold">
               {tm}月の未提出回数
@@ -216,11 +216,11 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
                           <span className="truncate text-xs font-bold">
                             {stores[k].name}
                           </span>
-                          <span className="ml-2 shrink-0 rounded-full bg-ng-bg px-2 py-0.5 text-[10px] font-bold text-ng">
+                          <span className="ml-2 shrink-0 rounded-full bg-ng-bg px-2 py-0.5 text-xs font-bold text-ng">
                             未提出：{dates.length}
                           </span>
                         </div>
-                          <p className="mt-1 text-[10px] text-text-muted">
+                          <p className="mt-1 text-xs text-text-muted">
                           {dates.map((m) => formatDateKeyShort(m.d) + (m.c > 0 ? `（${m.c}/${m.t}枚）` : '')).join('・')}
                         </p>
                       </button>
@@ -238,8 +238,8 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
               key={t}
               type="button"
               onClick={() => setReportTab(t)}
-              className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
-                reportTab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+              className={`min-h-[44px] flex-1 rounded-xl py-2 text-xs font-bold transition ${
+                reportTab === t ? 'bg-text text-white shadow-sm' : 'text-text-muted'
               }`}
             >
               {t === 'daily' ? 'デイリー' : 'ウィークリー'}
@@ -251,7 +251,7 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
           <button
             type="button"
             onClick={() => shiftDate(-1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
             aria-label="前へ"
           >
             ←
@@ -261,7 +261,7 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
             type="button"
             onClick={() => shiftDate(1)}
             disabled={!canForward}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
             aria-label="次へ"
           >
             →
@@ -317,12 +317,12 @@ export const ViewerScreen: FC<Props> = ({ stores, onBack }) => {
                     </div>
                   )}
                   {sub ? (
-                    <p className="mt-2 text-[11px] text-text-muted">
+                    <p className="mt-2 text-xs text-text-muted">
                       提出: {formatDateTimeJa(sub.submittedAt)}
                       {!isLine && ` ・ ${photos.length}枚`}
                     </p>
                   ) : (
-                    <p className="mt-2 text-[11px] text-ng">未提出</p>
+                    <p className="mt-2 text-xs text-ng">未提出</p>
                   )}
                 </button>
               );

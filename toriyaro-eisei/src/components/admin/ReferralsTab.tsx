@@ -150,7 +150,7 @@ export const ReferralsTab: FC<Props> = () => {
             テキストをコピー
           </button>
           {copied && (
-            <span className="rounded-full bg-ok-bg px-2 py-1 text-[10px] font-bold text-ok">
+            <span className="rounded-full bg-ok-bg px-2 py-1 text-xs font-bold text-ok">
               コピーしました
             </span>
           )}
@@ -158,7 +158,7 @@ export const ReferralsTab: FC<Props> = () => {
         <textarea
           readOnly
           value={monthlyText}
-          className="mt-2 h-40 w-full resize-y rounded-lg border border-border bg-surface2 p-2 text-[11px] leading-relaxed"
+          className="mt-2 h-40 w-full resize-y rounded-lg border border-border bg-surface2 p-2 text-xs leading-relaxed"
         />
       </div>
 
@@ -166,7 +166,7 @@ export const ReferralsTab: FC<Props> = () => {
       <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
         <h2 className="text-xs font-bold">紹介手当 申請一覧（新しい順）</h2>
         {error && (
-          <p className="mt-2 rounded-lg bg-ng-bg px-2 py-1.5 text-[11px] font-bold text-ng">
+          <p className="mt-2 rounded-lg bg-ng-bg px-2 py-1.5 text-xs font-bold text-ng">
             {error}
           </p>
         )}
@@ -187,7 +187,7 @@ export const ReferralsTab: FC<Props> = () => {
                     className="w-full rounded-xl border border-border bg-surface2 px-3 py-2.5 text-left transition active:scale-[0.99]"
                   >
                     {isDup && (
-                      <div className="mb-1 rounded-md bg-ng px-2 py-0.5 text-[10px] font-bold text-white">
+                      <div className="mb-1 rounded-md bg-ng px-2 py-0.5 text-xs font-bold text-white">
                         重複候補（同名の申請あり）
                       </div>
                     )}
@@ -195,16 +195,16 @@ export const ReferralsTab: FC<Props> = () => {
                       <div className="min-w-0">
                         <div className="truncate text-xs font-bold">
                           {r.referredName}
-                          <span className="ml-2 text-[10px] font-normal text-text-muted">
+                          <span className="ml-2 text-xs font-normal text-text-muted">
                             {r.storeName}
                           </span>
                         </div>
-                        <div className="mt-0.5 text-[10px] text-text-muted">
+                        <div className="mt-0.5 text-xs text-text-muted">
                           {KIND_LABEL[r.kind]}・{formatIsoJa(r.appliedAt)}
                         </div>
                       </div>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${style.cls}`}
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${style.cls}`}
                       >
                         {style.label}
                       </span>
@@ -320,7 +320,7 @@ const ReferralDetailModal: FC<{
         </div>
         <div className="space-y-3 px-5 py-4 text-xs">
           <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
               STATUS_STYLE[req.status].cls
             }`}
           >
@@ -349,18 +349,18 @@ const ReferralDetailModal: FC<{
           </div>
 
           {thresholdMismatch && (
-            <div className="rounded-lg bg-warn-bg px-2 py-1.5 text-[11px] font-bold text-warn">
+            <div className="rounded-lg bg-warn-bg px-2 py-1.5 text-xs font-bold text-warn">
               入社日+3ヶ月（{formatDateJa(autoThreshold)}）と達成日がズレています。
             </div>
           )}
           {req.status === 'rejected' && req.rejectReason && (
-            <div className="rounded-lg bg-ng-bg px-2 py-1.5 text-[11px] font-bold text-ng">
+            <div className="rounded-lg bg-ng-bg px-2 py-1.5 text-xs font-bold text-ng">
               差戻し理由：{req.rejectReason}
             </div>
           )}
 
           <div>
-            <p className="mb-1 text-[11px] font-bold text-text-muted">
+            <p className="mb-1 text-xs font-bold text-text-muted">
               サイン画像（タップで拡大）
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -388,7 +388,7 @@ const ReferralDetailModal: FC<{
           {req.status === 'pending' && (
             <>
               <div className="rounded-xl border border-border bg-surface2 p-3 space-y-2">
-                <p className="text-[11px] font-bold">
+                <p className="text-xs font-bold">
                   勤怠での確認チェックリスト
                 </p>
                 <CheckRow
@@ -417,7 +417,7 @@ const ReferralDetailModal: FC<{
                   }
                 />
                 <div>
-                  <label className="mb-1 block text-[11px] font-bold text-text-muted">
+                  <label className="mb-1 block text-xs font-bold text-text-muted">
                     確認者名（必須）
                   </label>
                   <input
@@ -441,7 +441,7 @@ const ReferralDetailModal: FC<{
               </div>
 
               <div className="rounded-xl border border-border bg-surface2 p-3 space-y-2">
-                <p className="text-[11px] font-bold">差戻し</p>
+                <p className="text-xs font-bold">差戻し</p>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
@@ -473,7 +473,7 @@ const ReferralDetailModal: FC<{
           )}
 
           {error && (
-            <p className="rounded-lg bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng">
+            <p className="rounded-lg bg-ng-bg px-3 py-2 text-xs font-bold text-ng">
               {error}
             </p>
           )}
@@ -496,7 +496,7 @@ const CheckRow: FC<{
   checked: boolean;
   onChange: (v: boolean) => void;
 }> = ({ label, checked, onChange }) => (
-  <label className="flex items-start gap-2 text-[11px]">
+  <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-sm">
     <input
       type="checkbox"
       checked={checked}
@@ -523,12 +523,12 @@ const SigThumb: FC<{
       {url ? (
         <img src={url} alt="" className="h-full w-full object-contain" />
       ) : (
-        <div className="flex h-full items-center justify-center text-[10px] text-text-muted">
+        <div className="flex h-full items-center justify-center text-xs text-text-muted">
           （画像なし）
         </div>
       )}
     </div>
-    <div className="border-t border-border px-1.5 py-1 text-[9px]">
+    <div className="border-t border-border px-1.5 py-1 text-xs">
       <div className="text-text-muted">{label}</div>
       <div className="truncate font-bold">{name}</div>
     </div>

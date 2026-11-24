@@ -131,7 +131,7 @@ export const LoginScreen: FC<Props> = ({
               <div className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm font-bold">
                 ＊ 管理者
               </div>
-              <p className="mt-2 text-[11px] text-text-muted">
+              <p className="mt-2 text-xs text-text-muted">
                 PCでは管理者のみ利用できます。店舗の衛生チェック提出はスマートフォンから行ってください。
               </p>
             </div>
@@ -177,7 +177,7 @@ export const LoginScreen: FC<Props> = ({
                         key={k}
                         type="button"
                         onClick={() => pickStore(k)}
-                        className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-surface2"
+                        className="flex min-h-[44px] w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-surface2"
                       >
                         {stores[k].name}
                       </button>
@@ -196,7 +196,7 @@ export const LoginScreen: FC<Props> = ({
           )}
 
           {loadError && (
-            <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+            <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
               {loadError}
             </p>
           )}
@@ -230,7 +230,7 @@ export const LoginScreen: FC<Props> = ({
           </button>
 
           {!isPC && (
-            <p className="text-center text-[11px] text-text-muted">
+            <p className="text-center text-xs text-text-muted">
               一度ログインするとパスワードはこの端末に保存され、次回から自動でログインされます。
             </p>
           )}

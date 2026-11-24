@@ -159,7 +159,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
           : `${newCount}枚を提出する`;
 
   const back = (
-    <button type="button" onClick={onBack} disabled={submitting} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">
+    <button type="button" onClick={onBack} disabled={submitting} className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40" aria-label="戻る">
       ←
     </button>
   );
@@ -213,7 +213,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
               <section key={itemIdx} className="mt-5">
                 <h3 className="text-sm font-bold">
                   {displayNo}. {item.label}
-                  <span className="ml-2 text-[11px] font-normal text-text-muted">
+                  <span className="ml-2 text-xs font-normal text-text-muted">
                     {item.source === 'video'
                       ? `動画 必要${item.required}本／最大${item.max}本（1本${VIDEO_MAX_LABEL}まで）`
                       : `必要${item.required}枚／最大${item.max}枚`}
@@ -221,22 +221,22 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
                 </h3>
                 {item.video && (
                   <div className="mt-1.5 rounded-xl border border-accent/40 bg-accent/5 p-2">
-                    <p className="mb-1 text-[11px] font-bold text-accent">参考動画</p>
+                    <p className="mb-1 text-xs font-bold text-accent">参考動画</p>
                     <InlineVideo video={item.video} />
                   </div>
                 )}
-                {item.note && <p className="mt-0.5 text-[11px] text-warn">{item.note}</p>}
+                {item.note && <p className="mt-0.5 text-xs text-warn">{item.note}</p>}
                 {item.helpImage && (
                   <button
                     type="button"
                     onClick={() => setHelpImageUrl(item.helpImage ?? null)}
-                    className="mt-1 inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/5 px-2 py-1 text-[11px] font-bold text-accent active:scale-95"
+                    className="mt-1 inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/5 px-2 py-1 text-xs font-bold text-accent active:scale-95"
                   >
                     <img src={item.helpImage} alt="" className="h-10 w-10 rounded object-cover" />
                     参考写真を見る
                   </button>
                 )}
-                <p className="mt-0.5 text-[11px] text-text-muted">
+                <p className="mt-0.5 text-xs text-text-muted">
                   撮影済み {filled}{item.source === 'video' ? '本' : '枚'}
                   {filled >= item.required
                     ? '（OK）'
@@ -266,7 +266,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
                             source={item.source}
                           />
                         )}
-                        <div className="px-1 text-center text-[11px] font-bold leading-tight text-text-muted">
+                        <div className="px-1 text-center text-xs font-bold leading-tight text-text-muted">
                           {optional ? '任意' : `${j + 1}${item.source === 'video' ? '本目' : '枚目'}`}
                         </div>
                       </div>
@@ -285,7 +285,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
         <div className="mx-auto w-full max-w-app px-4 py-3">
           {progressState && (
             <div className="mb-2">
-              <div className="flex justify-between text-[11px] font-bold text-text-muted">
+              <div className="flex justify-between text-xs font-bold text-text-muted">
                 <span>
                   アップロード中…
                   {bytesPct !== null && <span className="ml-1">（動画 {bytesPct}%）</span>}
@@ -307,7 +307,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
                 />
               </div>
               {bytesPct !== null && (
-                <p className="mt-1 text-[10px] text-text-muted">
+                <p className="mt-1 text-xs text-text-muted">
                   動画の送信中は画面を閉じないでください。
                 </p>
               )}

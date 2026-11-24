@@ -57,7 +57,7 @@ export const ScheduleSection: FC<SectionProps> = ({ storeKey, onOpen }) => {
       {upcoming.length > 0 && (
         <ul className="mt-2 space-y-1 px-1">
           {upcoming.map(([id, s]) => (
-            <li key={id} className="text-[11px] text-text-muted">
+            <li key={id} className="text-xs text-text-muted">
               {formatScheduleRange(s.from, s.to).split('〜')[0]}〜 {s.title}
             </li>
           ))}
@@ -122,7 +122,7 @@ export const ScheduleCard: FC<CardProps> = ({ scheduleId, schedule, storeKey, on
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-sm font-bold">{schedule.title}</h3>
-          <p className="mt-0.5 text-[11px] text-text-muted">
+          <p className="mt-0.5 text-xs text-text-muted">
             期間 {formatScheduleRange(schedule.from, schedule.to)}
           </p>
         </div>
@@ -131,25 +131,25 @@ export const ScheduleCard: FC<CardProps> = ({ scheduleId, schedule, storeKey, on
             <button
               type="button"
               onClick={() => setPlaying(cardVideo)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent active:scale-95"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-accent/10 text-sm font-bold text-accent active:scale-95"
               aria-label="参考動画を見る"
               title="参考動画を見る"
             >
               ▶
             </button>
           )}
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${chip.cls}`}>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>
             {chip.label}
           </span>
         </div>
       </div>
       {schedule.description && (
-        <p className="mt-2 whitespace-pre-wrap text-xs text-text">{schedule.description}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm text-text">{schedule.description}</p>
       )}
       <button
         type="button"
         onClick={onOpen}
-        className="mt-3 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
+        className="mt-3 min-h-[44px] w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
       >
         {p.status === 'partial' ? '続きを撮影して提出' : '撮影して提出'}
       </button>

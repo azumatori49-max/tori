@@ -80,7 +80,7 @@ export const PhotoSlot: FC<Props> = ({
             <span className="absolute left-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
               {index + 1}
             </span>
-            <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+            <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/70 px-2 py-0.5 text-xs font-bold text-white">
               {isReplacing
                 ? '差替予定'
                 : filePreview
@@ -90,7 +90,7 @@ export const PhotoSlot: FC<Props> = ({
                   : '提出済み'}
             </span>
             {!filePreview && (
-              <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[11px] font-bold text-white drop-shadow">
+              <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs font-bold text-white drop-shadow">
                 タップで{source === 'library' ? '選び直す' : '撮り直す'}
               </span>
             )}
@@ -98,7 +98,7 @@ export const PhotoSlot: FC<Props> = ({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-1 text-text-muted">
             <span className="text-2xl">{source === 'library' ? '🖼️' : ''}</span>
-            <span className="text-[11px] font-bold">
+            <span className="text-sm font-bold">
               {source === 'library' ? 'フォルダから選択' : 'タップして撮影'}
             </span>
           </div>
@@ -113,12 +113,12 @@ export const PhotoSlot: FC<Props> = ({
         />
       </button>
       {label && (
-        <div className="px-1 text-center text-[11px] font-bold leading-tight text-text">
+        <div className="px-1 text-center text-sm font-bold leading-snug text-text">
           {index + 1}. {label}
         </div>
       )}
       {note && (
-        <div className="px-1 text-center text-[10px] leading-tight text-warn">
+        <div className="px-1 text-center text-xs leading-tight text-warn">
           {note}
         </div>
       )}
@@ -129,7 +129,7 @@ export const PhotoSlot: FC<Props> = ({
             e.stopPropagation();
             onHelpClick?.(helpImage);
           }}
-          className="mx-auto mt-0.5 inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent active:scale-95"
+          className="tap-target mx-auto mt-1 inline-flex min-h-[32px] items-center gap-1 rounded-full border border-accent/40 bg-white px-3 py-1 text-xs font-bold text-accent active:scale-95"
         >
           参考写真を見る
         </button>

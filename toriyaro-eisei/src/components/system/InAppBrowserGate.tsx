@@ -1,4 +1,5 @@
 import { useState, type FC } from 'react';
+import { noticeDialog } from '../ui/ConfirmDialog';
 
 const IN_APP_PATTERNS =
   /(Line\/|Instagram|FBAN|FBAV|FB_IAB|FB4A|Twitter|TikTok|MicroMessenger|Snapchat|Pinterest|Slack|KAKAOTALK|NAVER|MoyaBrowse)/i;
@@ -23,7 +24,10 @@ const openInExternal = () => {
     window.location.href = `intent://${noScheme}#Intent;scheme=https;package=com.android.chrome;end`;
     return;
   }
-  alert('右上の「⋯」から「ブラウザで開く」を選択してください');
+  void noticeDialog({
+    title: '標準ブラウザで開けませんでした',
+    message: '画面右上の「⋯」（または「︙」）から「ブラウザで開く」を選んでください。',
+  });
 };
 
 export const InAppBrowserGate: FC = () => {
@@ -53,7 +57,7 @@ export const InAppBrowserGate: FC = () => {
 
       <details className="mt-4 max-w-xs text-left">
         <summary className="text-xs font-bold text-text-muted">うまく開けない場合</summary>
-        <ul className="mt-2 list-inside list-decimal space-y-1 text-[11px] text-text-muted">
+        <ul className="mt-2 list-inside list-decimal space-y-1 text-xs text-text-muted">
           <li>右上の「⋯」または「︙」メニューを開く</li>
           <li>「ブラウザで開く」「Safari で開く」などを選択</li>
           <li>もしくは URL をコピーして Safari / Chrome に貼り付け</li>
@@ -63,7 +67,7 @@ export const InAppBrowserGate: FC = () => {
       <button
         type="button"
         onClick={() => setShow(false)}
-        className="mt-6 text-[11px] text-text-muted underline"
+        className="mt-6 text-xs text-text-muted underline"
       >
         このまま続ける（非推奨）
       </button>

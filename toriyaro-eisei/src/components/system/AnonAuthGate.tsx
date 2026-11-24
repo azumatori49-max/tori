@@ -50,7 +50,7 @@ export const AnonAuthGate: FC<Props> = ({ children }) => {
       ) : (
         <>
           <p className="text-base font-bold text-text">セキュア接続を確立しています…</p>
-          <p className="text-[11px] text-text-muted">10秒以上かかる場合は通信状況をご確認ください</p>
+          <p className="text-xs text-text-muted">10秒以上かかる場合は通信状況をご確認ください</p>
         </>
       )}
     </div>

@@ -17,17 +17,17 @@ interface Props {
 
 const VARIANT: Record<ReportType, { label: string; border: string; chip: string }> = {
   daily: {
-    label: 'DAILY',
+    label: '毎日',
     border: 'border-l-accent',
     chip: 'bg-accent/10 text-accent',
   },
   weekly: {
-    label: 'WEEKLY',
+    label: '毎週',
     border: 'border-l-blue-500',
     chip: 'bg-blue-50 text-blue-600',
   },
   monthly: {
-    label: 'MONTHLY',
+    label: '毎月',
     border: 'border-l-violet-500',
     chip: 'bg-violet-50 text-violet-600',
   },
@@ -68,14 +68,14 @@ export const ReportCard: FC<Props> = ({
     >
       <div className="flex items-center justify-between">
         <span
-          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-black tracking-widest font-display ${v.chip}`}
+          className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${v.chip}`}
         >
           {v.label}
         </span>
         <StatusChip kind={status}>{isLine ? '提出済み（LINE）' : statusLabel(status)}</StatusChip>
       </div>
       <h3 className="mt-3 text-base font-bold">{title}</h3>
-      <p className="mt-1 text-xs text-text-muted">{description}</p>
+      <p className="mt-1 text-sm text-text-muted">{description}</p>
 
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-bold">
@@ -93,7 +93,7 @@ export const ReportCard: FC<Props> = ({
           />
         </div>
         {submission && (
-          <p className="mt-2 text-[11px] text-text-muted">
+          <p className="mt-2 text-xs text-text-muted">
             最終提出: {formatDateTimeJa(submission.submittedAt)}
           </p>
         )}

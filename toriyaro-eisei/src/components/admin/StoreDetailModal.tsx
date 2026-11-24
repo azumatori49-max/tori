@@ -173,7 +173,7 @@ export const StoreDetailModal: FC<Props> = ({
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface/95 px-5 py-3 backdrop-blur">
           <div className="min-w-0">
             <h2 className="truncate text-base font-bold">{storeName}</h2>
-            <p className="text-[11px] text-text-muted">{anchorDateKey}</p>
+            <p className="text-xs text-text-muted">{anchorDateKey}</p>
           </div>
           <button
             type="button"
@@ -197,7 +197,7 @@ export const StoreDetailModal: FC<Props> = ({
           {!loading && (
             <>
               <Section
-                label="DAILY"
+                label="毎日"
                 type="daily"
                 storeKey={storeKey}
                 storeName={storeName}
@@ -210,7 +210,7 @@ export const StoreDetailModal: FC<Props> = ({
                 readOnly={readOnly}
               />
               <Section
-                label="WEEKLY"
+                label="毎週"
                 type="weekly"
                 storeKey={storeKey}
                 storeName={storeName}
@@ -223,7 +223,7 @@ export const StoreDetailModal: FC<Props> = ({
                 readOnly={readOnly}
               />
               <Section
-                label="MONTHLY"
+                label="毎月"
                 type="monthly"
                 storeKey={storeKey}
                 storeName={storeName}
@@ -411,7 +411,7 @@ const Section: FC<SectionProps> = ({
     <section>
       <div className="mb-2 flex items-center justify-between">
         <span
-          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-black tracking-widest font-display ${bg} ${color}`}
+          className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${bg} ${color}`}
         >
           {label}
         </span>
@@ -420,11 +420,11 @@ const Section: FC<SectionProps> = ({
         </span>
       </div>
       {submission ? (
-        <p className="mb-2 text-[11px] text-text-muted">
+        <p className="mb-2 text-xs text-text-muted">
           提出: {formatDateTimeJa(submission.submittedAt)}
         </p>
       ) : (
-        <p className="mb-2 text-[11px] text-ng">未提出</p>
+        <p className="mb-2 text-xs text-ng">未提出</p>
       )}
 
       {isLine && (
@@ -464,13 +464,13 @@ const Section: FC<SectionProps> = ({
             <button
               type="button"
               onClick={() => setMoving(true)}
-              className="text-[11px] font-bold text-accent hover:underline"
+              className="inline-flex min-h-[44px] items-center text-xs font-bold text-accent underline"
             >
               別の{type === 'daily' ? '日' : '週'}に移動
             </button>
           ) : (
             <div className="rounded-lg border border-border bg-bg p-2.5 space-y-2">
-              <p className="text-[10px] font-bold text-text-muted">
+              <p className="text-xs font-bold text-text-muted">
                 移動先の{type === 'daily' ? '日付' : '週（その週内の任意の日付）'}
               </p>
               <input
@@ -484,7 +484,7 @@ const Section: FC<SectionProps> = ({
                   type="button"
                   onClick={handleMove}
                   disabled={!newDate || busy}
-                  className="flex-1 rounded bg-accent py-1.5 text-[11px] font-bold text-white disabled:bg-text-muted/40"
+                  className="flex-1 rounded bg-accent py-1.5 text-xs font-bold text-white disabled:bg-text-muted/40"
                 >
                   {busy ? '移動中…' : '移動'}
                 </button>
@@ -495,7 +495,7 @@ const Section: FC<SectionProps> = ({
                     setNewDate('');
                   }}
                   disabled={busy}
-                  className="flex-1 rounded border border-border bg-white py-1.5 text-[11px] font-bold text-text-muted"
+                  className="flex-1 rounded border border-border bg-white py-1.5 text-xs font-bold text-text-muted"
                 >
                   キャンセル
                 </button>
@@ -533,14 +533,14 @@ const Section: FC<SectionProps> = ({
                     type="button"
                     onClick={() => handleDeletePhoto(i)}
                     disabled={busy}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ng text-xs text-white shadow disabled:opacity-50"
+                    className="tap-target-sm absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ng text-sm text-white shadow disabled:opacity-50"
                     aria-label="削除"
                   >
                     ×
                   </button>
                 )}
               </div>
-              <div className="px-1 text-center text-[10px] font-bold leading-tight text-text">
+              <div className="px-1 text-center text-xs font-bold leading-tight text-text">
                 {i + 1}. {item.label}
               </div>
               {!readOnly && url && (
@@ -549,7 +549,7 @@ const Section: FC<SectionProps> = ({
                 </div>
               )}
               {t && (
-                <div className="text-center text-[9px] text-text-muted">
+                <div className="text-center text-xs text-text-muted">
                   {formatPhotoTime(t)}
                 </div>
               )}
@@ -562,12 +562,12 @@ const Section: FC<SectionProps> = ({
         <div className="mt-4">
           <h4 className="mb-2 text-xs font-bold">
             {fixedCount + 1}. {lastItem.label}
-            <span className="ml-2 text-[10px] font-normal text-text-muted">
+            <span className="ml-2 text-xs font-normal text-text-muted">
               {multiPhotos.length} 枚
             </span>
           </h4>
           {multiPhotos.length === 0 ? (
-            <p className="rounded-lg bg-surface2 px-3 py-2 text-[11px] text-text-muted">
+            <p className="rounded-lg bg-surface2 px-3 py-2 text-xs text-text-muted">
               未提出
             </p>
           ) : (
@@ -589,7 +589,7 @@ const Section: FC<SectionProps> = ({
                           type="button"
                           onClick={() => handleDeletePhoto(slotIdx)}
                           disabled={busy}
-                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ng text-xs text-white shadow disabled:opacity-50"
+                          className="tap-target-sm absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ng text-sm text-white shadow disabled:opacity-50"
                           aria-label="削除"
                         >
                           ×
@@ -602,7 +602,7 @@ const Section: FC<SectionProps> = ({
                       </div>
                     )}
                     {t && (
-                      <div className="text-center text-[9px] text-text-muted">
+                      <div className="text-center text-xs text-text-muted">
                         {formatPhotoTime(t)}
                       </div>
                     )}

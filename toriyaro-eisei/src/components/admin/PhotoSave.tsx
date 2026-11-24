@@ -1,8 +1,9 @@
 import { useRef, useState, type FC } from 'react';
+import { confirmDialog } from '../ui/ConfirmDialog';
 import { savePhoto, saveZip, type ZipEntry } from '../../lib/download';
 
 const btnCls =
-  'rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50';
+  'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted disabled:opacity-50';
 
 /** 1枚の保存ボタン（サムネイルの下などに置く小さいもの） */
 export const SavePhotoButton: FC<{
@@ -27,7 +28,7 @@ export const SavePhotoButton: FC<{
       disabled={state === 'saving'}
       className={
         className ??
-        'rounded bg-surface2 px-1.5 py-0.5 text-[10px] font-bold text-text-muted disabled:opacity-50'
+        'tap-target rounded bg-surface2 px-3 py-1.5 text-xs font-bold text-text disabled:opacity-50'
       }
     >
       {state === 'saving' ? '保存中…' : state === 'failed' ? '失敗・再試行' : '保存'}
@@ -50,7 +51,11 @@ export const ZipSaveButton: FC<{ entries: ZipEntry[]; zipName: string; label: st
   const run = async (targets: ZipEntry[]) => {
     if (
       targets.length > BIG_ZIP &&
-      !confirm(`${targets.length}枚あります。大きいため時間がかかります。続けますか？`)
+      !(await confirmDialog({
+        title: `${targets.length}枚をまとめて保存しますか？`,
+        message: '枚数が多いため、保存に時間がかかります。途中で画面を閉じないでください。',
+        confirmLabel: '保存を始める',
+      }))
     )
       return;
     const ctrl = new AbortController();
@@ -73,7 +78,7 @@ export const ZipSaveButton: FC<{ entries: ZipEntry[]; zipName: string; label: st
 
   if (progress) {
     return (
-      <span className="inline-flex items-center gap-2 text-[11px] font-bold text-text-muted">
+      <span className="inline-flex items-center gap-2 text-xs font-bold text-text-muted">
         <button type="button" disabled className={btnCls}>
           保存中 {progress.done}/{progress.total}
         </button>
@@ -84,7 +89,7 @@ export const ZipSaveButton: FC<{ entries: ZipEntry[]; zipName: string; label: st
     );
   }
   return (
-    <span className="inline-flex flex-wrap items-center gap-2 text-[11px]">
+    <span className="inline-flex flex-wrap items-center gap-2 text-xs">
       <button type="button" onClick={() => run(entries)} disabled={entries.length === 0} className={btnCls}>
         {label}
       </button>

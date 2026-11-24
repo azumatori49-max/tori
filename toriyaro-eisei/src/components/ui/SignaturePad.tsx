@@ -207,7 +207,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(
           aria-label="サインパッド"
         />
         {empty && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-text-muted">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-text-muted">
             ここに指でサインしてください
           </div>
         )}

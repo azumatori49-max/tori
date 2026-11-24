@@ -10,7 +10,7 @@ export const QrShareCard: FC = () => {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between"
+        className="flex min-h-[44px] w-full items-center justify-between text-left"
       >
         <h2 className="text-xs font-bold">アプリ共有用QRコード</h2>
         <span className="text-text-muted">{open ? '▲' : '▼'}</span>
@@ -21,7 +21,7 @@ export const QrShareCard: FC = () => {
             <QRCodeSVG value={url} size={200} />
           </div>
           <p className="break-all text-center text-xs font-bold text-text">{url}</p>
-          <p className="text-center text-[11px] text-text-muted">
+          <p className="text-center text-xs text-text-muted">
             スタッフにこのQRコードを読み取ってもらい、開いたページを
             「ホーム画面に追加」してもらってください。
             スクリーンショットを撮ってLINE等で配布することもできます。

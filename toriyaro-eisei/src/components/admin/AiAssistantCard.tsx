@@ -14,12 +14,12 @@ export const AiAssistantCard: FC = () => {
       <button
         type="button"
         onClick={openAssistant}
-        className="flex w-full items-center justify-between text-left"
+        className="flex min-h-[44px] w-full items-center justify-between text-left"
       >
         <span className="text-xs font-bold">AIアシスタントに聞く</span>
         <span className="text-text-muted">→</span>
       </button>
-      <p className="mt-1 text-[11px] text-text-muted">
+      <p className="mt-1 text-xs text-text-muted">
         提出状況や未提出集計をAIに質問できます（連携設定済みの端末のみ）。
       </p>
     </div>

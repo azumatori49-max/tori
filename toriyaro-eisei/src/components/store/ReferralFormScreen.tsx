@@ -6,6 +6,7 @@ import {
   useState,
   type FC,
 } from 'react';
+import { confirmDialog } from '../ui/ConfirmDialog';
 import { AppHeader } from '../layout/AppHeader';
 import { SignaturePad, type SignaturePadHandle } from '../ui/SignaturePad';
 import { SuccessOverlay } from '../ui/SuccessOverlay';
@@ -183,9 +184,12 @@ export const ReferralFormScreen: FC<Props> = ({
 
   const removeDraft = useCallback(
     async (d: ReferralDraft) => {
-      const ok = window.confirm(
-        `${d.referredName || '無題'}の下書きを削除しますか？（この操作は取り消せません）`,
-      );
+      const ok = await confirmDialog({
+        title: '下書きを削除しますか？',
+        message: `${d.referredName || '無題'}の下書きを削除します。入力した内容とサインも消えます。元に戻せません。`,
+        confirmLabel: '削除する',
+        danger: true,
+      });
       if (!ok) return;
       try {
         await deleteReferralDraft(storeKey, d.id);
@@ -392,7 +396,7 @@ export const ReferralFormScreen: FC<Props> = ({
         <button
           type="button"
           onClick={onBack}
-          className="text-lg text-text-muted hover:text-accent"
+          className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40"
           aria-label="戻る"
         >
           ←
@@ -419,7 +423,7 @@ export const ReferralFormScreen: FC<Props> = ({
         <main className="mx-auto w-full max-w-app px-4 py-5 space-y-4">
           <div className="rounded-2xl border border-accent/40 bg-surface p-4 shadow-sm">
             <h2 className="text-sm font-bold">作成中の申請があります</h2>
-            <p className="mt-1 text-[11px] text-text-muted">
+            <p className="mt-1 text-xs text-text-muted">
               以下は自動保存された下書きです。続きから入力するか、新しく作成できます。
             </p>
           </div>
@@ -434,7 +438,7 @@ export const ReferralFormScreen: FC<Props> = ({
                     <div className="truncate text-sm font-bold">
                       {d.referredName || '（被紹介者名 未入力）'}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-text-muted">
+                    <div className="mt-0.5 text-xs text-text-muted">
                       {d.kind === 'employee'
                         ? '社員（3ヶ月）'
                         : 'スタッフ（50時間）'}
@@ -446,14 +450,14 @@ export const ReferralFormScreen: FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => openDraft(d)}
-                    className="flex-1 rounded-xl bg-accent py-2 text-xs font-bold text-white shadow-sm active:scale-[0.98]"
+                    className="min-h-[44px] flex-1 rounded-xl bg-accent py-2 text-xs font-bold text-white shadow-sm active:scale-[0.98]"
                   >
                     続きから
                   </button>
                   <button
                     type="button"
                     onClick={() => removeDraft(d)}
-                    className="rounded-xl border border-ng bg-ng-bg px-4 py-2 text-xs font-bold text-ng"
+                    className="min-h-[44px] rounded-xl border border-ng bg-ng-bg px-4 py-2 text-xs font-bold text-ng"
                   >
                     削除
                   </button>
@@ -479,14 +483,14 @@ export const ReferralFormScreen: FC<Props> = ({
       {header}
       {showSaved && (
         <div
-          className="pointer-events-none fixed left-1/2 top-14 z-40 -translate-x-1/2 rounded-full bg-ok-bg px-3 py-1 text-[11px] font-bold text-ok shadow-sm"
+          className="pointer-events-none fixed left-1/2 top-14 z-40 -translate-x-1/2 rounded-full bg-ok-bg px-3 py-1 text-xs font-bold text-ok shadow-sm"
           aria-live="polite"
         >
           下書きを保存しました
         </div>
       )}
       <main className="mx-auto w-full max-w-app px-4 py-5 space-y-4">
-        <div className="flex items-center justify-between text-[11px] font-bold text-text-muted">
+        <div className="flex items-center justify-between text-xs font-bold text-text-muted">
           <StepChip label="STEP1 入力" active={step === 1} done={step > 1} />
           <StepChip label="STEP2 サイン" active={step === 2} done={step > 2} />
           <StepChip label="STEP3 確認" active={step === 3} done={false} />
@@ -565,24 +569,24 @@ export const ReferralFormScreen: FC<Props> = ({
                 className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
               />
               {kind === 'employee' && autoThreshold && (
-                <p className="mt-1 text-[10px] text-text-muted">
+                <p className="mt-1 text-xs text-text-muted">
                   入社日 + 3ヶ月 = {formatJa(autoThreshold)}
                 </p>
               )}
               {thresholdMismatch && (
-                <p className="mt-1 rounded-lg bg-warn-bg px-2 py-1.5 text-[11px] font-bold text-warn">
+                <p className="mt-1 rounded-lg bg-warn-bg px-2 py-1.5 text-xs font-bold text-warn">
                   自動計算（{formatJa(autoThreshold)}）とズレています。内容をご確認ください。
                 </p>
               )}
               {staffTooEarlyWarn && (
-                <p className="mt-1 rounded-lg bg-warn-bg px-2 py-1.5 text-[11px] font-bold text-warn">
+                <p className="mt-1 rounded-lg bg-warn-bg px-2 py-1.5 text-xs font-bold text-warn">
                   入社から14日未満です。勤怠を再確認してください。
                 </p>
               )}
             </div>
 
             {step1Errors.length > 0 && (
-              <ul className="rounded-lg bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng space-y-0.5">
+              <ul className="rounded-lg bg-ng-bg px-3 py-2 text-xs font-bold text-ng space-y-0.5">
                 {step1Errors.map((e) => (
                   <li key={e}>・{e}</li>
                 ))}
@@ -602,7 +606,7 @@ export const ReferralFormScreen: FC<Props> = ({
 
         {step === 2 && (
           <section className="space-y-5">
-            <div className="rounded-xl border border-accent/40 bg-accent/5 px-3 py-2 text-[11px] font-bold text-text leading-relaxed">
+            <div className="rounded-xl border border-accent/40 bg-accent/5 px-3 py-2 text-xs font-bold text-text leading-relaxed">
               全員が揃っていなくても大丈夫です。書ける方から順にサインしてください。
               途中の内容は自動保存されます。
             </div>
@@ -644,7 +648,7 @@ export const ReferralFormScreen: FC<Props> = ({
               </button>
             </div>
             {!canProceed2 && (
-              <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+              <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
                 3枚すべてサインしてから次に進めます。書ける人からで大丈夫です。
               </p>
             )}
@@ -674,7 +678,7 @@ export const ReferralFormScreen: FC<Props> = ({
             </div>
 
             <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm space-y-3">
-              <p className="text-[11px] font-bold text-text-muted">サイン（3枚）</p>
+              <p className="text-xs font-bold text-text-muted">サイン（3枚）</p>
               <SignPreview
                 label={`店長：${managerName}`}
                 dataUrl={managerSig}
@@ -689,12 +693,12 @@ export const ReferralFormScreen: FC<Props> = ({
               />
             </div>
 
-            <div className="rounded-xl bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+            <div className="rounded-xl bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
               送信後は修正できません。内容と3枚のサインをよく確認して送信してください。
             </div>
 
             {error && (
-              <div className="rounded-xl bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng">
+              <div className="rounded-xl bg-ng-bg px-3 py-2 text-xs font-bold text-ng">
                 {error}
               </div>
             )}
@@ -736,7 +740,7 @@ const StepChip: FC<{ label: string; active: boolean; done: boolean }> = ({
   done,
 }) => (
   <span
-    className={`flex-1 truncate rounded-full px-2 py-1 text-center text-[10px] font-bold transition ${
+    className={`flex-1 truncate rounded-full px-2 py-1 text-center text-xs font-bold transition ${
       active
         ? 'bg-accent text-white shadow-sm'
         : done
@@ -764,7 +768,7 @@ const KindOption: FC<{
     }`}
   >
     <div className="text-sm font-bold">{label}</div>
-    <div className="mt-0.5 text-[10px] text-text-muted">{sub}</div>
+    <div className="mt-0.5 text-xs text-text-muted">{sub}</div>
   </button>
 );
 
@@ -807,7 +811,7 @@ const SignBlock: FC<{
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
       <h3 className="text-sm font-bold">{title}</h3>
-      <p className="mt-1 text-[11px] text-text-muted">
+      <p className="mt-1 text-xs text-text-muted">
         私は本申請の内容が事実であることを確認し、同意します。<br />
         氏名：{agreeName || '（STEP1 で入力してください）'}
       </p>
@@ -820,11 +824,11 @@ const SignBlock: FC<{
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
         {savedDataUrl ? (
-          <span className="rounded-full bg-ok-bg px-2 py-0.5 text-[10px] font-bold text-ok">
+          <span className="rounded-full bg-ok-bg px-2 py-0.5 text-xs font-bold text-ok">
             ✓ サイン保存済み
           </span>
         ) : (
-          <span className="text-[10px] text-text-muted">
+          <span className="text-xs text-text-muted">
             指でサインしてください
           </span>
         )}
@@ -834,7 +838,7 @@ const SignBlock: FC<{
             padRef.current?.clear();
             onCapture(null);
           }}
-          className="text-[11px] font-bold text-text-muted underline"
+          className="tap-target text-xs font-bold text-text-muted underline"
         >
           書き直す
         </button>
@@ -855,7 +859,7 @@ const SignPreview: FC<{ label: string; dataUrl: string | null }> = ({
   dataUrl,
 }) => (
   <div>
-    <p className="mb-1 text-[10px] text-text-muted">{label}</p>
+    <p className="mb-1 text-xs text-text-muted">{label}</p>
     {dataUrl ? (
       <img
         src={dataUrl}
@@ -863,7 +867,7 @@ const SignPreview: FC<{ label: string; dataUrl: string | null }> = ({
         className="h-24 w-full rounded-lg border border-border bg-white object-contain"
       />
     ) : (
-      <p className="rounded-lg bg-ng-bg px-2 py-2 text-[11px] font-bold text-ng">
+      <p className="rounded-lg bg-ng-bg px-2 py-2 text-xs font-bold text-ng">
         サインが未入力です。STEP2 に戻って書き直してください。
       </p>
     )}

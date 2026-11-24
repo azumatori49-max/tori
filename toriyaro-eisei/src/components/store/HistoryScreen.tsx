@@ -196,7 +196,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
           <button
             type="button"
             onClick={onBack}
-            className="text-lg text-text-muted hover:text-accent"
+            className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40"
             aria-label="戻る"
           >
             ←
@@ -204,7 +204,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
         }
       />
       <main className="mx-auto w-full max-w-app px-4 py-4">
-        <div className="mb-3 rounded-xl bg-surface2 px-3 py-2 text-[11px] text-text-muted">
+        <div className="mb-3 rounded-xl bg-surface2 px-3 py-2 text-xs text-text-muted">
           この画面は確認専用です（編集はできません）。抜けている項目は赤字で表示されます。
         </div>
         {/* タブは4つ。スマホ幅では2×2に並べて、文字が切れないようにする */}
@@ -220,7 +220,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
               }}
               aria-pressed={activeTab === t}
               className={`min-h-[44px] rounded-xl px-2 py-2 text-xs font-bold transition ${
-                activeTab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+                activeTab === t ? 'bg-text text-white shadow-sm' : 'text-text-muted'
               }`}
             >
               {TAB_LABEL[t]}
@@ -236,7 +236,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
           <button
             type="button"
             onClick={() => shiftMonth(-1)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
             aria-label={tab === 'monthly' ? '前の年' : '前の月'}
           >
             ←
@@ -248,7 +248,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
             type="button"
             onClick={() => shiftMonth(1)}
             disabled={!canForward}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
             aria-label={tab === 'monthly' ? '次の年' : '次の月'}
           >
             →
@@ -293,7 +293,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
                     <h3 className="text-sm font-bold">{label}</h3>
                     {sub ? (
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                           done ? 'bg-ok-bg text-ok' : 'bg-warn-bg text-warn'
                         }`}
                       >
@@ -304,23 +304,23 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
                             : `一部提出 ${photos.size}/${target}`}
                       </span>
                     ) : beforeTrack ? (
-                      <span className="rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-bold text-text-muted">
+                      <span className="rounded-full bg-surface2 px-2 py-0.5 text-xs font-bold text-text-muted">
                         記録なし（集計開始前）
                       </span>
                     ) : (
-                      <span className="rounded-full bg-ng-bg px-2 py-0.5 text-[10px] font-bold text-ng">
+                      <span className="rounded-full bg-ng-bg px-2 py-0.5 text-xs font-bold text-ng">
                         未提出
                       </span>
                     )}
                   </div>
                   {sub && missing.length > 0 && (
-                    <p className="mt-2 text-[11px] font-bold text-ng">
+                    <p className="mt-2 text-xs font-bold text-ng">
                       抜けている項目：
                       {missing.map(({ it, i }) => `${i + 1}. ${it.label}`).join('・')}
                     </p>
                   )}
                   {!sub && !beforeTrack && (
-                    <p className="mt-2 text-[11px] text-ng">
+                    <p className="mt-2 text-xs text-ng">
                       全{fixedItems.length}項目が未提出です
                     </p>
                   )}

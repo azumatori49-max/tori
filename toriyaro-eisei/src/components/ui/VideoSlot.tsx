@@ -50,7 +50,7 @@ export const VideoSlot: FC<Props> = ({ index, file, existingUrl, onPick, disable
             <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
               {index + 1}
             </span>
-            <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+            <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-xs font-bold text-white">
               {isReplacing ? '差替予定' : filePreview ? '送信前' : '提出済み'}
             </span>
           </>
@@ -62,7 +62,7 @@ export const VideoSlot: FC<Props> = ({ index, file, existingUrl, onPick, disable
             className="flex h-full w-full flex-col items-center justify-center gap-1 text-text-muted transition active:scale-95"
           >
             <span className="text-2xl">🎥</span>
-            <span className="text-[11px] font-bold">動画を撮影 / フォルダから選択</span>
+            <span className="text-xs font-bold">動画を撮影 / フォルダから選択</span>
           </button>
         )}
         {/* capture を付けないので、スマホでは「撮影」と「フォルダから選択」の両方を選べる */}
@@ -83,7 +83,7 @@ export const VideoSlot: FC<Props> = ({ index, file, existingUrl, onPick, disable
           type="button"
           onClick={() => !disabled && inputRef.current?.click()}
           disabled={disabled}
-          className="rounded-lg border border-border bg-surface py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface py-1.5 text-xs font-bold text-text-muted disabled:opacity-50"
         >
           撮り直す / 選び直す
         </button>

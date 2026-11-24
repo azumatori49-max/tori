@@ -1,4 +1,5 @@
 import { useEffect, useState, type FC } from 'react';
+import { confirmDialog, noticeDialog } from '../ui/ConfirmDialog';
 import { onValue, ref, remove, set, update } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { Lightbox } from '../ui/Lightbox';
@@ -76,12 +77,25 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
   };
 
   const handleDelete = async (item: FeedbackItem) => {
-    if (!confirm('削除しますか？')) return;
+    const from = (item.storeKey && stores[item.storeKey]?.name) || '店舗不明';
+    const ok = await confirmDialog({
+      title: 'このご意見を削除しますか？',
+      message: `${from} からのご意見（${formatDateTimeJa(item.createdAt)}）を削除します。返信も一緒に消え、店舗側の画面からも見えなくなります。元に戻せません。`,
+      confirmLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
     await remove(ref(db, `feedback/${item.id}`));
   };
 
   const handleDeleteError = async (item: ErrorLogItem) => {
-    if (!confirm('このエラーログを削除しますか？')) return;
+    const ok = await confirmDialog({
+      title: 'このエラーログを削除しますか？',
+      message: '削除すると元に戻せません。',
+      confirmLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
     await remove(ref(db, `errorLogs/${item.id}`));
   };
 
@@ -100,7 +114,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
         return next;
       });
     } catch (err) {
-      alert('返信失敗: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '返信を送信できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setSavingId(null);
     }
@@ -115,8 +129,8 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
         <button
           type="button"
           onClick={() => setView('feedback')}
-          className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
-            view === 'feedback' ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+          className={`min-h-[44px] flex-1 rounded-xl py-2 text-xs font-bold transition ${
+            view === 'feedback' ? 'bg-text text-white shadow-sm' : 'text-text-muted'
           }`}
         >
           ご意見{unresolvedCount > 0 ? `（${unresolvedCount}）` : ''}
@@ -124,8 +138,8 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
         <button
           type="button"
           onClick={() => setView('errors')}
-          className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
-            view === 'errors' ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+          className={`min-h-[44px] flex-1 rounded-xl py-2 text-xs font-bold transition ${
+            view === 'errors' ? 'bg-text text-white shadow-sm' : 'text-text-muted'
           }`}
         >
           エラーログ{errors.length > 0 ? `（${errors.length}）` : ''}
@@ -147,10 +161,10 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
                   </span>
                   <span className="text-text-muted">{e.at ? formatDateTimeJa(e.at) : ''}</span>
                 </div>
-                <p className="mt-1 text-[11px] text-text-muted">
+                <p className="mt-1 text-xs text-text-muted">
                   {e.type === 'weekly' ? 'ウィークリー' : 'デイリー'} {e.dateOrWeekKey} ・ {e.uploaded ?? 0}/{e.total ?? 0}枚まで成功
                 </p>
-                <p className="mt-2 break-all rounded-lg bg-ng-bg px-3 py-2 text-[11px] text-ng">
+                <p className="mt-2 break-all rounded-lg bg-ng-bg px-3 py-2 text-xs text-ng">
                   {e.message}
                 </p>
                 <button
@@ -167,7 +181,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
       ) : (
         <>
           <div className="flex items-center justify-end">
-            <label className="flex items-center gap-1.5 text-xs text-text-muted">
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-1.5 text-xs text-text-muted">
               <input
                 type="checkbox"
                 checked={showResolved}
@@ -225,7 +239,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
                     )}
 
                     <div className="mt-3 space-y-2">
-                      <label className="block text-[10px] font-bold text-text-muted">
+                      <label className="block text-xs font-bold text-text-muted">
                         返信
                         {item.repliedAt && (
                           <span className="ml-2 font-normal">
@@ -248,7 +262,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
                         onClick={() => handleSendReply(item)}
                         disabled={isSaving || !replyValue.trim()}
                         data-busy={isSaving ? '' : undefined}
-                        className="w-full rounded-lg bg-accent py-2 text-xs font-bold text-white transition active:scale-[0.98] disabled:bg-text-muted/40"
+                        className="min-h-[44px] w-full rounded-lg bg-accent py-2 text-xs font-bold text-white transition active:scale-[0.98]"
                       >
                         {isSaving ? '送信中…' : item.reply ? '返信を更新' : '返信を送信'}
                       </button>

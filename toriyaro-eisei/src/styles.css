@@ -68,7 +68,8 @@ textarea {
   top: var(--update-banner-h, 0px);
 }
 .feedback-fab {
-  top: calc(0.75rem + var(--update-banner-h, 0px));
+  /* ヘッダー（高さ3.5rem）の中央に、高さ2.75remのボタンを置く */
+  top: calc(0.375rem + var(--update-banner-h, 0px));
 }
 
 /* 管理画面のPC用タブ（ヘッダーのすぐ下に固定）。ヘッダーの高さは 3.5rem */
@@ -86,6 +87,23 @@ textarea {
 html.liquid .bg-page-solid {
   background-color: #eaf0ff;
   background-image: linear-gradient(180deg, #eaf0ff 0%, #efe9ff 55%, #eaefff 100%);
+}
+
+/* 見た目が小さいボタン（写真の「×」、小さな文字リンクなど）の、指で押せる範囲を広げる。
+   見た目は変えず、周囲に透明な当たり判定を足して 44px 前後を確保する */
+.tap-target {
+  position: relative;
+}
+.tap-target::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+}
+/* 写真の角の「×」など、隣と近いボタン用（広げすぎて隣を押してしまわないよう控えめに） */
+.tap-target-sm::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
 }
 
 /* Hide scrollbars on horizontal photo strips */
@@ -137,15 +155,15 @@ html.liquid body {
 
   /* 主ボタン: 不透明のアクセント色＋押下ハイライト */
   html.liquid .bg-accent {
-    background-color: #d4500a !important;
-    box-shadow: 0 6px 18px -6px rgba(212, 80, 10, 0.45),
+    background-color: #b8390a !important;
+    box-shadow: 0 6px 18px -6px rgba(184, 57, 10, 0.45),
       inset 0 1px 0 rgba(255, 255, 255, 0.25);
     transition: transform 0.15s ease, box-shadow 0.2s ease,
       background-color 0.2s ease;
   }
   html.liquid button.bg-accent:hover:not(:disabled) {
-    background-color: #c04607 !important;
-    box-shadow: 0 10px 26px -8px rgba(212, 80, 10, 0.55),
+    background-color: #a53208 !important;
+    box-shadow: 0 10px 26px -8px rgba(184, 57, 10, 0.55),
       inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
   html.liquid button.bg-accent:active:not(:disabled) {

@@ -1,4 +1,5 @@
 import { useMemo, useState, type FC } from 'react';
+import { noticeDialog } from '../ui/ConfirmDialog';
 import { Lightbox } from '../ui/Lightbox';
 import { SavePhotoButton, ZipSaveButton } from './PhotoSave';
 import { buildPhotoFileName, sanitizeFileName, savePhoto, type ZipEntry } from '../../lib/download';
@@ -65,7 +66,7 @@ const useCopy = () => {
 };
 
 const btnCls =
-  'rounded-md border border-border bg-surface px-3 py-1.5 text-[11px] font-bold text-text-muted disabled:opacity-50';
+  'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-muted disabled:opacity-50';
 
 // ============================================================
 // 上部のサマリー: 全項目を達成／一部／未提出 ＋ 集計をコピー・CSVで保存
@@ -139,7 +140,7 @@ export const ScheduleItemStats: FC<{
         />
       ))}
       {stats.retiredPhotoCount > 0 && (
-        <p className="px-1 text-[11px] text-text-muted">
+        <p className="px-1 text-xs text-text-muted">
           削除・変更された項目の写真 {stats.retiredPhotoCount}枚
         </p>
       )}
@@ -167,7 +168,7 @@ const ItemStatCard: FC<{
   const pct = Math.round(stat.rate * 100);
   const text = missingStoresText(title, stat, storeName);
   const chip = (cls: string, label: string) => (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${cls}`}>{label}</span>
+    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${cls}`}>{label}</span>
   );
   return (
     <div className="rounded-xl border border-border bg-surface p-3">
@@ -175,19 +176,19 @@ const ItemStatCard: FC<{
         <p className="min-w-0 flex-1 truncate text-sm font-bold">
           {stat.index + 1}. {stat.item.label}
         </p>
-        <span className="shrink-0 text-[10px] text-text-muted">
+        <span className="shrink-0 text-xs text-text-muted">
           必要{stat.item.required}枚／最大{stat.item.max}枚
         </span>
       </div>
       {stat.unachievable && (
-        <p className="mt-1 rounded bg-ng-bg px-2 py-1 text-[11px] font-bold text-ng">
+        <p className="mt-1 rounded bg-ng-bg px-2 py-1 text-xs font-bold text-ng">
           必要枚数が上限を超えているため、達成できません
         </p>
       )}
       <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface2">
         <div className="h-full bg-ok" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-1 text-[11px] text-text-muted">
+      <p className="mt-1 text-xs text-text-muted">
         達成 {stat.done.length} / 対象 {stat.targetCount}店舗・{pct}%
       </p>
       <div className="mt-2 flex flex-wrap gap-1">
@@ -195,12 +196,12 @@ const ItemStatCard: FC<{
         {chip('bg-warn-bg text-warn', `一部 ${stat.partial.length}`)}
         {chip('bg-ng-bg text-ng', `未達成 ${stat.missing.length}`)}
       </div>
-      <p className="mt-2 text-[11px] text-text-muted">
+      <p className="mt-2 text-xs text-text-muted">
         写真 {stat.photoCount}枚・店舗あたり {stat.average.toFixed(1)}枚
       </p>
       {(stat.missing.length > 0 || stat.partial.length > 0) && (
         <details className="mt-2 text-xs">
-          <summary className="cursor-pointer text-[11px] font-bold text-text-muted">
+          <summary className="cursor-pointer text-xs font-bold text-text-muted">
             未達成・一部の店舗（{stat.missing.length + stat.partial.length}）
           </summary>
           <ul className="mt-1 space-y-0.5 pl-2">
@@ -223,7 +224,7 @@ const ItemStatCard: FC<{
             {copied ? 'コピーしました' : '未達成の店舗をコピー'}
           </button>
         ) : (
-          <span className="text-[11px] text-ok">未達成の店舗はありません</span>
+          <span className="text-xs text-ok">未達成の店舗はありません</span>
         )}
         <button type="button" onClick={onShowPhotos} disabled={stat.photoCount === 0} className={btnCls}>
           写真を一覧で見る
@@ -358,7 +359,7 @@ const PhotoGridModal: FC<{
                   </button>
                 )}
                 <div className="mt-0.5 flex items-center gap-1">
-                  <p className="min-w-0 flex-1 truncate text-[10px] text-text-muted">{p.name}</p>
+                  <p className="min-w-0 flex-1 truncate text-xs text-text-muted">{p.name}</p>
                   <SavePhotoButton url={p.url} nameWithExt={p.nameWithExt} />
                 </div>
               </div>
@@ -376,7 +377,7 @@ const PhotoGridModal: FC<{
           onClose={() => setCurrent(null)}
           onSave={() =>
             savePhoto(shown[current].url, shown[current].nameWithExt).catch(() =>
-              alert('保存できませんでした'),
+              noticeDialog({ title: '保存できませんでした', message: '通信状況を確認して、もう一度お試しください。' }),
             )
           }
           onPrev={current > 0 ? () => setCurrent(current - 1) : undefined}

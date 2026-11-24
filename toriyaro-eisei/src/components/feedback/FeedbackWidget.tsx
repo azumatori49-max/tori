@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
+import { noticeDialog } from '../ui/ConfirmDialog';
 import { onValue, push, ref, set } from 'firebase/database';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../../lib/firebase';
@@ -121,7 +122,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
       setImage(null);
       setTimeout(() => setDone(false), 1500);
     } catch (err) {
-      alert('送信失敗: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '送信できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setSubmitting(false);
     }
@@ -132,13 +133,13 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
       <button
         type="button"
         onClick={handleOpen}
-        className={`feedback-fab fixed z-50 inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-xs font-bold text-text-muted shadow-sm hover:bg-surface2 ${alignRight ? 'right-3' : 'left-3'}`}
+        className={`feedback-fab fixed z-50 inline-flex h-11 items-center justify-center rounded-full border border-border bg-white px-3.5 text-xs font-bold text-text-muted shadow-sm hover:bg-surface2 ${alignRight ? 'right-3' : 'left-3'}`}
         aria-label="フィードバック"
         title="不具合・要望を送信"
       >
         ご意見
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ng px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ng px-1 text-xs font-bold text-white">
             {unreadCount}
           </span>
         )}
@@ -153,7 +154,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-2xl text-text-muted"
+                className="-mr-2 inline-flex h-11 w-11 items-center justify-center text-2xl text-text-muted"
                 aria-label="閉じる"
               >
                 ×
@@ -165,10 +166,10 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                 <h4 className="text-xs font-bold text-text-muted">過去の報告</h4>
                 {items.map((item) => (
                   <div key={item.id} className="rounded-lg border border-border bg-bg p-3">
-                    <p className="text-[10px] text-text-muted">
+                    <p className="text-xs text-text-muted">
                       {item.createdAt ? formatDateTimeJa(item.createdAt) : ''}
                     </p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs">{item.message}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{item.message}</p>
                     {item.imageUrl && (
                       <img
                         src={item.imageUrl}
@@ -179,16 +180,16 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                     )}
                     {item.reply ? (
                       <div className="mt-2 rounded-md bg-accent/10 p-2">
-                        <p className="text-[10px] font-bold text-accent">管理者からの返信</p>
-                        <p className="mt-0.5 whitespace-pre-wrap text-xs">{item.reply}</p>
+                        <p className="text-xs font-bold text-accent">管理者からの返信</p>
+                        <p className="mt-0.5 whitespace-pre-wrap text-sm">{item.reply}</p>
                         {item.repliedAt && (
-                          <p className="mt-1 text-[10px] text-text-muted">
+                          <p className="mt-1 text-xs text-text-muted">
                             {formatDateTimeJa(item.repliedAt)}
                           </p>
                         )}
                       </div>
                     ) : (
-                      <p className="mt-2 text-[10px] text-text-muted">返信待ち</p>
+                      <p className="mt-2 text-xs text-text-muted">返信待ち</p>
                     )}
                   </div>
                 ))}
@@ -212,7 +213,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                   maxLength={2000}
                   className="w-full rounded-lg border border-border bg-bg p-2 text-sm focus:border-accent focus:outline-none"
                 />
-                <p className="mt-1 text-right text-[10px] text-text-muted">
+                <p className="mt-1 text-right text-xs text-text-muted">
                   {message.length} / 2000
                 </p>
 
@@ -226,7 +227,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                     <button
                       type="button"
                       onClick={() => setImage(null)}
-                      className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-ng text-white shadow"
+                      className="tap-target-sm absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ng text-white shadow"
                       aria-label="画像を削除"
                     >
                       ×
@@ -236,7 +237,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="mt-1 w-full rounded-lg border border-dashed border-border bg-bg py-2.5 text-xs font-bold text-text-muted"
+                    className="mt-1 min-h-[44px] w-full rounded-lg border border-dashed border-border bg-bg py-2.5 text-xs font-bold text-text-muted"
                   >
                     ＋ スクリーンショットを添付（任意）
                   </button>
@@ -258,7 +259,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                   onClick={handleSubmit}
                   disabled={submitting || (!message.trim() && !image)}
                   data-busy={submitting ? '' : undefined}
-                  className="mt-3 w-full rounded-lg bg-accent py-2.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:bg-text-muted/40 disabled:text-white"
+                  className="mt-3 min-h-[44px] w-full rounded-lg bg-accent py-2.5 text-sm font-bold text-white transition active:scale-[0.98]"
                 >
                   {submitting ? '送信中…' : '送信'}
                 </button>

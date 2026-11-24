@@ -243,7 +243,7 @@ export const MonthlyReportCard: FC<Props> = ({ stores }) => {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between"
+        className="flex min-h-[44px] w-full items-center justify-between text-left"
       >
         <h2 className="text-xs font-bold">月次レポート（デイリー提出状況）</h2>
         <span className="text-text-muted">{open ? '▲' : '▼'}</span>
@@ -275,7 +275,7 @@ export const MonthlyReportCard: FC<Props> = ({ stores }) => {
           </div>
 
           {targetDates.length === 0 && (
-            <p className="rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+            <p className="rounded-lg bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
               この月には集計対象の日がありません（集計開始日 {MISS_TRACK_START} より前、または当月の初日以前）。
             </p>
           )}
@@ -285,7 +285,7 @@ export const MonthlyReportCard: FC<Props> = ({ stores }) => {
           )}
 
           {!loading && misses && targetDates.length > 0 && (
-            <div className="flex items-center gap-2 text-[11px] font-bold">
+            <div className="flex items-center gap-2 text-xs font-bold">
               <span className="rounded-full bg-ok-bg px-2 py-0.5 text-ok">
                 未提出なし {noMissCount}店舗
               </span>
@@ -299,7 +299,7 @@ export const MonthlyReportCard: FC<Props> = ({ stores }) => {
             <textarea
               readOnly
               value={reportText}
-              className="h-64 w-full resize-y rounded-xl border border-border bg-surface2 p-3 text-[11px] leading-relaxed text-text focus:outline-none"
+              className="h-64 w-full resize-y rounded-xl border border-border bg-surface2 p-3 text-xs leading-relaxed text-text focus:outline-none"
             />
           )}
 

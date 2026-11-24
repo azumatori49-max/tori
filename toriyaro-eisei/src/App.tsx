@@ -135,7 +135,7 @@ const AppInner = () => {
           <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
             <p className="text-sm text-text-muted">店舗情報を読み込み中…</p>
             {storesError && (
-              <p className="max-w-xs rounded-lg bg-warn-bg px-3 py-2 text-[11px] font-bold text-warn">
+              <p className="max-w-xs rounded-lg bg-warn-bg px-3 py-2 text-xs font-bold text-warn">
                 {storesError}
               </p>
             )}

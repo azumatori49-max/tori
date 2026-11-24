@@ -80,7 +80,7 @@ export const VideoModal: FC<Props> = ({ video, onClose }) => {
             />
           )}
         </div>
-        <p className="mt-2 text-center text-[11px] text-white/70">外側をタップすると閉じます</p>
+        <p className="mt-2 text-center text-xs text-white/70">外側をタップすると閉じます</p>
       </div>
     </div>
   );

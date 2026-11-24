@@ -256,7 +256,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
         title={type === 'daily' ? '毎日の衛生チェック' : type === 'weekly' ? '週次の衛生チェック' : '月次の衛生チェック'}
         subtitle={storeName}
         left={
-          <button type="button" onClick={onBack} disabled={submitting} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">←</button>
+          <button type="button" onClick={onBack} disabled={submitting} className="-ml-2 inline-flex h-11 w-11 items-center justify-center text-lg text-text-muted hover:text-accent disabled:opacity-40" aria-label="戻る">←</button>
         }
       />
       <main className="mx-auto w-full max-w-app px-4 py-5">
@@ -322,7 +322,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
           <section className="mt-6">
             <h3 className="mb-2 text-sm font-bold">
               {fixedCount + 1}. {multiItem.label}
-              <span className="ml-2 text-[11px] font-normal text-text-muted">（複数枚OK）</span>
+              <span className="ml-2 text-xs font-normal text-text-muted">（複数枚OK）</span>
             </h3>
             <div className="grid grid-cols-3 gap-2.5">
               {multiSlots.map((slot, i) =>
@@ -349,7 +349,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
                 className="flex aspect-square w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent/60 bg-accent/5 text-accent transition active:scale-95 disabled:opacity-50"
               >
                 <span className="text-2xl">＋</span>
-                <span className="text-[11px] font-bold">追加</span>
+                <span className="text-xs font-bold">追加</span>
               </button>
               <input
                 ref={multiInputRef}
@@ -366,7 +366,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
               />
             </div>
             {multiSlots.length === 0 && (
-              <p className="mt-2 text-[11px] text-text-muted">
+              <p className="mt-2 text-xs text-text-muted">
                 「＋追加」から写真を選択してください（一度に複数選択可）
               </p>
             )}
@@ -387,7 +387,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
         <div className="mx-auto w-full max-w-app px-4 py-3">
           {progress && (
             <div className="mb-2" role="status" aria-live="polite">
-              <div className="flex justify-between text-[11px] font-bold text-text-muted">
+              <div className="flex justify-between text-xs font-bold text-text-muted">
                 <span>{progress.uploaded === progress.total ? '保存を確認中…' : '写真を送信中…'}</span>
                 <span>{progress.uploaded} / {progress.total}</span>
               </div>
@@ -456,7 +456,7 @@ const MultiCell: FC<MultiCellProps> = ({ index, slot, source, disabled, onReplac
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-ng text-white shadow disabled:opacity-50"
+        className="tap-target-sm absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ng text-white shadow disabled:opacity-50"
         aria-label="削除"
       >
         ×

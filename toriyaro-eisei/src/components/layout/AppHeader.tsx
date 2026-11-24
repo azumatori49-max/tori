@@ -22,7 +22,7 @@ export const AppHeader: FC<Props> = ({ title, subtitle, left, right, showLogo, w
         <div className="min-w-0">
           <h1 className="truncate text-sm font-bold leading-tight">{title}</h1>
           {subtitle && (
-            <p className="truncate text-[11px] text-text-muted leading-tight">{subtitle}</p>
+            <p className="truncate text-xs text-text-muted leading-tight">{subtitle}</p>
           )}
         </div>
       </div>

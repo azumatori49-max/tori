@@ -12,7 +12,7 @@ interface Props {
  */
 export const InlineVideo: FC<Props> = ({ video, className = '' }) => (
   <div className={className}>
-    {video.title && <p className="mb-1 text-[11px] font-bold text-text-muted">{video.title}</p>}
+    {video.title && <p className="mb-1 text-xs font-bold text-text-muted">{video.title}</p>}
     <div className="w-full overflow-hidden rounded-xl bg-black" style={{ aspectRatio: '16 / 9' }}>
       {video.type === 'upload' ? (
         <video

@@ -45,7 +45,7 @@ export const StoreRow: FC<Props> = ({
   onReload,
 }) => {
   const [busy, setBusy] = useState(false);
-  const target = targetForType(type, storeKey);
+  const target = targetForType(type, storeKey, dateOrWeekKey);
   const photos = normalisePhotos(submission?.photos);
   const photoCount = photos.size;
   const isLine = !!submission?.viaLine;

@@ -159,7 +159,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
           : `${newCount}枚を提出する`;
 
   const back = (
-    <button type="button" onClick={onBack} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">
+    <button type="button" onClick={onBack} disabled={submitting} className="text-lg text-text-muted hover:text-accent" aria-label="戻る">
       ←
     </button>
   );

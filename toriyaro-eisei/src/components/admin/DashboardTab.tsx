@@ -3,6 +3,7 @@ import { StoreRow } from './StoreRow';
 import { StoreDetailModal } from './StoreDetailModal';
 import { useSubmissionsBulk } from '../../hooks/useSubmissions';
 import { targetForType } from '../../data/checkItems';
+import { isStoreOpenFor } from '../../lib/storeOpening';
 import {
   dateKeyToDate,
   formatDateKeyJa,
@@ -36,10 +37,11 @@ export const DashboardTab: FC<Props> = ({ stores }) => {
 
   const sortedKeys = useMemo(
     () =>
-      Object.keys(stores).sort((a, b) =>
-        stores[a].name.localeCompare(stores[b].name, 'ja'),
-      ),
-    [stores],
+      Object.keys(stores)
+        // 表示中の日・週・月の時点でまだオープンしていない店舗は出さない
+        .filter((k) => isStoreOpenFor(stores[k].createdAt, reportTab, currentKey, getDateKey()))
+        .sort((a, b) => stores[a].name.localeCompare(stores[b].name, 'ja')),
+    [stores, reportTab, currentKey],
   );
 
   const { data, loading, reload } = useSubmissionsBulk(sortedKeys, reportTab, currentKey);

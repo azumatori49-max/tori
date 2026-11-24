@@ -376,22 +376,27 @@ input,select,textarea{background:rgba(255,255,255,.6);border-color:rgba(255,255,
 .home-hero h1{letter-spacing:.01em}
 /* 入力欄・未選択のボタンは、背景と見分けがつく濃さの枠にする（白地に白で見えない問題の対策） */
 :root{--ctl:#84919C}
-input,select,textarea,.chip,.scale button,.btn.ghost,.back-btn,.cat-chip,.photos .ph{border-color:var(--ctl)}
+input,select,textarea,.lf-bar input,.lf-bar select,.chip,.scale button,.btn.ghost,.back-btn,.cat-chip,.photos .ph{border-color:var(--ctl)}
+.chip:disabled{opacity:.45;cursor:default}
 .chip.on-good,.scale button.on-good{border-color:var(--good)}
 .chip.on-warn,.scale button.on-warn{border-color:var(--warn)}
 .chip.on-bad,.scale button.on-bad{border-color:var(--bad)}
 .cat-chip.on{border-color:var(--accent)}
 /* 指で押しやすい大きさにする */
-.save-btn{min-height:40px;padding:8px 16px}
+.save-btn{min-height:36px;padding:6px 16px}
 .back-btn{min-height:40px;padding:8px 12px}
 .cat-chip{min-height:40px;padding:9px 14px}
 .chip{min-height:42px;padding:10px 16px}
 .ai-hbtn,.mcp-hbtn{min-height:40px}
-.photos .ph .del{top:0;right:0;width:32px;height:32px;font-size:17px;line-height:32px;border-radius:0 0 0 12px}
+/* 写真の×：押せる範囲は32px、見た目は小さくして写真を隠しすぎない */
+.photos .ph .del{top:0;right:0;width:32px;height:32px;background:none;font-size:0;border-radius:0}
+.photos .ph .del::after{content:"×";position:absolute;top:3px;right:3px;width:22px;height:22px;line-height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:13px;text-align:center}
 .rep-item .photos .ph .del{display:none}
-.hw-item:has(>.list-card){padding:0}
-.hw-item>.list-card{padding:12px 0;min-height:48px}
-.list-card>span:first-child{min-width:0}
+@supports selector(:has(*)){
+  .hw-item:has(>.list-card){padding:0}
+  .hw-item>.list-card{padding:12px 0;min-height:48px}
+}
+.list-card>span:first-child{min-width:0;overflow-wrap:anywhere}
 .list-card .sc{white-space:nowrap;flex:0 0 auto}
 /* 未入力の項目へ飛んだ時に、固定ヘッダーの下に隠れないようにする */
 .card[id^="card-"]{scroll-margin-top:calc(var(--hd-h,200px) + 10px)}
@@ -981,7 +986,7 @@ function ymAdd(ym,delta){const [y,m]=ym.split("-").map(Number);const t=y*12+(m-1
 function ymLabel(ym){const [y,m]=ym.split("-");return `${y}年${+m}月`;}
 // 「要臨店」の基準：総合点がこの点数以下、または3点以下が続くアラート項目がある店舗
 const VISIT_SCORE=60;
-function needsVisit(r){ return r.score<=VISIT_SCORE||r.alerts>0; }
+function needsVisit(r){ return r.score<=VISIT_SCORE||r.alertsNow>0; }   // alertsNow＝アラート項目のうち、その回も3点以下だったもの
 function storeRanking(month){
   const list=state.inspections.filter(i=>i.completedAt&&!i.provisional&&(!month||ymOf(i.date)===month));
   const by={};
@@ -989,7 +994,10 @@ function storeRanking(month){
     const k=i.store;
     if(!by[k]||((i.date+(i.completedAt||""))>(by[k].date+(by[k].completedAt||"")))) by[k]=i;
   }
-  return Object.values(by).map(i=>({store:i.store,brand:i.brand||"",score:i.totalScore,date:i.date,alerts:storeAlerts(i.store).length}))
+  return Object.values(by).map(i=>{
+      const al=storeAlerts(i.store);
+      return {store:i.store,brand:i.brand||"",score:i.totalScore,date:i.date,alerts:al.length,
+        alertsNow:al.filter(x=>{const v=score5Of(x.it,i);return v!=null&&v<=ALERT_LOW;}).length};})
     .sort((a,b)=>a.score-b.score||a.store.localeCompare(b.store));
 }
 function storeAlerts(store){return ALL_ITEMS.map(it=>({it,c:lowCount(store,it)})).filter(x=>x.c>=ALERT_COUNT);}
@@ -1477,8 +1485,11 @@ function appBrandFor(store,brand){
 // 過去の記録から、その店舗名の屋号を引く（屋号の一覧に無いものは使わない）
 function knownBrandOf(store){
   if(!store) return "";
-  const b=storeBrandOf(store);
-  return b&&BRANDS.includes(b)?b:"";
+  // 同じ店舗名が複数の屋号にある場合は決められないので、自動では選ばない
+  const set=new Set(state.inspections.filter(i=>i.store===store&&i.completedAt&&!i.provisional&&i.brand).map(i=>i.brand));
+  if(set.size!==1) return "";
+  const b=[...set][0];
+  return BRANDS.includes(b)?b:"";
 }
 function storeBrandOf(store){
   let best=null;
@@ -2120,7 +2131,7 @@ function buildAssistantContext(){
   const cur=ymOf(todayStr());
   for(const m of [cur,ymAdd(cur,-1)]){
     const rank=storeRanking(m);
-    if(rank.length) lines.push(`【${ymLabel(m)}のランキング（総合点が低い順）】`+rank.map((r,i)=>`${i+1}位 ${r.brand?r.brand+" ":""}${r.store} ${r.score}点${needsVisit(r)?"（要臨店）":""}`).join("、")+`　※「要臨店」＝総合点${VISIT_SCORE}点以下、またはアラート項目のある店舗`);
+    if(rank.length) lines.push(`【${ymLabel(m)}のランキング（総合点が低い順）】`+rank.map((r,i)=>`${i+1}位 ${r.brand?r.brand+" ":""}${r.store} ${r.score}点${needsVisit(r)?"（要臨店）":""}`).join("、")+`　※「要臨店」＝総合点${VISIT_SCORE}点以下、またはアラート項目がその回も3点以下だった店舗`);
   }
   const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
   const al=stores.map(s=>{const a=storeAlerts(s);return a.length?`${s}：${a.map(x=>`${x.it.name}（3点以下${x.c}回）`).join("、")}`:null;}).filter(Boolean);
@@ -2223,7 +2234,7 @@ function viewAssistant(){
   const sugg=["全店を分析して改善アクション（Do）を出して","今月の要臨店はどこ？","全店で一番改善が必要な項目は？","面談で気になる店舗は？","先月から悪化した店舗は？"];
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
-    <button class="back-btn" id="to-home">${state.assistantFrom==="check"&&state.draft?"← チェックに戻る":"← 戻る"}</button>
+    <button class="back-btn" id="to-home">${state.assistantFrom==="check"&&state.draft?"← チェックへ":"← 戻る"}</button>
     <h1 style="flex:1">AIアシスタント <span class="meta" style="font-weight:600">${deviceClaudeKey?"Claude":"Gemini"}</span></h1>
     <button class="back-btn" id="chat-clear" style="font-size:12px" ${state.chat.length?"":"disabled"}>履歴クリア</button>
   </div></header>
@@ -2880,7 +2891,12 @@ let rendering=false;
    ・ホームから報告書・推移・AI・管理画面を開く時に、ホームの位置と入力内容を覚え、戻った時に元へ戻す
    ・ホーム以外の画面では履歴を1つ積み、端末の「戻る」でアプリの外に出ずに前の画面へ戻る */
 const HOME_INPUT_IDS=["f-store","f-inspector","f-date","search-store","past-q","past-ym","trend-q","trend-ym","csv-month"];
-let homeMemo=null, homePastOpen=false, lastView="home", histDeep=false, histSkip=0;
+let homeMemo=null, homePastOpen=false, lastView="home", histDeep=false, histSkip=0, overlayOwned=false;
+try{ history.scrollRestoration="manual"; }catch(e){}            // 位置の復元はアプリ側で行う（ブラウザの自動復元と競合させない）
+try{ if(history.state&&history.state.rk) histDeep=true; }catch(e){}  // 再読み込み前に積んだ履歴が残っていれば引き取る
+let composing=false, lastHomeInputAt=0, keepTimer=null;
+document.addEventListener("compositionstart",()=>{composing=true;});
+document.addEventListener("compositionend",()=>{composing=false;});
 function captureHome(){
   const vals={};
   for(const id of HOME_INPUT_IDS){ const el=document.getElementById(id); if(el) vals[id]=el.value; }
@@ -2888,7 +2904,7 @@ function captureHome(){
   return {y:window.scrollY, vals, pastOpen:homePastOpen, foldOpen:!!(fold&&fold.open),
     focus:ae&&HOME_INPUT_IDS.includes(ae.id)?{id:ae.id,s:ae.selectionStart,e:ae.selectionEnd}:null};
 }
-function restoreHome(m,withScroll){
+function restoreHome(m,withScroll,keepFocus){
   if(!m||state.view!=="home") return;
   for(const id of HOME_INPUT_IDS){
     const el=document.getElementById(id); if(!el||m.vals[id]==null) continue;
@@ -2897,15 +2913,30 @@ function restoreHome(m,withScroll){
   }
   if(m.pastOpen) document.getElementById("past-more")?.click();
   const fold=document.getElementById("fold-noal"); if(fold&&m.foldOpen) fold.open=true;
-  document.getElementById("f-store")?.dispatchEvent(new Event("input"));       // 前回の宿題の表示を戻す
+  document.getElementById("f-store")?.dispatchEvent(new CustomEvent("input",{detail:"restore"}));  // 前回の宿題の表示を戻す（屋号の自動選択は動かさない）
   document.getElementById("search-store")?.dispatchEvent(new Event("input"));  // 絞り込みを戻す
-  if(m.focus){ const el=document.getElementById(m.focus.id); if(el){ el.focus({preventScroll:true}); try{ el.setSelectionRange(m.focus.s,m.focus.e); }catch(e){} } }
+  if(keepFocus&&m.focus){ const el=document.getElementById(m.focus.id); if(el){ el.focus({preventScroll:true}); try{ el.setSelectionRange(m.focus.s,m.focus.e); }catch(e){} } }
   if(withScroll) scrollTo(0,m.y);
 }
 // ホームを描き直しても、入力中の文字・絞り込み・位置を保つ
 function renderKeep(){
-  if(state.view==="home"&&lastView==="home"&&!state.locked&&document.getElementById("start")){ const m=captureHome(); render(); restoreHome(m,true); }
+  if(state.view==="home"&&lastView==="home"&&!state.locked&&document.getElementById("start")){ const m=captureHome(); render(); restoreHome(m,true,true); }
   else render();
+}
+// クラウドの更新など、利用者の操作と無関係な描き直し：ホームで文字を打っている最中（変換中を含む）は少し待つ
+function renderKeepSoon(){
+  clearTimeout(keepTimer);
+  const ae=document.activeElement;
+  const typing=state.view==="home"&&(composing||(ae&&HOME_INPUT_IDS.includes(ae.id)&&Date.now()-lastHomeInputAt<1500));
+  if(typing){ keepTimer=setTimeout(renderKeepSoon,800); return; }
+  renderKeep();
+}
+// 重ねて出す画面（拡大写真・MCP案内）：ホームで開いた時も履歴を1つ積み、端末の「戻る」で閉じられるようにする
+function overlayOpened(){
+  try{ if(!histDeep){ history.pushState({rk:1},""); histDeep=true; overlayOwned=true; } }catch(e){}
+}
+function overlayClosed(){
+  if(overlayOwned){ overlayOwned=false; syncHistory(); }
 }
 // 前の画面へ戻る（画面の「戻る」ボタンと、端末の「戻る」操作の両方から呼ぶ）
 function goBack(){
@@ -2926,8 +2957,9 @@ window.addEventListener("popstate",()=>{
   histDeep=false;                                   // 積んでいた履歴が1つ戻された
   const lb=document.getElementById("lightbox"), mcp=document.getElementById("mcp-x");
   if(lb||mcp){                                      // 拡大写真・案内パネルが開いていれば、まずそれを閉じる
+    overlayOwned=false;
     if(lb) lb.click(); else mcp.click();
-    try{ history.pushState({rk:1},""); histDeep=true; }catch(e){}
+    syncHistory();                                  // ホーム以外の画面なら、履歴を積み直す
     return;
   }
   goBack();
@@ -2961,7 +2993,7 @@ function render(){
   else if(state.view==="assistant") html=viewAssistant();
   else if(state.view==="admin") html=viewAdmin();
   rendering=true; try{ app.innerHTML=html; } finally{ rendering=false; }   // 描き直しで外れた入力欄が発火する change は無視する
-  app.insertAdjacentHTML("afterbegin",'<div id="sync-bar" class="sync-bar"></div>');
+  app.insertAdjacentHTML("afterbegin",syncBarHtml());   // 最初から中身入りで描く（後から高さが変わって位置がずれないように）
   updateSyncBar();
   if(state.view==="home"){ homePastOpen=false; bindHome(); }
   if(state.view==="admin") bindAdmin();
@@ -3102,7 +3134,7 @@ function viewHome(){
         <b style="font-size:15px">${ymLabel(month)}</b>
         <button class="back-btn" id="rank-next" ${month>=cur?"disabled":""}>次の月 ▶</button>
       </div>
-      <p class="desc">${ymLabel(month)}に行ったチェックを、総合点の低い順（臨店の優先順）に並べています（同じ月に複数回ある店舗は最新分）。${VISIT_SCORE}点以下、またはアラートのある店舗に「要臨店」が付きます。タップで項目別の推移を確認できます。</p>
+      <p class="desc">${ymLabel(month)}に行ったチェックを、総合点の低い順（臨店の優先順）に並べています（同じ月に複数回ある店舗は最新分）。${VISIT_SCORE}点以下、またはアラート項目がその回も3点以下だった店舗に「要臨店」が付きます。タップで項目別の推移を確認できます。</p>
       ${rank.length?rank.map((r,i)=>`
         <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
           <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　${r.brand?`<span class="hw-meta">${esc(r.brand)}</span> `:""}<b>${esc(r.store)}</b>${needsVisit(r)?` <span class="badge issue">要臨店</span>`:""}
@@ -3354,6 +3386,7 @@ function bindAdmin(){
     const st=$("#gk-status"); const v=$("#gk-input").value.trim();
     if(!v){st.textContent="キーを貼り付けてください。";return;}
     deviceGeminiKey=v; aiModels={}; await kvSet("geminiKey",v).catch(()=>{});
+    await kvDel("geminiKeyDeletePending").catch(()=>{});
     const shared=await cloudSaveGeminiKey(v);
     markGeminiShared(shared);
     render();
@@ -3361,10 +3394,13 @@ function bindAdmin(){
     if(s2){s2.textContent=shared?"保存しました（全端末に自動共有されます）。「接続テスト」で確認できます。":"この端末に保存しました（クラウド未接続のため共有は保留）。";}
   });
   $("#gk-clear")?.addEventListener("click",async()=>{
-    if(!confirm("AIのキーを削除しますか？\n全端末で、写真のAI判定とAIアシスタントが使えなくなります。")) return;
+    if(!confirm(fsDb?"AIのキーを削除しますか？\n共有しているキーを全端末から削除します。":"いまはクラウドにつながっていないため、他の端末からはまだ消せません。\nこの端末のキーを削除し、次につながった時に共有分も削除しますか？")) return;
     deviceGeminiKey=null; aiModels={}; markGeminiShared(false); await kvDel("geminiKey").catch(()=>{});
-    await cloudDeleteGeminiKey();
+    const gone=await cloudDeleteGeminiKey();
+    if(!gone) await kvSet("geminiKeyDeletePending",true).catch(()=>{});     // 共有分は、次につながった時に消す
     render();
+    const s3=$("#gk-status");
+    if(s3) s3.textContent=gone?"削除しました（他の端末からも順次消えます）。":"この端末から削除しました。共有分は、次にクラウドへつながった時に削除します。";
   });
   $("#gk-test")?.addEventListener("click",async()=>{
     const st=$("#gk-status"); const v=$("#gk-input").value.trim();
@@ -3578,12 +3614,14 @@ function bindHome(){
   };
   storeIn?.addEventListener("input",renderPrev);
   // 登録のある店舗名が入ったら、その店舗の屋号を自動で選ぶ（選び忘れで項目が減るのを防ぐ）
-  storeIn?.addEventListener("input",()=>{
+  // 屋号を手で選んだ後は触らない。自動で付けた屋号は、店舗名が変わったら付け直す（未登録の店舗名なら外す）
+  storeIn?.addEventListener("input",e=>{
+    if(e.detail==="restore"||state.brandTouched) return;
     const b=knownBrandOf(storeIn.value.trim());
-    if(b&&b!==state.startBrand){
-      state.startBrand=b;
-      document.querySelectorAll("[data-brandsel]").forEach(x=>x.classList.toggle("on-good",x.dataset.brandsel===b));
-    }
+    if(b){ state.startBrand=b; state.autoBrand=b; }
+    else if(state.autoBrand&&state.startBrand===state.autoBrand){ state.startBrand=""; state.autoBrand=""; }
+    else return;
+    document.querySelectorAll("[data-brandsel]").forEach(x=>x.classList.toggle("on-good",x.dataset.brandsel===state.startBrand));
   });
   $("#start")?.addEventListener("click",async()=>{
     if(startBusy) return; startBusy=true;
@@ -3595,13 +3633,14 @@ function bindHome(){
     if(same&&!confirm(`「${store}」はすでに進行中のチェックがあります。\n\nOK＝新しく別のチェックを開始（進行中のものも残ります）\nキャンセル＝やめて、進行中の一覧から続きを再開`)) return;
     const last=lastInspectionFor(store);
     const nd={
-      id:uuid(), store, inspector, date, brand:state.startBrand||knownBrandOf(store)||"",
+      id:uuid(), store, inspector, date, brand:state.startBrand||(state.brandTouched?"":knownBrandOf(store))||"",
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
       catIndex:0, updatedAt:Date.now(),
     };
     state.lastInspector=inspector; kvSet("lastInspector",inspector).catch(()=>{});   // 確認者名は次回から最初に入れておく
+    state.startBrand=""; state.autoBrand=""; state.brandTouched=false;              // 次の店舗に前の屋号を持ち越さない
     if(state.draft) await saveDraftNow(state.draft);
     state.drafts.push(nd); state.draft=nd; state.catIndex=0;
     await saveDraftNow(nd);
@@ -3727,21 +3766,33 @@ const TREND_N=8; // 推移一覧に表示する直近のチェック回数
    完了したチェックを全端末・全ユーザーで共有する。写真はドキュメント上限を
    避けるため photos コレクションに分けて保存。オフライン・未設定時は端末内
    （IndexedDB）のみで動作する。 */
-let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false, cloudIniting=false;
-async function initCloud(){
+let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false, cloudInitP=null, cloudSdkFailed=false;
+// 接続は1本だけ。接続中に呼ばれたら、その完了を待てるよう同じ約束を返す
+function initCloud(){
+  if(fsDb) return Promise.resolve();
+  if(!cloudInitP) cloudInitP=initCloudOnce().finally(()=>{ cloudInitP=null; });
+  return cloudInitP;
+}
+const cloudConfigured=()=>!!(SHARED_FB_CONFIG&&SHARED_FB_CONFIG.config)&&!(IS_COMPANY_SITE&&!CC.firebase);
+// いまのページのままではつなぎ直せない状態（部品の読み込み失敗は同じページでは回復しない／接続後のエラー）
+const cloudNeedsReload=()=>cloudSdkFailed||(!!fsDb&&!cloudReady&&!!cloudErr);
+async function initCloudOnce(){
   // 会社別サイトで config.js（会社専用のFirebase設定）が無い場合は、
   // 誤って自社のデータベースに接続しないようクラウド保存を無効にする
   if(IS_COMPANY_SITE&&!CC.firebase){ cloudErr="この会社用のFirebase設定（config.js）が未設定のため、端末内保存のみで動作しています"; return; }
   if(!SHARED_FB_CONFIG||!SHARED_FB_CONFIG.config) return;
-  if(cloudIniting||fsDb) return;         // 接続中・接続済みなら重ねて始めない
-  cloudIniting=true; cloudErr="";
+  if(fsDb) return;
+  cloudErr="";
   try{
     const V=FB_SDK_VERSION;
-    const [appMod,fsMod,authMod]=await Promise.all([
-      import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
-      import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`),
-      import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
-    ]);
+    let appMod,fsMod,authMod;
+    try{
+      [appMod,fsMod,authMod]=await Promise.all([
+        import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
+        import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`),
+        import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
+      ]);
+    }catch(e){ cloudSdkFailed=true; throw e; }
     const app=appMod.getApps().length?appMod.getApp():appMod.initializeApp(SHARED_FB_CONFIG.config);
     if(PASSWORD_PROTECTED){
       const {auth}=await passwordAuth();
@@ -3789,13 +3840,12 @@ async function initCloud(){
         }
         syncOutbox();
       }
-      if(["home","trends","report"].includes(state.view)) renderKeep();
+      if(["home","trends","report"].includes(state.view)) renderKeepSoon();
     },err=>{
       cloudErr=String(err&&err.message||err); cloudReady=false;
       if(state.view==="admin") render(); else refreshCloudLabel();
     });
   }catch(e){ cloudErr=String(e&&e.message||e); refreshCloudLabel(); }
-  finally{ cloudIniting=false; }
 }
 function refreshCloudLabel(){ const el=document.getElementById("cloud-label"); if(el) el.innerHTML=cloudStatusLabel(); }
 function stripPhotos(insp){
@@ -3939,12 +3989,17 @@ async function cloudSaveGeminiKey(key){
   }catch(e){ return false; }
 }
 async function cloudDeleteGeminiKey(){
-  if(!fsDb) return;
-  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","gemini")); }catch(e){}
+  if(!fsDb) return false;
+  try{ await fsMods.deleteDoc(fsMods.doc(fsDb,"config","gemini")); return true; }catch(e){ return false; }
 }
 async function cloudFetchGeminiKey(){
   if(!fsDb||!fsMods.getDoc) return;
   try{
+    // 未接続の時に削除したキーが残っていれば、取得の前に共有分を消す（消したはずのキーが戻らないように）
+    if(await kvGet("geminiKeyDeletePending").catch(()=>false)){
+      if(await cloudDeleteGeminiKey()) await kvDel("geminiKeyDeletePending").catch(()=>{});
+      else return;
+    }
     const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","gemini"));
     const k=snap&&snap.exists&&snap.exists()?(snap.data()||{}).key:null;
     if(k){
@@ -4065,6 +4120,10 @@ function catDoneMark(i){
   }
   return "";
 }
+// 低い評価（問題あり・要注意の選択肢）が付いているか
+function isLowEval(item,a){
+  return item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return !!o&&(o.issue||o.lv==="bad"||o.lv==="warn");});
+}
 function itemCard(item){
   const a=ans(item.id);
   const complete=itemComplete(item,a);
@@ -4101,8 +4160,8 @@ function itemCard(item){
     ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
     ${(()=>{   // 低い点を付けたのに書く欄が無い項目には、理由を残せる1行メモを出す（報告書に載る）
-      const low=item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o&&o.issue;});
-      const hasText=(item.extras||[]).some(f=>shown(f,a)&&(f.type==="textarea"||f.type==="text"));
+      const low=isLowEval(item,a);
+      const hasText=(item.extras||[]).some(f=>shown(f,a)&&f.type==="textarea");
       if(!(low&&!hasText)&&!filled(a.fields.memo)) return "";
       return `<div class="field"><label>指摘メモ <span style="font-weight:600">任意</span></label><input type="text" value="${esc(a.fields.memo||"")}" data-field="${item.id}:memo" placeholder="何が・どこが悪かったか（報告書に載ります）" autocomplete="off"></div>`;})()}
     ${item.note?`<p class="note">${esc(item.note)}</p>`:""}
@@ -4217,7 +4276,7 @@ function viewReport(){
   <div class="wrap">
     ${state.justDone&&state.justDone.id===insp.id?`<div class="card done-banner no-print" id="done-banner">
       <h3>✓ ${state.justDone.partial?"一時保存として提出しました":"チェックを完了しました"}</h3>
-      <p class="desc">${state.justDone.partial?"続きは下の「続きを入力する」からいつでも再開できます。":"報告書を保存しました。この下に内容が表示されています。"}${state.justDone.note?esc(state.justDone.note):""}</p>
+      <p class="desc">${state.justDone.partial?"続きは下の「続きを入力する」からいつでも再開できます。":"この下に報告書が表示されています。"}${state.justDone.note?esc(state.justDone.note):""}</p>
       <div style="display:flex;gap:10px;margin-top:12px">
         <button class="btn" id="to-home2">ホームへ戻る</button>
         ${state.justDone.partial?"":`<button class="btn sub" id="rep-print2">印刷・PDF保存</button>`}
@@ -4275,7 +4334,7 @@ function reportBody(insp,isPreview){
       const to5=v=>v==null?null:Math.round(v/25)+1;      // 項目の点数は、入力・推移と同じ5点満点で表示する
       const extras=[...(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
         .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`),
-        ...(filled(a.fields&&a.fields.memo)?[`<b>指摘メモ：</b>${esc(a.fields.memo)}`]:[])].join("／");
+        ...(filled(a.fields&&a.fields.memo)?[`<b>${isLowEval(it,a)?"指摘メモ":"メモ"}：</b>${esc(a.fields.memo)}`]:[])].join("／");
       return `<div class="rep-item">
         <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums;white-space:nowrap">${sc!=null?`${to5(sc)}<small style="font-weight:600;color:var(--sub)">／5点</small>`:"—"}${it.noScore?`<span class="hw-meta">（総合点対象外）</span>`:""}${aiSc!=null?`<span class="hw-meta">（AI：${to5(aiSc)}／5）</span>`:""}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
@@ -4363,6 +4422,7 @@ document.addEventListener("click",async e=>{
   }
   if(t.id==="chat-send"){const el=$("#chat-in");const q=(el&&el.value||"").trim();if(!q)return;el.value="";askAssistant(q);return;}
   if(t.dataset.brandsel){
+    state.brandTouched=true; state.autoBrand="";      // 手で選んだ（外した）屋号は、以後自動で変えない
     state.startBrand=state.startBrand===t.dataset.brandsel?"":t.dataset.brandsel;
     document.querySelectorAll("[data-brandsel]").forEach(b=>b.classList.toggle("on-good",b.dataset.brandsel===state.startBrand));
     return;
@@ -4449,14 +4509,22 @@ document.addEventListener("click",async e=>{
   if(t.dataset.repivai){repInterviewAI(t.dataset.repivai);return;}
   if(t.id==="ai-batch"){judgeAllItems();return;}
   if(t.id==="sync-now"){
-    if(!fsDb){                                         // クラウドにつながっていなければ、まずつなぎ直す
+    if(!cloudConfigured()){ showToast("クラウドが設定されていないため送信できません（記録はこの端末に保存されています）"); return; }
+    if(!fsDb&&!cloudSdkFailed){                         // クラウドにつながっていなければ、まずつなぎ直す（接続中ならその完了を待つ）
       await updateSyncBar("クラウドに接続しています…");
       await initCloud();
-      if(!fsDb){
-        await updateSyncBar("クラウドに接続できません");
-        showToast("クラウドに接続できませんでした。記録は端末に保存されています。電波のよい場所でもう一度お試しください");
-        return;
-      }
+    }
+    if(cloudNeedsReload()){
+      // 読み込みに失敗した部品は、このページのままでは取り直せない。アプリを読み込み直して接続する
+      await flushDrafts().catch(()=>{});
+      if(!navigator.onLine){ await updateSyncBar("オフラインです"); showToast("いまはオフラインです。記録は端末に保存されています。電波のよい場所でもう一度お試しください"); return; }
+      if(confirm("クラウドにつなぎ直すため、アプリを読み込み直します。\n入力中の内容と未送信の記録は、端末に保存されています。よろしいですか？")) location.reload();
+      return;
+    }
+    if(!fsDb){
+      await updateSyncBar("クラウドに接続できません");
+      showToast("クラウドに接続できませんでした。記録は端末に保存されています。電波のよい場所でもう一度お試しください");
+      return;
     }
     await syncOutbox();
     await refreshPendingIds();
@@ -4538,10 +4606,13 @@ document.addEventListener("click",async e=>{
     }
     await removeDraft(fd);            // この店舗の下書きだけを消す（ほかの店舗の下書きは残る）
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
-    const sendNote=noDb?"":(navigator.onLine&&fsDb?"クラウドへ送信しています。":"いまはクラウドにつながっていないため、端末に保存しました。通信が回復したら自動で送信します。");
+    const cloudOff=!SHARED_FB_CONFIG||(IS_COMPANY_SITE&&!CC.firebase);
+    const sendNote=noDb?"⚠ この端末では保存機能が使えないため、画面を閉じると記録は残りません。必要なら今のうちに印刷・PDF保存をしてください。"
+      :cloudOff?"記録はこの端末に保存されています。"
+      :(navigator.onLine&&fsDb?"クラウドへ送信します（送信の状況は画面の一番上に出ます）。":"いまはクラウドにつながっていないため、端末に保存しました。通信が回復したら自動で送信します。");
     state.draft=null; state.reportId=insp.id; state.view="report"; state.justDone={id:insp.id,partial,note:sendNote};
     render(); scrollTo(0,0);
-    showToast(partial?"一時保存として提出しました":"チェックを完了し、報告書を保存しました");
+    showToast(partial?"一時保存として提出しました":(noDb?"チェックを完了しました（この端末には保存できません）":"チェックを完了し、報告書を保存しました"));
     syncOutbox();
     if(!partial) autoIvEnqueue([insp.id]);
     }finally{ finalizeBusy=false; }
@@ -4612,6 +4683,7 @@ document.addEventListener("change",async e=>{
   if(t.dataset.iv){(state.draft.pdca.interview||(state.draft.pdca.interview={}))[t.dataset.iv]=t.value;persistDraft();return;}
 });
 document.addEventListener("input",e=>{
+  if(e.target&&HOME_INPUT_IDS.includes(e.target.id)&&e.isTrusted) lastHomeInputAt=Date.now();
   const t=e.target;
   if(t.dataset.field){const [id,key]=t.dataset.field.split(":");ans(id).fields[key]=t.value;persistDraft();refreshHeader();return;}
   if(t.dataset.iv){(state.draft.pdca.interview||(state.draft.pdca.interview={}))[t.dataset.iv]=t.value;persistDraft();return;}
@@ -4670,7 +4742,11 @@ document.addEventListener("input",e=>{
   render();
   initCloud();
   // 通信復帰・画面再表示のたびに自動再送
-  window.addEventListener("online",async()=>{updateSyncBar("オンラインに戻りました"); if(!fsDb) await initCloud(); syncOutbox();});
+  window.addEventListener("online",async()=>{
+    updateSyncBar(cloudNeedsReload()?"オンラインに戻りました（「今すぐ再送」でつなぎ直せます）":"オンラインに戻りました");
+    if(!fsDb&&!cloudSdkFailed) await initCloud();
+    syncOutbox();
+  });
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); reconcileDrafts(); } else flushDrafts(); });
   window.addEventListener("pagehide",()=>{ flushDrafts(); });
@@ -4724,10 +4800,11 @@ function openMcpPanel(){
       接続URLは${deviceMcpUrl?"上のボタンでコピーできます":"管理画面の「MCP連携」で保存・コピーできます"}。⚠ 社外の人には共有しないでください。</p>
     </details>
   </div>`;
-  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);};
+  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);overlayClosed();};
   const onKey=ev=>{if(ev.key==="Escape")close();};
   d.addEventListener("click",ev=>{if(ev.target===d||ev.target.id==="mcp-x")close();});
   document.addEventListener("keydown",onKey);
+  overlayOpened();
   d.querySelector("#mcp-copy2")?.addEventListener("click",async()=>{
     const ok=await copyText(deviceMcpUrl||"");
     const st=d.querySelector("#mcp-copy2-st");
@@ -4743,11 +4820,12 @@ function openLightbox(src){
   const img=document.createElement("img"); img.src=src; img.alt="拡大写真";
   const x=document.createElement("button"); x.className="lb-close"; x.textContent="×"; x.setAttribute("aria-label","閉じる");
   d.append(img,x);
-  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);};
+  const close=()=>{d.remove();document.removeEventListener("keydown",onKey);overlayClosed();};
   const onKey=ev=>{if(ev.key==="Escape")close();};
   d.addEventListener("click",close);
   document.addEventListener("keydown",onKey);
   document.body.appendChild(d);
+  overlayOpened();
 }
 function showUpdateBanner(v){
   if(document.getElementById("upd-bar")) return;

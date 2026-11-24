@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
+import { VersionText } from '../system/VersionText';
 import { DashboardTab } from './DashboardTab';
 import { StoreManageTab } from './StoreManageTab';
 import { FeedbackTab } from './FeedbackTab';
@@ -43,7 +44,7 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
           <button
             type="button"
             onClick={onLogout}
-            className="text-xs font-bold text-text-muted hover:text-accent"
+            className="inline-flex min-h-[44px] items-center whitespace-nowrap px-1 text-xs font-bold text-text-muted hover:text-accent"
           >
             ログアウト
           </button>
@@ -63,6 +64,7 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
         {tab === 'feedback' && <FeedbackTab stores={stores} />}
         {tab === 'referrals' && <ReferralsTab />}
         {tab === 'schedules' && <ScheduleTab stores={stores} />}
+        <VersionText className="mt-8" />
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur">

@@ -712,6 +712,7 @@ export const ReferralFormScreen: FC<Props> = ({
                 type="button"
                 onClick={onSubmit}
                 disabled={submitting}
+                data-busy={submitting ? '' : undefined}
                 className="flex-1 rounded-xl bg-accent py-3 text-sm font-bold text-white shadow-sm active:scale-[0.98] disabled:opacity-40"
               >
                 {submitting ? '送信中…' : '申請を送信する'}

@@ -1,3 +1,4 @@
+import { VersionText } from '../system/VersionText';
 import { useMemo, useState, type FC } from 'react';
 import { ADMIN_PASSWORD, firebaseAuth } from '../../lib/firebase';
 import { clearStoreSurveySessions, connectStoreSurvey, storeSurveyUrl } from '../../lib/storeSurvey';
@@ -226,6 +227,7 @@ export const LoginScreen: FC<Props> = ({
             type="submit"
             className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50"
             disabled={busy}
+            data-busy={busy ? '' : undefined}
           >
             {busy ? '確認中…' : 'ログイン'}
           </button>
@@ -247,6 +249,7 @@ export const LoginScreen: FC<Props> = ({
             閲覧モードで見る（パスワード不要）
           </button>
         )}
+        <VersionText className="mt-6" />
       </div>
     </div>
   );

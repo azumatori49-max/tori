@@ -1469,7 +1469,7 @@ const ScheduleForm: FC<{
       )}
 
       <div className="flex gap-2">
-        <button type="button" onClick={handleSave} disabled={busy || uploading} className="flex-1 rounded-lg bg-accent py-2.5 text-sm font-bold text-white disabled:opacity-50">
+        <button type="button" onClick={handleSave} disabled={busy || uploading} data-busy={busy || uploading ? '' : undefined} className="flex-1 rounded-lg bg-accent py-2.5 text-sm font-bold text-white disabled:opacity-50">
           {busy ? '保存中…' : uploading ? '動画のアップロード中…' : initial ? '保存' : '作成'}
         </button>
         <button type="button" onClick={() => void handleCancel()} disabled={busy} className="flex-1 rounded-lg border border-border bg-surface py-2.5 text-sm font-bold text-text-muted">

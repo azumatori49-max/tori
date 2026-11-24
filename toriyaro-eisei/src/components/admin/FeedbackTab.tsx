@@ -247,6 +247,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
                         type="button"
                         onClick={() => handleSendReply(item)}
                         disabled={isSaving || !replyValue.trim()}
+                        data-busy={isSaving ? '' : undefined}
                         className="w-full rounded-lg bg-accent py-2 text-xs font-bold text-white transition active:scale-[0.98] disabled:bg-text-muted/40"
                       >
                         {isSaving ? '送信中…' : item.reply ? '返信を更新' : '返信を送信'}

@@ -18,15 +18,6 @@ import { isMobileDevice } from './lib/device';
 import type { ReferralRequest } from './types';
 import { storeSurveyAccessUrl, storeSurveyUrl } from './lib/storeSurvey';
 
-declare const __BUILD_TIME__: string;
-const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
-
-const VersionBadge = () => (
-  <div className="pointer-events-none fixed bottom-1 right-1 z-50 select-none rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-mono text-white/80">
-    v {BUILD_TIME}
-  </div>
-);
-
 const AppInner = () => {
   const { auth, loginAsStore, loginAsAdmin, logout } = useAuth();
   const { stores, loading, loaded, error: storesError } = useStores();
@@ -253,7 +244,6 @@ const App = () => (
       <AppInner />
     </AnonAuthGate>
     <UpdateNotifier />
-    <VersionBadge />
     <InAppBrowserGate />
   </>
 );

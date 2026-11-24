@@ -179,6 +179,8 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
     <div className="min-h-screen bg-bg pb-32">
       <AppHeader title={schedule.title} subtitle={storeName} left={back} />
       <main className="mx-auto w-full max-w-app px-4 py-5">
+        {/* ヘッダーでは長いタイトルを「…」で省略するので、本文の先頭に省略なしで出す */}
+        <h2 className="mb-3 text-base font-bold leading-snug text-text">{schedule.title}</h2>
         <div className="mb-3 rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn">
           <span className="font-bold">期間 {formatScheduleRange(schedule.from, schedule.to)}</span>
           {ended && <p className="mt-1">この依頼の受付は終了しました（確認のみ可能）。</p>}
@@ -315,7 +317,8 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit}
-            className="w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-border disabled:text-text-muted"
+            data-busy={submitting ? '' : undefined}
+            className="w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
           >
             {submitLabel}
           </button>

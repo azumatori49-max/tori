@@ -373,7 +373,8 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit}
-            className="w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-border disabled:text-text-muted"
+            data-busy={submitting ? '' : undefined}
+            className="w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
           >
             {submitLabel}
           </button>

@@ -12,6 +12,9 @@ const getCurrentBundles = (): string =>
     .sort()
     .join('|');
 
+/** お知らせの帯の高さ(px)。「更新」ボタンを44px確保する */
+const BANNER_HEIGHT = 56;
+
 export const UpdateNotifier: FC = () => {
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
@@ -44,15 +47,30 @@ export const UpdateNotifier: FC = () => {
     };
   }, []);
 
+  // お知らせを出している間は、その高さぶんヘッダー・本文・「ご意見」ボタンを下にずらす
+  // （styles.css の --update-banner-h を参照。ヘッダーのボタンを覆わないため）
+  useEffect(() => {
+    const root = document.documentElement;
+    if (updateAvailable) root.style.setProperty('--update-banner-h', `${BANNER_HEIGHT}px`);
+    else root.style.removeProperty('--update-banner-h');
+    return () => {
+      root.style.removeProperty('--update-banner-h');
+    };
+  }, [updateAvailable]);
+
   if (!updateAvailable) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[100] flex items-center justify-center gap-3 bg-accent px-3 py-2 text-xs font-bold text-white shadow-lg">
+    <div
+      className="fixed inset-x-0 top-0 z-40 flex items-center justify-center gap-3 bg-accent px-3 text-sm font-bold text-white shadow-lg"
+      style={{ height: BANNER_HEIGHT }}
+      role="status"
+    >
       新しいバージョンがあります
       <button
         type="button"
         onClick={() => window.location.reload()}
-        className="rounded-full bg-white px-3 py-1 text-accent"
+        className="inline-flex h-11 items-center rounded-full bg-white px-5 text-sm font-bold text-accent"
       >
         更新
       </button>

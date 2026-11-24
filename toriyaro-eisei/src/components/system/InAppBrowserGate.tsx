@@ -31,7 +31,7 @@ export const InAppBrowserGate: FC = () => {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-bg p-6 text-center">
+    <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center overflow-y-auto bg-page-solid p-6 text-center">
       <img
         src="/rakuraku.png"
         alt=""

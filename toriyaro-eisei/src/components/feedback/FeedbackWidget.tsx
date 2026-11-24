@@ -132,7 +132,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
       <button
         type="button"
         onClick={handleOpen}
-                        className={`fixed top-3 z-50 inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-xs font-bold text-text-muted shadow-sm hover:bg-surface2 ${alignRight ? 'right-3' : 'left-3'}`}
+        className={`feedback-fab fixed z-50 inline-flex h-8 items-center justify-center rounded-full border border-border bg-white px-3 text-xs font-bold text-text-muted shadow-sm hover:bg-surface2 ${alignRight ? 'right-3' : 'left-3'}`}
         aria-label="フィードバック"
         title="不具合・要望を送信"
       >
@@ -257,6 +257,7 @@ export const FeedbackWidget: FC<{ alignRight?: boolean }> = ({ alignRight = fals
                   type="button"
                   onClick={handleSubmit}
                   disabled={submitting || (!message.trim() && !image)}
+                  data-busy={submitting ? '' : undefined}
                   className="mt-3 w-full rounded-lg bg-accent py-2.5 text-sm font-bold text-white transition active:scale-[0.98] disabled:bg-text-muted/40 disabled:text-white"
                 >
                   {submitting ? '送信中…' : '送信'}

@@ -59,6 +59,28 @@ textarea {
   }
 }
 
+/* 「新しいバージョンがあります」の帯（UpdateNotifier）が出ている間は、その高さぶん
+   ページ全体・ヘッダー・「ご意見」ボタンを下にずらして、帯がボタンを覆わないようにする */
+#root {
+  padding-top: var(--update-banner-h, 0px);
+}
+.app-header {
+  top: var(--update-banner-h, 0px);
+}
+.feedback-fab {
+  top: calc(0.75rem + var(--update-banner-h, 0px));
+}
+
+/* 全画面の案内（アプリ内ブラウザの警告など）用の不透明な背景。
+   bg-bg はスマホ配色（html.liquid）で透明になるため、後ろが透けてはいけない画面はこちらを使う */
+.bg-page-solid {
+  background-color: #f5f4f0;
+}
+html.liquid .bg-page-solid {
+  background-color: #eaf0ff;
+  background-image: linear-gradient(180deg, #eaf0ff 0%, #efe9ff 55%, #eaefff 100%);
+}
+
 /* Hide scrollbars on horizontal photo strips */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -121,6 +143,22 @@ html.liquid body {
   }
   html.liquid button.bg-accent:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  /* 押せない状態の主ボタン: 灰色の地に濃い灰色の文字（透明度では薄くしない）。
+     送信中など「処理が進んでいる」ボタンは data-busy を付けてオレンジのまま見せる */
+  button.bg-accent:disabled:not([data-busy]),
+  html.liquid button.bg-accent:disabled:not([data-busy]) {
+    background-color: #e5e3de !important;
+    color: #5f5a55 !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+  }
+  button.bg-accent[data-busy]:disabled {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    cursor: progress;
   }
 
   /* ステータス背景 (ok/warn/ng): 不透明で意味を保つ */

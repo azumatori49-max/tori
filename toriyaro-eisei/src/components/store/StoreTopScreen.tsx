@@ -183,7 +183,7 @@ export const StoreTopScreen: FC<Props> = ({
           <button
             type="button"
             onClick={onLogout}
-            className="text-xs font-bold text-text-muted hover:text-accent"
+            className="inline-flex min-h-[44px] items-center whitespace-nowrap px-1 text-xs font-bold text-text-muted hover:text-accent"
           >
             ログアウト
           </button>

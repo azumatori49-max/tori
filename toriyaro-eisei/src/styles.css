@@ -7,8 +7,8 @@
   /* モバイル向けデザイントークン。透過はやめて不透明面に統一。
      背景の淡いグラデ・角丸・柔らかい影・薄いボーダーの雰囲気のみ残す */
   --surface-cool: #ffffff;   /* カード・ヘッダー・下部バー・モーダル本体 */
-  --surface2-cool: #eef1f9;  /* サブ面（入力欄・チップ内側・ハイライト） */
-  --border-cool: #d9def0;    /* 細い青みボーダー */
+  --surface2-cool: #efede8;  /* サブ面（入力欄・チップ内側・ハイライト） */
+  --border-cool: #e0ddd6;    /* 細い青みボーダー */
 }
 
 html,
@@ -85,8 +85,7 @@ textarea {
   background-color: #f5f4f0;
 }
 html.liquid .bg-page-solid {
-  background-color: #eaf0ff;
-  background-image: linear-gradient(180deg, #eaf0ff 0%, #efe9ff 55%, #eaefff 100%);
+  background-color: #f5f4f0;
 }
 
 /* 見た目が小さいボタン（写真の「×」、小さな文字リンクなど）の、指で押せる範囲を広げる。
@@ -123,16 +122,9 @@ html.liquid .bg-page-solid {
    ============================================================== */
 
 html.liquid body {
-  /* 淡青〜淡紫の柔らかいグラデーションを固定表示 */
-  background-color: #eaf0ff;
-  color: #0f172a;
-  background-image:
-    radial-gradient(1200px 700px at 8% -10%, rgba(196, 214, 255, 0.75) 0%, rgba(196, 214, 255, 0) 60%),
-    radial-gradient(900px 600px at 110% 10%, rgba(220, 202, 255, 0.75) 0%, rgba(220, 202, 255, 0) 55%),
-    radial-gradient(1000px 700px at 50% 110%, rgba(210, 225, 255, 0.85) 0%, rgba(210, 225, 255, 0) 60%),
-    linear-gradient(180deg, #eaf0ff 0%, #efe9ff 55%, #eaefff 100%);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+  /* スマホの背景: 温かみのあるオフホワイト（PCの管理画面と同じ色） */
+  background-color: #f5f4f0;
+  color: #1a1a1a;
 }
 
 @layer utilities {
@@ -205,17 +197,17 @@ html.liquid body {
   /* シャドウ: 柔らかいガラス影は維持（青みのある暖かい影） */
   html.liquid .shadow-sm {
     box-shadow:
-      0 1px 2px rgba(52, 62, 120, 0.06),
-      0 4px 12px -4px rgba(52, 62, 120, 0.10) !important;
+      0 1px 2px rgba(60, 50, 40, 0.06),
+      0 4px 12px -4px rgba(60, 50, 40, 0.10) !important;
   }
   html.liquid :is(.shadow, .shadow-md) {
     box-shadow:
-      0 4px 12px -2px rgba(52, 62, 120, 0.14),
-      0 12px 30px -12px rgba(52, 62, 120, 0.22) !important;
+      0 4px 12px -2px rgba(60, 50, 40, 0.14),
+      0 12px 30px -12px rgba(60, 50, 40, 0.22) !important;
   }
   html.liquid .shadow-lg {
     box-shadow:
-      0 12px 32px -8px rgba(52, 62, 120, 0.24),
-      0 20px 60px -16px rgba(52, 62, 120, 0.30) !important;
+      0 12px 32px -8px rgba(60, 50, 40, 0.24),
+      0 20px 60px -16px rgba(60, 50, 40, 0.30) !important;
   }
 }

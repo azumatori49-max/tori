@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  // スマホではタップ後に hover の色が残ってしまうので、hover はマウスのある端末だけに効かせる
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       colors: {
@@ -22,8 +24,8 @@ export default {
         'text-muted': '#5f5a55',
       },
       boxShadow: {
-        glass: '0 8px 24px -8px rgba(52, 62, 120, 0.18), 0 2px 6px rgba(52, 62, 120, 0.08)',
-        'glass-strong': '0 16px 48px -12px rgba(52, 62, 120, 0.30), 0 4px 12px rgba(52, 62, 120, 0.12)',
+        glass: '0 8px 24px -8px rgba(60, 50, 40, 0.18), 0 2px 6px rgba(60, 50, 40, 0.08)',
+        'glass-strong': '0 16px 48px -12px rgba(60, 50, 40, 0.30), 0 4px 12px rgba(60, 50, 40, 0.12)',
       },
       fontFamily: {
         sans: [

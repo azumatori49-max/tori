@@ -1,5 +1,5 @@
+import { useMemo, useRef, useState, type FC } from 'react';
 import { VersionText } from '../system/VersionText';
-import { useMemo, useState, type FC } from 'react';
 import { ADMIN_PASSWORD, firebaseAuth } from '../../lib/firebase';
 import { clearStoreSurveySessions, connectStoreSurvey, storeSurveyUrl } from '../../lib/storeSurvey';
 import { verifyPassword } from '../../lib/crypto';
@@ -34,6 +34,7 @@ export const LoginScreen: FC<Props> = ({
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   const sortedStoreKeys = useMemo(() => {
     return Object.keys(stores).sort((a, b) =>
@@ -49,7 +50,7 @@ export const LoginScreen: FC<Props> = ({
 
   const selectedLabel =
     selected === '__admin__'
-      ? '＊ 管理者'
+      ? '管理者'
       : selected
         ? (stores[selected]?.name ?? '')
         : '';
@@ -151,7 +152,7 @@ export const LoginScreen: FC<Props> = ({
                 }}
                 placeholder={
                   loading
-                    ? '店舗を読み込み中…（管理者は選択できます）'
+                    ? '店舗を読み込み中…'
                     : '店舗名で検索 / 選択'
                 }
                 className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
@@ -159,14 +160,6 @@ export const LoginScreen: FC<Props> = ({
               />
               {open && (
                 <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => pickStore('__admin__')}
-                    className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-bold text-accent hover:bg-surface2"
-                  >
-                    ＊ 管理者
-                  </button>
-                  <div className="border-t border-border" />
                   {loading && (
                     <div className="px-3 py-3 text-xs text-text-muted">店舗を読み込み中…</div>
                   )}
@@ -209,9 +202,13 @@ export const LoginScreen: FC<Props> = ({
           )}
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-text-muted">パスワード</label>
+            <label className="mb-1 block text-xs font-bold text-text-muted">
+              {selected === '__admin__' ? '管理者パスワード' : 'パスワード'}
+            </label>
             <input
+              ref={passwordRef}
               type="password"
+              autoFocus={isPC}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-xl border border-border bg-surface2 px-3 py-3 text-sm focus:border-accent focus:outline-none"
@@ -249,7 +246,32 @@ export const LoginScreen: FC<Props> = ({
             閲覧モードで見る（パスワード不要）
           </button>
         )}
-        <VersionText className="mt-6" />
+        {!isPC && (
+          <div className="mt-2 text-center">
+            {selected === '__admin__' ? (
+              <button
+                type="button"
+                onClick={() => pickStore('')}
+                className="inline-flex min-h-[44px] items-center px-3 text-xs text-text-muted underline"
+              >
+                店舗のログインに戻る
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  pickStore('__admin__');
+                  setPassword('');
+                  passwordRef.current?.focus();
+                }}
+                className="inline-flex min-h-[44px] items-center px-3 text-xs text-text-muted underline"
+              >
+                管理者の方はこちら
+              </button>
+            )}
+          </div>
+        )}
+        <VersionText className="mt-4" />
       </div>
     </div>
   );

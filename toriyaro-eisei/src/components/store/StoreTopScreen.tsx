@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { storeSurveyUrl } from '../../lib/storeSurvey';
 import { ReportCard } from './ReportCard';
+import { isMorningLocked } from '../../lib/morningLock';
 import { ScheduleSection } from './ScheduleCard';
 import {
   dateKeyToDate,
@@ -13,9 +14,11 @@ import {
   getWeekKey,
 } from '../../lib/dateUtils';
 import {
+  fetchSubmissionRange,
   fetchSubmissionsForKey,
   useStoreSubmissionStatus,
 } from '../../hooks/useSubmissions';
+import { collectMissDays, currentMonthTrackKeys, type MissDay } from '../../lib/missTrack';
 import { useStoreReferrals } from '../../hooks/useReferrals';
 import { targetForType } from '../../data/checkItems';
 import type {
@@ -39,31 +42,14 @@ interface Props {
   onOpenSchedule: (scheduleId: string) => void;
 }
 
-/** 未提出カウントの集計開始日（この日より前は数えない） */
-const MISS_TRACK_START = '2026-07-11';
 /** マンスリー開始月（この月より前はアラートしない） */
 const MONTHLY_START = 'M2026-08';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
-interface MissDay {
-  d: string;
-  c: number;
-  t: number;
-}
-
-const countPhotos = (raw: unknown): number => {
-  if (!raw) return 0;
-  if (Array.isArray(raw)) {
-    return raw.filter((x) => typeof x === 'string' && x.length > 0).length;
-  }
-  if (typeof raw === 'object') {
-    return Object.values(raw as Record<string, unknown>).filter(
-      (x) => typeof x === 'string' && x.length > 0,
-    ).length;
-  }
-  return 0;
-};
+/**
+ * 全店舗の未提出回数（店舗トップ下部の一覧用）。
+ * 一覧を開いたときに初めて読み込み、アプリを開いている間は同じ日の結果を使い回す。
+ */
+let allMissCache: { todayKey: string; storeKeys: string; data: Record<StoreKey, MissDay[]> } | null = null;
 
 export const StoreTopScreen: FC<Props> = ({
   storeKey,
@@ -88,11 +74,14 @@ export const StoreTopScreen: FC<Props> = ({
   const dailyTarget = targetForType('daily', storeKey);
   const weeklyTarget = targetForType('weekly', storeKey);
 
-  const [allMiss, setAllMiss] = useState<Record<StoreKey, MissDay[]> | null>(null);
-  const [missOpen, setMissOpen] = useState(true);
+  const tm = Number(todayKey.split('-')[1]);
   const [prevMonthlyMissing, setPrevMonthlyMissing] = useState(false);
 
-  const [ty, tm, td] = todayKey.split('-').map(Number);
+  // 自店の今月の未提出日（自店のデータだけを1回で読む）。null=集計中, 'error'=読めなかった
+  const [missDates, setMissDates] = useState<MissDay[] | 'error' | null>(null);
+  // 全店舗の未提出回数（一覧を開いたときだけ読む）
+  const [missOpen, setMissOpen] = useState(false);
+  const [allMiss, setAllMiss] = useState<Record<StoreKey, MissDay[]> | 'error' | null>(null);
 
   const sortedKeys = useMemo(
     () =>
@@ -101,6 +90,8 @@ export const StoreTopScreen: FC<Props> = ({
       ),
     [stores],
   );
+  const storeKeysSig = sortedKeys.join(',');
+  const myCreatedAt = stores[storeKey]?.createdAt;
 
   // 前月のマンスリー未提出チェック
   useEffect(() => {
@@ -115,63 +106,70 @@ export const StoreTopScreen: FC<Props> = ({
     };
   }, [storeKey]);
 
-  // 今月の未提出日を全店分集計（集計開始日〜昨日・業務日ベース・規定枚数未満は未提出扱い）
+  // 自店の今月の未提出日（集計開始日〜昨日・業務日ベース・規定枚数未満は未提出扱い）
   useEffect(() => {
-    if (sortedKeys.length === 0) return;
     let cancelled = false;
-    const monthStart = `${ty}-${pad(tm)}-01`;
-    const from = monthStart > MISS_TRACK_START ? monthStart : MISS_TRACK_START;
-
-    const keys: string[] = [];
-    for (let day = 1; day < td; day += 1) {
-      const k = `${ty}-${pad(tm)}-${pad(day)}`;
-      if (k >= from) keys.push(k);
+    const keys = currentMonthTrackKeys(todayKey);
+    if (keys.length === 0) {
+      setMissDates([]);
+      return;
     }
+    setMissDates(null);
+    fetchSubmissionRange(storeKey, 'daily', keys[0], keys[keys.length - 1])
+      .then((daily) => {
+        if (cancelled) return;
+        setMissDates(collectMissDays(keys, daily, myCreatedAt, targetForType('daily', storeKey)));
+      })
+      .catch(() => {
+        if (!cancelled) setMissDates('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeKey, todayKey, myCreatedAt]);
 
+  // 全店舗の未提出回数: 一覧を開いたときに初めて読み込む（店舗ごとに1回ずつ）
+  useEffect(() => {
+    if (!missOpen || sortedKeys.length === 0) return;
+    if (allMissCache && allMissCache.todayKey === todayKey && allMissCache.storeKeys === storeKeysSig) {
+      setAllMiss(allMissCache.data);
+      return;
+    }
+    let cancelled = false;
+    const keys = currentMonthTrackKeys(todayKey);
     if (keys.length === 0) {
       setAllMiss({});
       return;
     }
-
     setAllMiss(null);
-    Promise.all(keys.map((k) => fetchSubmissionsForKey(sortedKeys, 'daily', k)))
-      .then((results) => {
-        if (cancelled) return;
-        const misses: Record<string, MissDay[]> = {};
-        sortedKeys.forEach((k) => {
-          misses[k] = [];
-        });
-        results.forEach((dayMap, idx) => {
-          const dayKey = keys[idx];
-          sortedKeys.forEach((k) => {
-            const created = stores[k]?.createdAt?.slice(0, 10);
-            if (created && dayKey < created) return;
-            const sub = dayMap[k];
-            const target = targetForType('daily', k);
-            const c = countPhotos(sub?.photos);
-            const submitted = !!sub?.viaLine || c >= target;
-            if (!submitted) misses[k].push({ d: dayKey, c, t: target });
-          });
-        });
-        setAllMiss(misses);
+    Promise.all(
+      sortedKeys.map(async (k) => {
+        const daily = await fetchSubmissionRange(k, 'daily', keys[0], keys[keys.length - 1]);
+        return [k, collectMissDays(keys, daily, stores[k]?.createdAt, targetForType('daily', k))] as const;
+      }),
+    )
+      .then((entries) => {
+        const data = Object.fromEntries(entries) as Record<StoreKey, MissDay[]>;
+        allMissCache = { todayKey, storeKeys: storeKeysSig, data };
+        if (!cancelled) setAllMiss(data);
       })
       .catch(() => {
-        if (!cancelled) setAllMiss(null);
+        if (!cancelled) setAllMiss('error');
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortedKeys.join(','), ty, tm, td]);
+  }, [missOpen, storeKeysSig, todayKey]);
 
-  const missDates = allMiss === null ? null : allMiss[storeKey] ?? [];
-
+  const allMissData = allMiss !== null && allMiss !== 'error' ? allMiss : null;
   const missList = useMemo(() => {
-    if (!allMiss) return [];
+    if (!allMissData) return [];
     return sortedKeys
-      .filter((k) => (allMiss[k]?.length ?? 0) > 0)
-      .sort((a, b) => (allMiss[b]?.length ?? 0) - (allMiss[a]?.length ?? 0));
-  }, [allMiss, sortedKeys]);
+      .filter((k) => (allMissData[k]?.length ?? 0) > 0)
+      .sort((a, b) => (allMissData[b]?.length ?? 0) - (allMissData[a]?.length ?? 0));
+  }, [allMissData, sortedKeys]);
+  const myMiss = Array.isArray(missDates) ? missDates : null;
 
   return (
     <div className="min-h-screen bg-bg">
@@ -198,19 +196,16 @@ export const StoreTopScreen: FC<Props> = ({
           </div>
           {missDates === null ? (
             <span className="text-[11px] text-text-muted">集計中…</span>
-          ) : (
+          ) : myMiss ? (
             <span
               className={`rounded-full px-3 py-1.5 text-xs font-bold ${
-                missDates.length > 0 ? 'bg-ng-bg text-ng' : 'bg-ok-bg text-ok'
+                myMiss.length > 0 ? 'bg-ng-bg text-ng' : 'bg-ok-bg text-ok'
               }`}
             >
-              {tm}月の未提出：{missDates.length}回
+              {tm}月の未提出：{myMiss.length}回
             </span>
-          )}
+          ) : null}
         </div>
-
-        {/* 年間スケジュール（期間つきの撮影依頼）。未提出カウントや月次集計には含めない */}
-        <ScheduleSection storeKey={storeKey} onOpen={onOpenSchedule} />
 
         {prevMonthlyMissing && (
           <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng">
@@ -218,22 +213,28 @@ export const StoreTopScreen: FC<Props> = ({
           </div>
         )}
 
-        {missDates !== null && missDates.length > 0 && (
+        {myMiss && myMiss.length > 0 && (
           <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-[11px] text-ng">
             <span className="font-bold">未提出の日：</span>
-            {missDates.map((m) => formatDateKeyShort(m.d) + (m.c > 0 ? `（${m.c}/${m.t}枚）` : '')).join('・')}
+            {myMiss.map((m) => formatDateKeyShort(m.d) + (m.c > 0 ? `（${m.c}/${m.t}枚）` : '')).join('・')}
           </div>
         )}
 
-        <div className="space-y-4">
-          <ReportCard
-            variant="daily"
-            storeKey={storeKey}
-            title="毎日の衛生チェック"
-            description={`毎日 ${dailyTarget}枚の写真を撮影して提出してください`}
-            submission={daily}
-            onOpen={() => onOpenReport('daily')}
-          />
+        {/* 毎日の提出を一番上に置く（最初の画面で必ず見えるように） */}
+        <ReportCard
+          variant="daily"
+          storeKey={storeKey}
+          title="毎日の衛生チェック"
+          description={`毎日 ${dailyTarget}枚の写真を撮影して提出してください`}
+          submission={daily}
+          viewOnly={isMorningLocked(storeKey)}
+          onOpen={() => onOpenReport('daily')}
+        />
+
+        {/* 年間スケジュール（期間つきの撮影依頼）。未提出カウントや月次集計には含めない */}
+        <ScheduleSection storeKey={storeKey} onOpen={onOpenSchedule} />
+
+        <div className="mt-4 space-y-4">
           <ReportCard
             variant="weekly"
             storeKey={storeKey}
@@ -294,8 +295,12 @@ export const StoreTopScreen: FC<Props> = ({
         <div className="mt-5 rounded-2xl border border-border bg-surface p-4 shadow-sm">
           <button
             type="button"
-            onClick={() => setMissOpen((v) => !v)}
-            className="flex w-full items-center justify-between"
+            onClick={() => {
+              if (missOpen && allMiss === 'error') setAllMiss(null);
+              setMissOpen((v) => !v);
+            }}
+            aria-expanded={missOpen}
+            className="flex min-h-[44px] w-full items-center justify-between text-left"
           >
             <h2 className="text-xs font-bold">
               {tm}月の未提出回数（全店舗）
@@ -309,12 +314,16 @@ export const StoreTopScreen: FC<Props> = ({
             <div className="mt-3">
               {allMiss === null ? (
                 <p className="text-xs text-text-muted">集計中…</p>
+              ) : allMiss === 'error' ? (
+                <p className="text-xs font-bold text-ng">
+                  集計を読み込めませんでした。電波の良い場所で、いったん閉じてからもう一度開いてください。
+                </p>
               ) : missList.length === 0 ? (
                 <p className="text-xs font-bold text-ok">今月の未提出はありません</p>
               ) : (
                 <div className="max-h-72 space-y-1.5 overflow-y-auto">
                   {missList.map((k) => {
-                    const dates = allMiss?.[k] ?? [];
+                    const dates = allMissData?.[k] ?? [];
                     const isMe = k === storeKey;
                     return (
                       <div

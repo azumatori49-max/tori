@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { get, onValue, push, ref, set, update } from 'firebase/database';
+import {
+  endAt,
+  get,
+  onValue,
+  orderByKey,
+  push,
+  query,
+  ref,
+  set,
+  startAt,
+  update,
+} from 'firebase/database';
 import {
   ref as storageRef,
   uploadBytes,
@@ -331,6 +342,23 @@ export const fetchSubmissionsForKey = async (
     }),
   );
   return Object.fromEntries(entries);
+};
+
+/**
+ * 1店舗ぶんの提出データを、キーの範囲（fromKey〜toKey・両端含む）でまとめて1回で読む。
+ * 日ごとに1件ずつ読むより通信回数が大幅に少ない（未提出回数の集計用）。
+ * 失敗したときは例外を投げる（「読めなかった」を「未提出」と取り違えないため）。
+ */
+export const fetchSubmissionRange = async (
+  storeKey: StoreKey,
+  type: ReportType,
+  fromKey: string,
+  toKey: string,
+): Promise<Record<string, Submission>> => {
+  const snap = await get(
+    query(ref(db, `submissions/${storeKey}/${type}`), orderByKey(), startAt(fromKey), endAt(toKey)),
+  );
+  return (snap.val() as Record<string, Submission> | null) ?? {};
 };
 
 export const useSubmissionsBulk = (

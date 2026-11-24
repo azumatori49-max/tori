@@ -155,7 +155,7 @@ export const ScheduleUploadScreen: FC<Props> = ({ storeKey, storeName, scheduleI
           ? '変更がありません'
           : '写真を選択してください'
         : hasExisting
-          ? `${newCount}枚を更新する`
+          ? `${newCount}枚を送信する`
           : `${newCount}枚を提出する`;
 
   const back = (

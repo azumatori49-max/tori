@@ -1,3 +1,4 @@
+import { isMorningLocked } from '../../lib/morningLock';
 import { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { PhotoSlot } from '../ui/PhotoSlot';
@@ -26,11 +27,6 @@ interface Props {
   type: ReportType;
   onBack: () => void;
 }
-
-/** AM6:00〜8:59 にデイリーの編集を締め切る店舗（確認のみ可能にする） */
-const MORNING_LOCK_STORE_KEYS = new Set<string>([
-  'store_e567a64b', // カラオケ池袋店
-]);
 
 type SlotState =
   | { kind: 'empty' }
@@ -75,11 +71,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
   const dateOrWeekKey = defaultKey;
 
   // 指定店舗のみ AM6:00〜8:59 はデイリーの編集を締め切り、確認のみ可能にする
-  const morningLock =
-    type === 'daily' &&
-    MORNING_LOCK_STORE_KEYS.has(storeKey) &&
-    new Date().getHours() >= 6 &&
-    new Date().getHours() < 9;
+  const morningLock = type === 'daily' && isMorningLocked(storeKey);
 
   const { submission: existing, loading } = useStoreSubmissionStatus(
     storeKey,
@@ -234,7 +226,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
       ? '送信中…'
       : newCount === 0
         ? hasExisting ? '変更がありません' : '写真を選択してください'
-        : hasExisting ? `${newCount}枚を更新する` : `${newCount}枚を提出する`;
+        : hasExisting ? `${newCount}枚を送信する` : `${newCount}枚を提出する`;
 
   return (
     <div className="min-h-screen bg-bg pb-32">
@@ -280,7 +272,7 @@ export const UploadScreen: FC<Props> = ({ storeKey, storeName, type, onBack }) =
           <span className="text-text-muted">撮影済み <span className="text-base text-text">{filledCount}</span>枚</span>
           {newCount > 0 && (
             <span className="rounded-full bg-accent/10 px-2 py-0.5 text-accent">
-              {newCount}枚を{hasExisting ? '差替/追加' : '追加'}予定
+              未送信 {newCount}枚
             </span>
           )}
         </div>

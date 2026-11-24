@@ -1,18 +1,43 @@
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
 import { Lightbox } from '../ui/Lightbox';
-import { fetchSubmissionsForKey } from '../../hooks/useSubmissions';
+import { VideoModal } from '../ui/VideoModal';
+import { fetchSubmissionRange, fetchSubmissionsForKey } from '../../hooks/useSubmissions';
+import { useSchedules } from '../../hooks/useSchedules';
 import {
   getDateKey,
+  getMonthKey,
   getWeekKey,
   formatDateKeyJa,
+  formatMonthKeyJa,
   isFutureDate,
   isFutureWeek,
   weekKeyToDate,
 } from '../../lib/dateUtils';
 import { itemsForType, targetForType } from '../../data/checkItems';
 import { MISS_TRACK_START } from '../../lib/missTrack';
-import type { ReportType, StoreKey, Submission } from '../../types';
+import {
+  formatScheduleRange,
+  isStoreTargeted,
+  photosMap,
+  progress,
+  scheduleItems,
+  scheduleStatus,
+} from '../../lib/schedule';
+import type { ReportType, Schedule, ScheduleVideo, StoreKey, Submission } from '../../types';
+
+/** この画面のタブ。'schedule' は年間スケジュール */
+type HistoryTab = ReportType | 'schedule';
+
+const TAB_LABEL: Record<HistoryTab, string> = {
+  daily: 'デイリー',
+  weekly: 'ウィークリー',
+  monthly: 'マンスリー',
+  schedule: '年間スケジュール',
+};
+
+/** マンスリー開始月（この月より前で記録が無い月は「記録なし」扱い） — StoreTopScreen と揃える */
+const MONTHLY_START = 'M2026-08';
 
 interface Props {
   storeKey: StoreKey;
@@ -28,6 +53,8 @@ interface Props {
  * base を渡すので 9時切替の補正は掛からない。
  */
 const compareDateKey = (tab: ReportType, k: string): string => {
+  // マンスリーはその月の末日相当（文字列比較用）
+  if (tab === 'monthly') return `${k.slice(1)}-31`;
   if (tab !== 'weekly') return k;
   const sun = weekKeyToDate(k);
   sun.setDate(sun.getDate() + 6);
@@ -62,7 +89,9 @@ const weekLabel = (weekKey: string): string => {
 };
 
 export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBack }) => {
-  const [tab, setTab] = useState<ReportType>('daily');
+  const [activeTab, setActiveTab] = useState<HistoryTab>('daily');
+  // 年間スケジュールは下の ScheduleHistory が表示する。こちらの一覧はデイリー/ウィークリー/マンスリー用
+  const tab: ReportType = activeTab === 'schedule' ? 'daily' : activeTab;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-11
@@ -72,6 +101,16 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
 
   // その月に該当するキー一覧（新しい順）
   const keys = useMemo(() => {
+    if (tab === 'monthly') {
+      // マンスリーは1年ぶんを新しい順に（先の月は出さない）
+      const current = getMonthKey();
+      const out: string[] = [];
+      for (let m = 12; m >= 1; m -= 1) {
+        const key = `M${year}-${String(m).padStart(2, '0')}`;
+        if (key <= current) out.push(key);
+      }
+      return out;
+    }
     const lastDay = new Date(year, month + 1, 0).getDate();
     if (tab === 'daily') {
       const out: string[] = [];
@@ -93,15 +132,23 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
   }, [tab, year, month]);
 
   useEffect(() => {
+    if (activeTab === 'schedule') return;
     let cancelled = false;
     setLoading(true);
-    Promise.all(
-      keys.map((k) =>
-        fetchSubmissionsForKey([storeKey], tab, k).then(
-          (res) => [k, res[storeKey] ?? null] as const,
-        ),
-      ),
-    )
+    const load =
+      tab === 'monthly' && keys.length > 0
+        ? // マンスリーは1年ぶんを1回で読む
+          fetchSubmissionRange(storeKey, 'monthly', keys[keys.length - 1], keys[0]).then((res) =>
+            keys.map((k) => [k, res[k] ?? null] as const),
+          )
+        : Promise.all(
+            keys.map((k) =>
+              fetchSubmissionsForKey([storeKey], tab, k).then(
+                (res) => [k, res[storeKey] ?? null] as const,
+              ),
+            ),
+          );
+    load
       .then((entries) => {
         if (!cancelled) {
           setData(Object.fromEntries(entries));
@@ -115,17 +162,20 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeKey, tab, year, month, keys.join(',')]);
+  }, [storeKey, activeTab, year, month, keys.join(',')]);
 
+  // マンスリーは年単位、デイリー/ウィークリーは月単位で送る
   const shiftMonth = (delta: number) => {
-    const d = new Date(year, month + delta, 1);
+    const d = tab === 'monthly' ? new Date(year + delta, month, 1) : new Date(year, month + delta, 1);
     setYear(d.getFullYear());
     setMonth(d.getMonth());
   };
 
   const canForward =
-    year < now.getFullYear() ||
-    (year === now.getFullYear() && month < now.getMonth());
+    tab === 'monthly'
+      ? year < now.getFullYear()
+      : year < now.getFullYear() ||
+        (year === now.getFullYear() && month < now.getMonth());
 
   // 記録が無く、かつ店舗の登録日より前の日（週）は一覧から除外する。
   // createdAt は UTC 日付で持っており、JST の 9時切替と一致する。
@@ -157,39 +207,49 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
         <div className="mb-3 rounded-xl bg-surface2 px-3 py-2 text-[11px] text-text-muted">
           この画面は確認専用です（編集はできません）。抜けている項目は赤字で表示されます。
         </div>
-        <div className="mb-3 flex rounded-2xl border border-border bg-surface p-1 shadow-sm">
-          {(['daily', 'weekly'] as const).map((t) => (
+        {/* タブは4つ。スマホ幅では2×2に並べて、文字が切れないようにする */}
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl border border-border bg-surface p-1 shadow-sm sm:grid-cols-4">
+          {(['daily', 'weekly', 'monthly', 'schedule'] as const).map((t) => (
             <button
               key={t}
               type="button"
-              onClick={() => setTab(t)}
-              className={`flex-1 rounded-xl py-2 text-xs font-bold transition ${
-                tab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
+              onClick={() => {
+                // マンスリーから月単位のタブに戻るとき、今年なら今月に合わせる（先の月を出さない）
+                if (t !== 'monthly' && year === now.getFullYear() && month > now.getMonth()) setMonth(now.getMonth());
+                setActiveTab(t);
+              }}
+              aria-pressed={activeTab === t}
+              className={`min-h-[44px] rounded-xl px-2 py-2 text-xs font-bold transition ${
+                activeTab === t ? 'bg-accent text-white shadow-sm' : 'text-text-muted'
               }`}
             >
-              {t === 'daily' ? 'デイリー' : 'ウィークリー'}
+              {TAB_LABEL[t]}
             </button>
           ))}
         </div>
 
+        {activeTab === 'schedule' ? (
+          <ScheduleHistory storeKey={storeKey} />
+        ) : (
+          <>
         <div className="mb-4 flex items-center justify-between rounded-2xl border border-border bg-surface px-3 py-2 shadow-sm">
           <button
             type="button"
             onClick={() => shiftMonth(-1)}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border"
-            aria-label="前の月"
+            aria-label={tab === 'monthly' ? '前の年' : '前の月'}
           >
             ←
           </button>
           <div className="text-sm font-bold">
-            {year}年{month + 1}月
+            {tab === 'monthly' ? `${year}年` : `${year}年${month + 1}月`}
           </div>
           <button
             type="button"
             onClick={() => shiftMonth(1)}
             disabled={!canForward}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-surface2 text-base hover:bg-border disabled:opacity-30"
-            aria-label="次の月"
+            aria-label={tab === 'monthly' ? '次の年' : '次の月'}
           >
             →
           </button>
@@ -199,14 +259,15 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
           <p className="py-8 text-center text-sm text-text-muted">読み込み中…</p>
         ) : visibleKeys.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
-            この月の対象データはありません
+            {tab === 'monthly' ? 'この年の対象データはありません' : 'この月の対象データはありません'}
           </p>
         ) : (
           <div className="space-y-3">
             {visibleKeys.map((k) => {
               const sub = data[k];
               // 記録が無く集計開始前の日（週）は「未提出」ではなく「記録なし」扱い
-              const beforeTrack = !sub && compareDateKey(tab, k) < MISS_TRACK_START;
+              const beforeTrack =
+                !sub && (tab === 'monthly' ? k < MONTHLY_START : compareDateKey(tab, k) < MISS_TRACK_START);
               const photos = sparsePhotos(sub?.photos);
               const isLine = !!sub?.viaLine;
               const target = targetForType(tab, storeKey, k);
@@ -220,7 +281,8 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
                     .map((it, i) => ({ it, i }))
                     .filter(({ i }) => !photos.has(i));
               const done = isLine || photos.size >= target;
-              const label = tab === 'daily' ? formatDateKeyJa(k) : weekLabel(k);
+              const label =
+                tab === 'daily' ? formatDateKeyJa(k) : tab === 'weekly' ? weekLabel(k) : formatMonthKeyJa(k);
               const urls = Array.from(photos.values());
               return (
                 <div
@@ -286,8 +348,164 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBac
             })}
           </div>
         )}
+          </>
+        )}
       </main>
       <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+    </div>
+  );
+};
+
+// ============================================================
+// 年間スケジュールの提出履歴（自店が対象のもの・確認専用）
+// ============================================================
+
+const ScheduleHistory: FC<{ storeKey: StoreKey }> = ({ storeKey }) => {
+  const { schedules, loading: schedulesLoading } = useSchedules();
+  const todayKey = getDateKey();
+  const [subs, setSubs] = useState<Record<string, Submission | null> | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<ScheduleVideo | null>(null);
+
+  // 自店が対象で、すでに始まっているもの（新しい順）
+  const list = useMemo(
+    () =>
+      Object.entries(schedules)
+        .filter(([, s]) => isStoreTargeted(s, storeKey) && s.from <= todayKey)
+        .sort((a, b) => b[1].from.localeCompare(a[1].from) || b[1].to.localeCompare(a[1].to)),
+    [schedules, storeKey, todayKey],
+  );
+  const idsSig = list.map(([id]) => id).join(',');
+
+  useEffect(() => {
+    if (schedulesLoading) return;
+    const ids = idsSig ? idsSig.split(',') : [];
+    if (ids.length === 0) {
+      setSubs({});
+      return;
+    }
+    let cancelled = false;
+    setSubs(null);
+    // 年間スケジュールの提出は submissions/{店舗}/weekly/{スケジュールID} に入っている
+    Promise.all(
+      ids.map((id) =>
+        fetchSubmissionsForKey([storeKey], 'weekly', id).then((res) => [id, res[storeKey] ?? null] as const),
+      ),
+    ).then((entries) => {
+      if (!cancelled) setSubs(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeKey, idsSig, schedulesLoading]);
+
+  if (schedulesLoading || subs === null) {
+    return <p className="py-8 text-center text-sm text-text-muted">読み込み中…</p>;
+  }
+
+  // 本部が非表示にしたものは、提出がある場合だけ出す
+  const visible = list.filter(([id, s]) => !s.archived || !!subs[id]);
+  if (visible.length === 0) {
+    return <p className="py-8 text-center text-sm text-text-muted">年間スケジュールの記録はまだありません</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {visible.map(([id, s]) => (
+        <ScheduleHistoryCard
+          key={id}
+          schedule={s}
+          submission={subs[id] ?? null}
+          storeKey={storeKey}
+          todayKey={todayKey}
+          onOpenPhoto={setLightboxUrl}
+          onOpenVideo={(url) => setPlaying({ type: 'upload', url })}
+        />
+      ))}
+      <Lightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      <VideoModal video={playing} onClose={() => setPlaying(null)} />
+    </div>
+  );
+};
+
+const ScheduleHistoryCard: FC<{
+  schedule: Schedule;
+  submission: Submission | null;
+  storeKey: StoreKey;
+  todayKey: string;
+  onOpenPhoto: (url: string) => void;
+  onOpenVideo: (url: string) => void;
+}> = ({ schedule, submission, storeKey, todayKey, onOpenPhoto, onOpenVideo }) => {
+  const items = scheduleItems(schedule);
+  const p = progress(items, submission?.photos, storeKey);
+  const photos = photosMap(submission?.photos);
+  const status = scheduleStatus(schedule, todayKey);
+  const chip =
+    p.status === 'done'
+      ? { cls: 'bg-ok-bg text-ok', label: '提出済み' }
+      : p.status === 'partial'
+        ? { cls: 'bg-warn-bg text-warn', label: `一部提出 ${p.doneItems}/${p.totalItems}項目` }
+        : { cls: 'bg-ng-bg text-ng', label: '未提出' };
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold">{schedule.title}</h3>
+          <p className="mt-0.5 text-xs text-text-muted">
+            期間 {formatScheduleRange(schedule.from, schedule.to)}
+            {status === 'active' ? '（受付中）' : '（終了）'}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${chip.cls}`}>{chip.label}</span>
+      </div>
+      <ul className="mt-3 space-y-3">
+        {p.items.map(({ item, index, range, count, done }) => {
+          const urls: string[] = [];
+          for (let n = range.start; n < range.end; n += 1) {
+            const url = photos.get(n);
+            if (url) urls.push(url);
+          }
+          const isVideo = item.source === 'video';
+          return (
+            <li key={index}>
+              <p className={`text-xs font-bold ${done ? 'text-text' : 'text-ng'}`}>
+                {item.label}
+                <span className="ml-2 font-normal">
+                  {count === 0 ? '未提出' : `${count}${isVideo ? '本' : '枚'}${done ? '' : `（あと${Math.max(0, item.required - count)}）`}`}
+                </span>
+              </p>
+              {urls.length > 0 && (
+                <div className="no-scrollbar mt-1.5 flex gap-1.5 overflow-x-auto">
+                  {urls.map((url, i) =>
+                    isVideo ? (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => onOpenVideo(url)}
+                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-surface2 text-xs font-bold text-text"
+                        aria-label={`${item.label} の動画を再生`}
+                      >
+                        ▶ 動画
+                      </button>
+                    ) : (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => onOpenPhoto(url)}
+                        className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-border"
+                        aria-label={`${item.label} の写真を拡大`}
+                      >
+                        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      </button>
+                    ),
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };

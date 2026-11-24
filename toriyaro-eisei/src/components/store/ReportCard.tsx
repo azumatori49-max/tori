@@ -10,6 +10,8 @@ interface Props {
   title: string;
   description: string;
   submission: Submission | null;
+  /** true のとき「確認のみ」（朝の締め切り時間帯など）。ボタンの文言だけが変わる */
+  viewOnly?: boolean;
   onOpen: () => void;
 }
 
@@ -37,13 +39,26 @@ export const ReportCard: FC<Props> = ({
   title,
   description,
   submission,
+  viewOnly = false,
   onOpen,
 }) => {
   const v = VARIANT[variant];
   const target = targetForType(variant, storeKey);
   const count = submission?.count ?? 0;
-  const status = statusFromCount(count, target);
-  const pct = Math.min(100, (count / target) * 100);
+  // LINE報告で提出済みにしてもらった分は、枚数に関係なく提出済みとして見せる
+  const isLine = !!submission?.viaLine;
+  const status = isLine ? 'ok' : statusFromCount(count, target);
+  const pct = isLine ? 100 : Math.min(100, (count / target) * 100);
+  const remaining = Math.max(0, target - count);
+
+  // カード下部のボタン（カード全体が押せるので、見た目だけのボタン）
+  const action = viewOnly
+    ? { label: '写真を確認する', primary: false }
+    : status === 'ok'
+      ? { label: '写真を確認・撮り直す', primary: false }
+      : status === 'warn'
+        ? { label: `続きを撮る（あと${remaining}枚）`, primary: true }
+        : { label: '撮影する', primary: true };
 
   return (
     <button
@@ -57,7 +72,7 @@ export const ReportCard: FC<Props> = ({
         >
           {v.label}
         </span>
-        <StatusChip kind={status}>{statusLabel(status)}</StatusChip>
+        <StatusChip kind={status}>{isLine ? '提出済み（LINE）' : statusLabel(status)}</StatusChip>
       </div>
       <h3 className="mt-3 text-base font-bold">{title}</h3>
       <p className="mt-1 text-xs text-text-muted">{description}</p>
@@ -83,6 +98,16 @@ export const ReportCard: FC<Props> = ({
           </p>
         )}
       </div>
+
+      <span
+        className={`mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl px-3 text-sm font-bold ${
+          action.primary
+            ? 'bg-accent text-white shadow-sm'
+            : 'border border-border bg-surface text-text'
+        }`}
+      >
+        {action.label}
+      </span>
     </button>
   );
 };

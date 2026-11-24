@@ -19,6 +19,8 @@ interface Props {
   onLogout: () => void;
 }
 
+const TOOLS_OPEN_KEY = 'admin_tools_open_v1';
+
 export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const { items: referrals } = useAllReferrals();
@@ -34,12 +36,32 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
     }
   }, []);
 
+  // 「ツール」（QRコード・AIアシスタント・月次レポート）の開閉は端末に覚えさせる
+  const [toolsOpen, setToolsOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(TOOLS_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleTools = () => {
+    setToolsOpen((v) => {
+      try {
+        localStorage.setItem(TOOLS_OPEN_KEY, v ? '0' : '1');
+      } catch {
+        // 保存できなくても動作には影響しない
+      }
+      return !v;
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-bg pb-20">
+    <div className="flex min-h-screen flex-col bg-bg pb-20 lg:pb-10">
       <AppHeader
         title="管理者ダッシュボード"
         subtitle={formatDateJa(new Date())}
         showLogo
+        wide
         right={
           <button
             type="button"
@@ -51,12 +73,36 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
         }
       />
 
-           <main className="mx-auto w-full max-w-app px-4 py-4">
-        <QrShareCard />
-        <AiAssistantCard />
+      {/* PC（1024px以上）では本文を広く使う。スマホ幅は今までどおり1列 */}
+      <main className="mx-auto w-full max-w-app px-4 py-4 lg:order-2 lg:max-w-[1200px] lg:px-6">
         {tab === 'dashboard' && (
           <>
-            <MonthlyReportCard stores={stores} />
+            {/* 提出確認のときだけ出す。ふだんは1行に畳んでおく */}
+            <div className="mb-4 rounded-2xl border border-border bg-surface shadow-sm">
+              <button
+                type="button"
+                onClick={toggleTools}
+                aria-expanded={toolsOpen}
+                className="flex min-h-[48px] w-full items-center justify-between gap-2 px-4 text-left"
+              >
+                <span className="text-sm font-bold">
+                  ツール
+                  <span className="ml-2 text-xs font-normal text-text-muted">
+                    QRコード・AIアシスタント・月次レポート
+                  </span>
+                </span>
+                <span className="text-text-muted" aria-hidden="true">{toolsOpen ? '▲' : '▼'}</span>
+              </button>
+              {toolsOpen && (
+                <div className="border-t border-border px-3 pt-4 lg:grid lg:grid-cols-2 lg:gap-x-4">
+                  <QrShareCard />
+                  <AiAssistantCard />
+                  <div className="lg:col-span-2">
+                    <MonthlyReportCard stores={stores} />
+                  </div>
+                </div>
+              )}
+            </div>
             <DashboardTab stores={stores} />
           </>
         )}
@@ -67,8 +113,12 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
         <VersionText className="mt-8" />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur">
-        <div className="mx-auto grid w-full max-w-app grid-cols-5">
+      {/* スマホは画面下のメニュー、PCはヘッダーのすぐ下の横並びタブ */}
+      <nav
+        className="admin-nav fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur lg:sticky lg:inset-x-auto lg:bottom-auto lg:order-1 lg:border-b lg:border-t-0"
+        aria-label="管理メニュー"
+      >
+        <div className="mx-auto grid w-full max-w-app grid-cols-5 lg:flex lg:max-w-[1200px] lg:gap-1 lg:px-6">
           {(
             [
               { key: 'dashboard', label: '提出確認' },
@@ -82,13 +132,14 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
               key={item.key}
               type="button"
               onClick={() => setTab(item.key)}
-              className={`relative flex flex-col items-center gap-0.5 whitespace-nowrap py-2.5 text-[10px] font-bold transition ${
-                tab === item.key ? 'text-accent' : 'text-text-muted'
+              aria-current={tab === item.key ? 'page' : undefined}
+              className={`relative flex min-h-[48px] flex-col items-center justify-center gap-0.5 whitespace-nowrap px-1 text-xs font-bold transition lg:flex-row lg:border-b-2 lg:px-5 lg:text-sm ${
+                tab === item.key ? 'text-accent lg:border-accent' : 'text-text-muted lg:border-transparent'
               }`}
             >
               {item.label}
               {item.key === 'referrals' && pendingCount > 0 && (
-                <span className="absolute right-3 top-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-ng px-1 text-[10px] font-bold leading-[16px] text-white">
+                <span className="absolute right-2 top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-ng px-1 text-xs font-bold leading-[18px] text-white lg:static lg:ml-1.5">
                   {pendingCount}
                 </span>
               )}

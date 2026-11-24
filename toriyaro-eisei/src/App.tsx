@@ -6,6 +6,7 @@ import { AdminScreen } from './components/admin/AdminScreen';
 import { InAppBrowserGate } from './components/system/InAppBrowserGate';
 import { AnonAuthGate } from './components/system/AnonAuthGate';
 import { UpdateNotifier } from './components/system/UpdateNotifier';
+import { ConfirmHost } from './components/ui/ConfirmDialog';
 import { useAuth } from './hooks/useAuth';
 import { useStores } from './hooks/useStores';
 import type { ReportType, Screen } from './types';
@@ -244,6 +245,7 @@ const App = () => (
       <AppInner />
     </AnonAuthGate>
     <UpdateNotifier />
+    <ConfirmHost />
     <InAppBrowserGate />
   </>
 );

@@ -128,7 +128,7 @@ export const ScheduleItemStats: FC<{
     return <p className="py-8 text-center text-sm text-text-muted">対象店舗がありません</p>;
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
       {stats.items.map((s) => (
         <ItemStatCard
           key={s.index}

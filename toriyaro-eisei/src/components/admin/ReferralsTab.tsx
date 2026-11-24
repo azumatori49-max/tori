@@ -175,7 +175,7 @@ export const ReferralsTab: FC<Props> = () => {
         ) : items.length === 0 ? (
           <p className="mt-3 text-xs text-text-muted">申請はまだありません</p>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
             {items.map((r) => {
               const style = STATUS_STYLE[r.status];
               const isDup = dupSet.has(r.normalizedReferredName);

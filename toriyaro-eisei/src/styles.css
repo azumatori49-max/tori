@@ -71,6 +71,13 @@ textarea {
   top: calc(0.75rem + var(--update-banner-h, 0px));
 }
 
+/* 管理画面のPC用タブ（ヘッダーのすぐ下に固定）。ヘッダーの高さは 3.5rem */
+@media (min-width: 1024px) {
+  .admin-nav {
+    top: calc(3.5rem + var(--update-banner-h, 0px));
+  }
+}
+
 /* 全画面の案内（アプリ内ブラウザの警告など）用の不透明な背景。
    bg-bg はスマホ配色（html.liquid）で透明になるため、後ろが透けてはいけない画面はこちらを使う */
 .bg-page-solid {

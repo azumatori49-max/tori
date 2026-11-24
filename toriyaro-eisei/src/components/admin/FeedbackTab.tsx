@@ -138,7 +138,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
             エラーログはありません
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
             {errors.map((e) => (
               <div key={e.id} className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-2 text-xs">
@@ -184,7 +184,7 @@ export const FeedbackTab: FC<Props> = ({ stores }) => {
               {showResolved ? 'フィードバックはありません' : '未対応のフィードバックはありません'}
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
               {filtered.map((item) => {
                 const storeName =
                   item.storeKey === '__admin__'

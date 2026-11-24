@@ -1,6 +1,7 @@
 import { useState, type FC } from 'react';
 import { useStores } from '../../hooks/useStores';
 import { getDateKey } from '../../lib/dateUtils';
+import { confirmDialog } from '../ui/ConfirmDialog';
 import type { Store, StoreKey } from '../../types';
 
 interface Props {
@@ -36,9 +37,15 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
   const [message, setMessage] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<StoreKey | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [search, setSearch] = useState('');
 
   const sortedKeys = Object.keys(stores).sort((a, b) =>
     stores[a].name.localeCompare(stores[b].name, 'ja'),
+  );
+  const searchText = search.trim().toLowerCase();
+  // 編集中の店舗は、検索に合わなくなっても一覧に残す
+  const visibleKeys = sortedKeys.filter(
+    (k) => !searchText || k === editingKey || stores[k].name.toLowerCase().includes(searchText),
   );
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -95,11 +102,22 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
   };
 
   const handleDelete = async (key: StoreKey, name: string) => {
-    if (!confirm(`「${name}」を削除しますか？`)) return;
+    const ok = await confirmDialog({
+      title: `「${name}」を削除しますか？`,
+      message:
+        '削除すると、この店舗はログインできなくなり、提出確認・集計・店舗一覧から消えます。\n' +
+        'これまでに提出された写真のデータは消えませんが、画面からは見られなくなります。\n' +
+        '同じ名前で登録し直しても、過去の提出とはつながりません。元に戻せません。',
+      confirmLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await deleteStore(key);
-      setMessage('削除しました');
+      setEditingKey(null);
+      setEditingName('');
+      setMessage(`「${name}」を削除しました`);
     } catch {
       setMessage('削除に失敗しました');
     } finally {
@@ -144,6 +162,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 rounded-full bg-surface border border-border px-3 py-1 text-xs font-bold">
           登録店舗 <span className="text-accent">{sortedKeys.length}</span>
+          {searchText && <span className="font-normal text-text-muted">（表示 {visibleKeys.length}）</span>}
         </span>
         <button
           type="button"
@@ -250,8 +269,21 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
         </p>
       )}
 
-      <ul className="space-y-2">
-        {sortedKeys.map((k) => {
+      <input
+        type="search"
+        placeholder="店舗名で検索"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        aria-label="店舗名で検索"
+        className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm focus:border-accent focus:outline-none"
+      />
+
+      {visibleKeys.length === 0 && (
+        <p className="py-6 text-center text-sm text-text-muted">該当する店舗がありません</p>
+      )}
+
+      <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-2 lg:space-y-0 xl:grid-cols-3">
+        {visibleKeys.map((k) => {
           const isEditing = editingKey === k;
           return (
             <li
@@ -260,10 +292,13 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
             >
               {isEditing ? (
                 <div className="space-y-2">
-                  <p className="truncate font-mono text-[10px] text-text-muted">{k}</p>
+                  <p className="truncate text-xs text-text-muted">
+                    管理番号 <span className="font-mono">{k}</span>
+                  </p>
                   <input
                     type="text"
                     value={editingName}
+                    aria-label="店舗名"
                     onChange={(e) => setEditingName(e.target.value)}
                     className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
                     autoFocus
@@ -299,6 +334,17 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
                       キャンセル
                     </button>
                   </div>
+                  {/* 削除は誤操作を防ぐため、一覧ではなく編集の中に置く */}
+                  <div className="border-t border-border pt-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(k, stores[k].name)}
+                      disabled={busy}
+                      className="inline-flex min-h-[44px] items-center px-2 text-xs font-bold text-ng underline disabled:opacity-50"
+                    >
+                      この店舗を削除する
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
@@ -309,23 +355,14 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
                         オープン日：{stores[k].createdAt.slice(0, 10)}
                       </p>
                     )}
-                    <p className="truncate font-mono text-[10px] text-text-muted">{k}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => startEdit(k)}
                     disabled={busy}
-                    className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-bold text-text-muted disabled:opacity-50"
+                    className="inline-flex min-h-[44px] items-center rounded-md border border-border bg-surface px-4 text-xs font-bold text-text disabled:opacity-50"
                   >
                     編集
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(k, stores[k].name)}
-                    disabled={busy}
-                    className="rounded-md bg-ng-bg px-2 py-1 text-[11px] font-bold text-ng disabled:opacity-50"
-                  >
-                    削除
                   </button>
                 </div>
               )}

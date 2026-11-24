@@ -1,8 +1,7 @@
-import { useState, type FC, type MouseEvent } from 'react';
+import type { FC } from 'react';
 import { StatusChip, statusFromCount, statusLabel } from '../ui/StatusChip';
 import { formatDateTimeJa } from '../../lib/dateUtils';
-import { targetForType } from '../../data/checkItems';
-import { markAsLineReport, unmarkSubmission } from '../../hooks/useSubmissions';
+import { itemsForType, targetForType } from '../../data/checkItems';
 import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
@@ -12,7 +11,6 @@ interface Props {
   dateOrWeekKey: string;
   submission: Submission | null;
   onClick: () => void;
-  onReload: () => void;
 }
 
 const normalisePhotos = (raw: unknown): Map<number, string> => {
@@ -35,139 +33,71 @@ const normalisePhotos = (raw: unknown): Map<number, string> => {
   return map;
 };
 
-export const StoreRow: FC<Props> = ({
-  storeKey,
-  storeName,
-  type,
-  dateOrWeekKey,
-  submission,
-  onClick,
-  onReload,
-}) => {
-  const [busy, setBusy] = useState(false);
+/**
+ * 提出確認の一覧の1店舗ぶん。行全体を押すと店舗の詳細が開く。
+ * - 未提出: 1行だけ（店舗名とチップ）
+ * - 一部提出: 提出済みの写真と、足りない項目名
+ * - 提出済み: 写真と提出日時
+ * LINE報告の操作は一覧には置かず、詳細画面の中で行う（誤操作を防ぎ、一覧を短くするため）。
+ */
+export const StoreRow: FC<Props> = ({ storeKey, storeName, type, dateOrWeekKey, submission, onClick }) => {
   const target = targetForType(type, storeKey, dateOrWeekKey);
   const photos = normalisePhotos(submission?.photos);
   const photoCount = photos.size;
   const isLine = !!submission?.viaLine;
   const status = isLine ? 'ok' : statusFromCount(photoCount, target);
-  const canMarkLine = !isLine && photoCount < target;
 
-  let maxKey = -1;
-  photos.forEach((_, k) => {
-    if (k > maxKey) maxKey = k;
-  });
-  const slotCount = Math.max(target, maxKey + 1);
-
-  const handleMarkLine = async (e: MouseEvent) => {
-    e.stopPropagation();
-    const msg = photoCount > 0
-      ? `${storeName} に LINE報告を加えて提出済みにしますか？（既存の写真 ${photoCount} 枚は保持されます）`
-      : `${storeName} を LINE報告として提出済みにしますか？`;
-    if (!confirm(msg)) return;
-    setBusy(true);
-    try {
-      await markAsLineReport(storeKey, storeName, type, dateOrWeekKey);
-      onReload();
-    } catch (err) {
-      alert('失敗: ' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleUnmark = async (e: MouseEvent) => {
-    e.stopPropagation();
-    const msg = photoCount > 0
-      ? `${storeName} の LINE報告マークを取消しますか？（写真 ${photoCount} 枚は残ります）`
-      : `${storeName} の LINE報告を取消（未提出に戻す）しますか？`;
-    if (!confirm(msg)) return;
-    setBusy(true);
-    try {
-      await unmarkSubmission(storeKey, type, dateOrWeekKey);
-      onReload();
-    } catch (err) {
-      alert('失敗: ' + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setBusy(false);
-    }
-  };
+  // 足りない項目（複数枚OKの最後の項目は、1枚も無いときだけ挙げる）
+  const items = itemsForType(type, storeKey, dateOrWeekKey);
+  const lastItem = items[items.length - 1];
+  const fixedCount = lastItem?.multi ? items.length - 1 : items.length;
+  const missing: string[] = [];
+  if (status === 'warn') {
+    items.forEach((it, i) => {
+      const has = i < fixedCount ? photos.has(i) : Array.from(photos.keys()).some((n) => n >= fixedCount);
+      if (!has) missing.push(`${i + 1}. ${it.label}`);
+    });
+  }
+  const urls = Array.from(photos.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([, url]) => url);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <button
-        type="button"
-        onClick={onClick}
-        className="block w-full text-left transition active:scale-[0.99]"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-sm font-bold">{storeName}</h3>
-          <StatusChip kind={status}>
-            {isLine ? '提出済み（LINE）' : statusLabel(status)}
-          </StatusChip>
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full rounded-2xl border border-border bg-surface px-4 py-3 text-left shadow-sm transition active:scale-[0.99]"
+    >
+      <div className="flex min-h-[28px] items-center justify-between gap-2">
+        <h3 className="truncate text-sm font-bold">{storeName}</h3>
+        <StatusChip kind={status} className="shrink-0">
+          {isLine ? '提出済み（LINE）' : status === 'warn' ? `一部提出 ${photoCount}/${target}枚` : statusLabel(status)}
+        </StatusChip>
+      </div>
+
+      {urls.length > 0 && (
+        <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
+          {urls.map((url, i) => (
+            <div key={i} className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </div>
+          ))}
         </div>
-
-        {(photoCount > 0 || !isLine) && (
-          <div className="mt-3 flex gap-1.5 overflow-x-auto no-scrollbar">
-            {Array.from({ length: slotCount }).map((_, i) => {
-              const url = photos.get(i);
-              return (
-                <div
-                  key={i}
-                  className={`h-12 w-12 shrink-0 overflow-hidden rounded-md border ${
-                    url ? 'border-border' : 'border-dashed border-border bg-surface2'
-                  }`}
-                >
-                  {url ? (
-                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-[10px] text-text-muted">
-                      —
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {isLine && (
-          <div className="mt-2 rounded-lg bg-ok-bg px-3 py-2 text-xs font-bold text-ok">
-            {photoCount > 0
-              ? `写真 ${photoCount} 枚 + LINE報告で完了`
-              : 'LINE報告として記録済み（写真なし）'}
-          </div>
-        )}
-
-        {submission ? (
-          <p className="mt-2 text-[11px] text-text-muted">
-            提出: {formatDateTimeJa(submission.submittedAt)}
-            {!isLine && ` ・ ${photoCount}枚`}
-          </p>
-        ) : (
-          <p className="mt-2 text-[11px] text-ng">未提出</p>
-        )}
-      </button>
-
-      {canMarkLine && (
-        <button
-          type="button"
-          onClick={handleMarkLine}
-          disabled={busy}
-          className="mt-3 w-full rounded-lg border border-accent bg-white px-3 py-2 text-xs font-bold text-accent transition active:scale-[0.98] disabled:opacity-50"
-        >
-          {busy ? '処理中…' : photoCount > 0 ? '残りをLINE報告として完了にする' : 'LINE報告として提出済みにする'}
-        </button>
       )}
+
+      {missing.length > 0 && (
+        <p className="mt-2 text-xs font-bold text-ng">抜け：{missing.join('、')}</p>
+      )}
+
       {isLine && (
-        <button
-          type="button"
-          onClick={handleUnmark}
-          disabled={busy}
-          className="mt-3 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-bold text-text-muted transition active:scale-[0.98] disabled:opacity-50"
-        >
-          {busy ? '処理中…' : 'LINE報告マークを取消'}
-        </button>
+        <p className="mt-2 text-xs font-bold text-ok">
+          {photoCount > 0 ? `写真 ${photoCount} 枚 + LINE報告で完了` : 'LINE報告として記録済み（写真なし）'}
+        </p>
       )}
-    </div>
+
+      {submission && (
+        <p className="mt-1.5 text-xs text-text-muted">提出: {formatDateTimeJa(submission.submittedAt)}</p>
+      )}
+    </button>
   );
 };

@@ -1,9 +1,12 @@
 import { useEffect, useState, type FC } from 'react';
 import { Lightbox } from '../ui/Lightbox';
+import { confirmDialog, noticeDialog } from '../ui/ConfirmDialog';
 import {
   deletePhoto,
   fetchSubmissionsForKey,
+  markAsLineReport,
   moveSubmission,
+  unmarkSubmission,
 } from '../../hooks/useSubmissions';
 import {
   dateKeyToDate,
@@ -23,6 +26,8 @@ interface Props {
   anchorDateKey: string;
   onClose: () => void;
   readOnly?: boolean;
+  /** この画面で内容を変えた（LINE報告・写真の削除・移動）ときに呼ぶ。一覧の読み直し用 */
+  onChanged?: () => void;
 }
 
 interface LoadedData {
@@ -108,6 +113,7 @@ export const StoreDetailModal: FC<Props> = ({
   anchorDateKey,
   onClose,
   readOnly = false,
+  onChanged,
 }) => {
   const [data, setData] = useState<LoadedData>({ daily: null, weekly: null, monthly: null });
   const [loading, setLoading] = useState(false);
@@ -147,7 +153,10 @@ export const StoreDetailModal: FC<Props> = ({
 
   if (!open) return null;
 
-  const reload = () => setReloadToken((t) => t + 1);
+  const reload = () => {
+    setReloadToken((t) => t + 1);
+    onChanged?.();
+  };
   const allEntries: ZipEntry[] = readOnly
     ? []
     : [
@@ -159,7 +168,8 @@ export const StoreDetailModal: FC<Props> = ({
   return (
     <div className="fixed inset-0 z-40">
       <div className="absolute inset-0 bg-black/40 animate-fadeIn" onClick={onClose} />
-      <div className="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-y-auto rounded-t-3xl bg-surface shadow-2xl animate-slideUp">
+      {/* スマホは下から出るシート、PC（1024px以上）は中央の広いダイアログ */}
+      <div className="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-y-auto rounded-t-3xl bg-surface shadow-2xl animate-slideUp lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[960px] lg:max-w-[94vw] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:animate-fadeIn lg:rounded-3xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface/95 px-5 py-3 backdrop-blur">
           <div className="min-w-0">
             <h2 className="truncate text-base font-bold">{storeName}</h2>
@@ -168,7 +178,7 @@ export const StoreDetailModal: FC<Props> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-2xl text-text-muted hover:text-accent"
+            className="inline-flex h-11 w-11 items-center justify-center text-2xl text-text-muted hover:text-accent"
             aria-label="閉じる"
           >
             ×
@@ -278,31 +288,92 @@ const Section: FC<SectionProps> = ({
   const fixedItems = hasMulti ? items.slice(0, -1) : items;
   const fixedCount = fixedItems.length;
 
-  const multiUrls: string[] = [];
-  if (hasMulti) {
-    let i = fixedCount;
-    while (photos.has(i) && i < 20) {
-      multiUrls.push(photos.get(i)!);
-      i += 1;
+  // 複数枚OKの項目の写真。途中の番号が抜けていても、後ろの写真を落とさない
+  const multiPhotos: Array<{ slot: number; url: string }> = hasMulti
+    ? Array.from(photos.entries())
+        .filter(([slot]) => slot >= fixedCount)
+        .sort((a, b) => a[0] - b[0])
+        .map(([slot, url]) => ({ slot, url }))
+    : [];
+  const isLine = !!submission?.viaLine;
+  const typeLabel = TYPE_LABEL[type];
+  const keyLabel =
+    type === 'daily' ? currentKey : type === 'weekly' ? `${currentKey.slice(1)} の週` : `${currentKey.slice(1)}`;
+  /** 写真番号 → 項目名（確認画面の文面用） */
+  const itemLabelFor = (slot: number): string => {
+    const item = slot < fixedCount ? fixedItems[slot] : lastItem;
+    const n = slot < fixedCount ? slot + 1 : fixedCount + 1;
+    return item ? `${n}. ${item.label}` : `${slot + 1}枚目`;
+  };
+
+  const handleMarkLine = async () => {
+    if (!storeKey) return;
+    const ok = await confirmDialog({
+      title: 'LINE報告として提出済みにしますか？',
+      message:
+        `${storeName} の ${keyLabel} の${typeLabel}を、LINE報告として提出済みにします。` +
+        (filledCount > 0 ? `\nすでにある写真 ${filledCount} 枚は残ります。` : '') +
+        '\nあとから取り消せます。',
+      confirmLabel: '提出済みにする',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await markAsLineReport(storeKey, storeName, type, currentKey);
+      onReload();
+    } catch (err) {
+      await noticeDialog({
+        title: 'LINE報告を記録できませんでした',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
     }
-  }
+  };
+
+  const handleUnmarkLine = async () => {
+    if (!storeKey) return;
+    const ok = await confirmDialog({
+      title: 'LINE報告を取り消しますか？',
+      message:
+        `${storeName} の ${keyLabel} の${typeLabel}のLINE報告を取り消します。` +
+        (filledCount > 0 ? `\n写真 ${filledCount} 枚は残ります（枚数が足りなければ一部提出に戻ります）。` : '\n未提出に戻ります。'),
+      confirmLabel: '取り消す',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await unmarkSubmission(storeKey, type, currentKey);
+      onReload();
+    } catch (err) {
+      await noticeDialog({
+        title: 'LINE報告を取り消せませんでした',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleMove = async () => {
     if (!storeKey || !newDate) return;
     const targetKey =
       type === 'daily' ? newDate : getWeekKey(0, new Date(newDate + 'T00:00:00'));
     if (targetKey === currentKey) {
-      alert('同じ' + (type === 'daily' ? '日付' : '週') + 'です');
+      await noticeDialog({ title: `同じ${type === 'daily' ? '日付' : '週'}です`, message: '移動先に別の日付を選んでください。' });
       return;
     }
     const lbl =
       type === 'daily' ? targetKey : `週 ${targetKey.slice(1)} 起算`;
-    if (
-      !confirm(
-        `${storeName} の${type === 'daily' ? 'デイリー' : 'ウィークリー'}を ${lbl} に移動しますか？\n（同じスロット番号は既存データを優先してマージされます）`,
-      )
-    )
-      return;
+    const ok = await confirmDialog({
+      title: `${lbl} に移動しますか？`,
+      message:
+        `${storeName} の${type === 'daily' ? 'デイリー' : 'ウィークリー'}の提出を ${lbl} に移します。\n` +
+        '移動先にすでに写真がある項目は、移動先の写真を残します。',
+      confirmLabel: '移動する',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await moveSubmission(storeKey, type, currentKey, targetKey);
@@ -310,7 +381,7 @@ const Section: FC<SectionProps> = ({
       setNewDate('');
       onReload();
     } catch (err) {
-      alert('移動失敗: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '移動できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setBusy(false);
     }
@@ -318,13 +389,19 @@ const Section: FC<SectionProps> = ({
 
   const handleDeletePhoto = async (idx: number) => {
     if (!storeKey) return;
-    if (!confirm(`#${idx + 1} の写真を削除しますか？`)) return;
+    const ok = await confirmDialog({
+      title: '写真を削除しますか？',
+      message: `${storeName} の「${itemLabelFor(idx)}」の写真を削除します。元に戻せません。`,
+      confirmLabel: '削除する',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await deletePhoto(storeKey, type, currentKey, idx);
       onReload();
     } catch (err) {
-      alert('削除失敗: ' + (err instanceof Error ? err.message : String(err)));
+      await noticeDialog({ title: '削除できませんでした', message: err instanceof Error ? err.message : String(err) });
     } finally {
       setBusy(false);
     }
@@ -348,6 +425,37 @@ const Section: FC<SectionProps> = ({
         </p>
       ) : (
         <p className="mb-2 text-[11px] text-ng">未提出</p>
+      )}
+
+      {isLine && (
+        <p className="mb-2 rounded-lg bg-ok-bg px-3 py-2 text-xs font-bold text-ok">
+          {filledCount > 0 ? `写真 ${filledCount} 枚 + LINE報告で完了` : 'LINE報告として記録済み（写真なし）'}
+        </p>
+      )}
+
+      {/* LINE報告の操作（一覧ではなく、この詳細の中で行う）。閲覧モードでは出さない */}
+      {!readOnly && (isLine || filledCount < target) && (
+        <div className="mb-3">
+          {isLine ? (
+            <button
+              type="button"
+              onClick={handleUnmarkLine}
+              disabled={busy}
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-border bg-surface px-4 text-xs font-bold text-text disabled:opacity-50"
+            >
+              {busy ? '処理中…' : 'LINE報告マークを取消'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleMarkLine}
+              disabled={busy}
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-border bg-surface px-4 text-xs font-bold text-text disabled:opacity-50"
+            >
+              {busy ? '処理中…' : filledCount > 0 ? '残りをLINE報告として完了にする' : 'LINE報告として提出済みにする'}
+            </button>
+          )}
+        </div>
       )}
 
       {!readOnly && submission && type !== 'monthly' && (
@@ -397,7 +505,7 @@ const Section: FC<SectionProps> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2 lg:grid-cols-6">
         {fixedItems.map((item, i) => {
           const url = photos.get(i);
           const t = photoMeta[String(i)]?.uploadedAt;
@@ -455,17 +563,16 @@ const Section: FC<SectionProps> = ({
           <h4 className="mb-2 text-xs font-bold">
             {fixedCount + 1}. {lastItem.label}
             <span className="ml-2 text-[10px] font-normal text-text-muted">
-              {multiUrls.length} 枚
+              {multiPhotos.length} 枚
             </span>
           </h4>
-          {multiUrls.length === 0 ? (
+          {multiPhotos.length === 0 ? (
             <p className="rounded-lg bg-surface2 px-3 py-2 text-[11px] text-text-muted">
               未提出
             </p>
           ) : (
-            <div className="grid grid-cols-4 gap-1.5">
-              {multiUrls.map((url, i) => {
-                const slotIdx = fixedCount + i;
+            <div className="grid grid-cols-4 gap-1.5 lg:grid-cols-8">
+              {multiPhotos.map(({ slot: slotIdx, url }, i) => {
                 const t = photoMeta[String(slotIdx)]?.uploadedAt;
                 return (
                   <div key={i} className="flex flex-col gap-0.5">

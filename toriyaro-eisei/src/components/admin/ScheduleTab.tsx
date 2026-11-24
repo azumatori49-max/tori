@@ -198,7 +198,7 @@ export const ScheduleTab: FC<Props> = ({ stores }) => {
       ) : sortedIds.length === 0 ? (
         <p className="py-8 text-center text-sm text-text-muted">スケジュールはまだありません</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
           {sortedIds.map((id) => (
             <ScheduleListRow
               key={id}
@@ -500,7 +500,7 @@ const ScheduleDetail: FC<{
       {loading ? (
         <p className="py-8 text-center text-sm text-text-muted">読み込み中…</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0">
           {rows.map((r) => {
             const photos = photosMap(r.sub?.photos);
             const meta = r.sub?.photoMeta ?? {};

@@ -12,6 +12,8 @@ import {
   getWeekKey,
 } from '../../lib/dateUtils';
 import { itemsForType, targetForType } from '../../data/checkItems';
+import { buildPhotoFileName, sanitizeFileName, type ZipEntry } from '../../lib/download';
+import { SavePhotoButton, ZipSaveButton } from './PhotoSave';
 import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
@@ -47,6 +49,50 @@ const normalisePhotos = (raw: unknown): Map<number, string> => {
     });
   }
   return map;
+};
+
+const TYPE_LABEL: Record<ReportType, string> = { daily: 'デイリー', weekly: 'ウィークリー', monthly: 'マンスリー' };
+
+/** 保存ファイル名の日付: デイリーは業務日、ウィークリーは週の月曜日、マンスリーは YYYYMM */
+const dateLabelFor = (type: ReportType, key: string): string =>
+  (type === 'weekly' ? key.slice(1) : key).replace(/-/g, '');
+
+/** 番号 → 保存ファイル名（拡張子を除く）の作り方。multi 項目は 1,2,3 と連番 */
+const photoNamer = (
+  type: ReportType,
+  storeKey: StoreKey | null,
+  key: string,
+  storeName: string,
+): ((slot: number) => (ext: string) => string) => {
+  const items = itemsForType(type, storeKey, key);
+  const lastItem = items[items.length - 1];
+  const fixedCount = lastItem?.multi ? items.length - 1 : items.length;
+  return (slot) => {
+    const item = slot < fixedCount ? items[slot] : lastItem;
+    const index = slot < fixedCount ? 1 : slot - fixedCount + 1;
+    return (ext) =>
+      buildPhotoFileName({
+        storeName,
+        label: `${TYPE_LABEL[type]}-${item?.label ?? ''}`,
+        dateLabel: dateLabelFor(type, key),
+        index,
+        ext,
+      });
+  };
+};
+
+/** その種類の提出にある写真すべての zip 用エントリ */
+const zipEntriesFor = (
+  type: ReportType,
+  storeKey: StoreKey | null,
+  key: string,
+  storeName: string,
+  submission: Submission | null,
+): ZipEntry[] => {
+  const namer = photoNamer(type, storeKey, key, storeName);
+  return Array.from(normalisePhotos(submission?.photos).entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([slot, url]) => ({ url, nameWithExt: namer(slot) }));
 };
 
 const formatPhotoTime = (iso: string): string => {
@@ -102,6 +148,13 @@ export const StoreDetailModal: FC<Props> = ({
   if (!open) return null;
 
   const reload = () => setReloadToken((t) => t + 1);
+  const allEntries: ZipEntry[] = readOnly
+    ? []
+    : [
+        ...zipEntriesFor('daily', storeKey, dailyKey, storeName, data.daily),
+        ...zipEntriesFor('weekly', storeKey, weekKey, storeName, data.weekly),
+        ...zipEntriesFor('monthly', storeKey, monthKey, storeName, data.monthly),
+      ];
 
   return (
     <div className="fixed inset-0 z-40">
@@ -124,6 +177,13 @@ export const StoreDetailModal: FC<Props> = ({
 
         <div className="px-5 py-4 space-y-6">
           {loading && <p className="text-center text-sm text-text-muted">読み込み中…</p>}
+          {!loading && !readOnly && (
+            <ZipSaveButton
+              entries={allEntries}
+              zipName={`${sanitizeFileName(storeName)}_${anchorDateKey.replace(/-/g, '')}.zip`}
+              label={`この店舗の写真をまとめて保存（zip・${allEntries.length}枚）`}
+            />
+          )}
           {!loading && (
             <>
               <Section
@@ -211,6 +271,7 @@ const Section: FC<SectionProps> = ({
   const photos = normalisePhotos(submission?.photos);
   const photoMeta = submission?.photoMeta || {};
   const filledCount = photos.size;
+  const nameFor = photoNamer(type, storeKey, currentKey, storeName);
 
   const lastItem = items[items.length - 1];
   const hasMulti = !!lastItem?.multi;
@@ -374,6 +435,11 @@ const Section: FC<SectionProps> = ({
               <div className="px-1 text-center text-[10px] font-bold leading-tight text-text">
                 {i + 1}. {item.label}
               </div>
+              {!readOnly && url && (
+                <div className="text-center">
+                  <SavePhotoButton url={url} nameWithExt={nameFor(i)} />
+                </div>
+              )}
               {t && (
                 <div className="text-center text-[9px] text-text-muted">
                   {formatPhotoTime(t)}
@@ -423,6 +489,11 @@ const Section: FC<SectionProps> = ({
                         </button>
                       )}
                     </div>
+                    {!readOnly && (
+                      <div className="text-center">
+                        <SavePhotoButton url={url} nameWithExt={nameFor(slotIdx)} />
+                      </div>
+                    )}
                     {t && (
                       <div className="text-center text-[9px] text-text-muted">
                         {formatPhotoTime(t)}

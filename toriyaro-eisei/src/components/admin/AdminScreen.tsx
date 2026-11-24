@@ -7,9 +7,10 @@ import { QrShareCard } from './QrShareCard';
 import { AiAssistantCard } from './AiAssistantCard';
 import { MonthlyReportCard } from './MonthlyReportCard';
 import { ReferralsTab } from './ReferralsTab';
+import { ScheduleTab } from './ScheduleTab';
 import { useAllReferrals } from '../../hooks/useReferrals';
 import { formatDateJa } from '../../lib/dateUtils';
-import { maybeRunDailyCleanup } from '../../lib/cleanup';
+import { CLEANUP_ENABLED, maybeRunDailyCleanup } from '../../lib/cleanup';
 import type { AdminTab, Store, StoreKey } from '../../types';
 
 interface Props {
@@ -26,7 +27,10 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
   );
 
   useEffect(() => {
-    void maybeRunDailyCleanup();
+    // 自動クリーンアップは一時停止中（理由は lib/cleanup.ts の CLEANUP_ENABLED を参照）
+    if (CLEANUP_ENABLED) {
+      void maybeRunDailyCleanup();
+    }
   }, []);
 
   return (
@@ -58,14 +62,16 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
         {tab === 'stores' && <StoreManageTab stores={stores} />}
         {tab === 'feedback' && <FeedbackTab stores={stores} />}
         {tab === 'referrals' && <ReferralsTab />}
+        {tab === 'schedules' && <ScheduleTab stores={stores} />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/95 backdrop-blur">
-        <div className="mx-auto grid w-full max-w-app grid-cols-4">
+        <div className="mx-auto grid w-full max-w-app grid-cols-5">
           {(
             [
               { key: 'dashboard', label: '提出確認' },
               { key: 'stores', label: '店舗管理' },
+              { key: 'schedules', label: '年間予定' },
               { key: 'referrals', label: '申請' },
               { key: 'feedback', label: 'ご意見' },
             ] as const
@@ -74,7 +80,7 @@ export const AdminScreen: FC<Props> = ({ stores, onLogout }) => {
               key={item.key}
               type="button"
               onClick={() => setTab(item.key)}
-              className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold transition ${
+              className={`relative flex flex-col items-center gap-0.5 whitespace-nowrap py-2.5 text-[10px] font-bold transition ${
                 tab === item.key ? 'text-accent' : 'text-text-muted'
               }`}
             >

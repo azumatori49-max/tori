@@ -1,5 +1,6 @@
 import { useMemo, useState, type FC } from 'react';
-import { ADMIN_PASSWORD } from '../../lib/firebase';
+import { ADMIN_PASSWORD, firebaseAuth } from '../../lib/firebase';
+import { clearStoreSurveySessions, connectStoreSurvey, storeSurveyUrl } from '../../lib/storeSurvey';
 import { verifyPassword } from '../../lib/crypto';
 import { isMobileDevice } from '../../lib/device';
 import type { Store, StoreKey } from '../../types';
@@ -8,7 +9,9 @@ interface Props {
   stores: Record<StoreKey, Store>;
   loading: boolean;
   loadError?: string | null;
-  onLoginStore: (storeKey: StoreKey) => void;
+  onLoginStore: (storeKey: StoreKey, surveyNotice?: string) => void;
+  initialStoreKey?: string;
+  notice?: string | null;
   onLoginAdmin: () => void;
   onOpenViewer: () => void;
 }
@@ -20,9 +23,11 @@ export const LoginScreen: FC<Props> = ({
   onLoginStore,
   onLoginAdmin,
   onOpenViewer,
+  initialStoreKey,
+  notice,
 }) => {
   const isPC = !isMobileDevice();
-  const [selected, setSelected] = useState<string>(isPC ? '__admin__' : '');
+  const [selected, setSelected] = useState<string>(isPC ? '__admin__' : initialStoreKey || '');
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -78,8 +83,21 @@ export const LoginScreen: FC<Props> = ({
     setBusy(true);
     try {
       const ok = await verifyPassword(password, selected, store.passwordHash);
-      if (ok) onLoginStore(selected);
-      else setError('パスワードが違います');
+      if (ok) {
+        let surveyNotice: string | undefined;
+        try {
+          clearStoreSurveySessions();
+          if (storeSurveyUrl(selected)) {
+            const idToken = await firebaseAuth.currentUser?.getIdToken();
+            if (!idToken) throw new Error('店舗ログインを確認できませんでした。');
+            await connectStoreSurvey(selected, password, idToken);
+          }
+        } catch {
+          surveyNotice = 'アンケートへの接続が完了しませんでした。時間をおいて店舗にログインし直してください。';
+        }
+        setPassword('');
+        onLoginStore(selected, surveyNotice);
+      } else setError('パスワードが違います');
     } finally {
       setBusy(false);
     }
@@ -104,6 +122,7 @@ export const LoginScreen: FC<Props> = ({
           onSubmit={handleSubmit}
           className="space-y-4 rounded-3xl bg-surface p-6 shadow-sm border border-border"
         >
+          {notice && <p className="rounded-xl bg-warn-bg p-3 text-xs font-bold text-warn">{notice}</p>}
           {isPC ? (
             <div>
               <label className="mb-1 block text-xs font-bold text-text-muted">ログイン</label>

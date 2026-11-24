@@ -12,9 +12,11 @@ import type { ReportType, Screen } from './types';
 import { FeedbackWidget } from './components/feedback/FeedbackWidget';
 import { HistoryScreen } from './components/store/HistoryScreen';
 import { ReferralFormScreen } from './components/store/ReferralFormScreen';
+import { ScheduleUploadScreen } from './components/store/ScheduleUploadScreen';
 import { ViewerScreen } from './components/viewer/ViewerScreen';
 import { isMobileDevice } from './lib/device';
 import type { ReferralRequest } from './types';
+import { storeSurveyAccessUrl, storeSurveyUrl } from './lib/storeSurvey';
 
 declare const __BUILD_TIME__: string;
 const BUILD_TIME = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'dev';
@@ -27,7 +29,7 @@ const VersionBadge = () => (
 
 const AppInner = () => {
   const { auth, loginAsStore, loginAsAdmin, logout } = useAuth();
-  const { stores, loading, error: storesError } = useStores();
+  const { stores, loading, loaded, error: storesError } = useStores();
   const [screen, setScreen] = useState<Screen>(() =>
     auth.isAdmin ? 'admin' : auth.storeKey ? 'store-top' : 'login',
   );
@@ -35,6 +37,13 @@ const AppInner = () => {
   const [referralInitial, setReferralInitial] = useState<ReferralRequest | null>(
     null,
   );
+  const [scheduleId, setScheduleId] = useState<string | null>(null);
+  const [loginStoreKey, setLoginStoreKey] = useState(() => {
+    const key = new URLSearchParams(window.location.search).get('surveyLogin') || '';
+    return storeSurveyUrl(key) ? key : '';
+  });
+  const [loginNotice, setLoginNotice] = useState<string | null>(loginStoreKey ? 'いつもの店舗ログインでアンケートを開けます。' : null);
+  const [surveyNotice, setSurveyNotice] = useState<string | undefined>();
 
   useEffect(() => {
     if (auth.isAdmin) {
@@ -47,18 +56,30 @@ const AppInner = () => {
   }, [auth.isAdmin, auth.storeKey]);
 
   useEffect(() => {
+    if (!loginStoreKey) return;
+    setScreen('login');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('surveyLogin');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }, []);
+
+  // 店舗一覧を正常に受信できた（loaded）うえで自店が無いときだけログアウトする。
+  // 取得失敗・遅延（loaded=false）ではログアウトせず「店舗情報を読み込み中…」のまま待ち、
+  // データが届けば自動で店舗トップに戻る。
+  useEffect(() => {
     if (
-      !loading &&
+      loaded &&
       auth.storeKey &&
       auth.storeKey !== '__admin__' &&
       !stores[auth.storeKey]
     ) {
       logout();
     }
-  }, [loading, auth.storeKey, stores, logout]);
+  }, [loaded, auth.storeKey, stores, logout]);
 
   const feedbackRight =
     screen === 'upload' ||
+    screen === 'schedule-upload' ||
     screen === 'history' ||
     screen === 'viewer' ||
     screen === 'referral-form';
@@ -73,8 +94,12 @@ const AppInner = () => {
         stores={stores}
         loading={loading}
         loadError={storesError}
-        onLoginStore={(k) => {
+        initialStoreKey={loginStoreKey}
+        notice={loginNotice}
+        onLoginStore={(k, surveyWarning) => {
           loginAsStore(k);
+          setLoginNotice(null);
+          setSurveyNotice(surveyWarning);
           setScreen('store-top');
         }}
         onLoginAdmin={() => {
@@ -136,6 +161,7 @@ const AppInner = () => {
           <HistoryScreen
             storeKey={storeKey}
             storeName={store.name}
+            createdAt={store.createdAt}
             onBack={() => setScreen('store-top')}
           />
         );
@@ -146,6 +172,18 @@ const AppInner = () => {
             storeName={store.name}
             type={reportType}
             onBack={() => setScreen('store-top')}
+          />
+        );
+      } else if (screen === 'schedule-upload' && scheduleId) {
+        content = (
+          <ScheduleUploadScreen
+            storeKey={storeKey}
+            storeName={store.name}
+            scheduleId={scheduleId}
+            onBack={() => {
+              setScheduleId(null);
+              setScreen('store-top');
+            }}
           />
         );
       } else if (screen === 'referral-form') {
@@ -176,9 +214,24 @@ const AppInner = () => {
               setScreen('upload');
             }}
             onOpenHistory={() => setScreen('history')}
+            surveyNotice={surveyNotice}
+            onOpenSurvey={() => {
+              const url = storeSurveyAccessUrl(storeKey);
+              if (url) {
+                window.location.assign(url);
+              } else {
+                setLoginStoreKey(storeKey);
+                setLoginNotice('アンケートを開くため、一度だけいつもの店舗ログインをお願いします。');
+                setScreen('login');
+              }
+            }}
             onOpenReferral={(init) => {
               setReferralInitial(init ?? null);
               setScreen('referral-form');
+            }}
+            onOpenSchedule={(id) => {
+              setScheduleId(id);
+              setScreen('schedule-upload');
             }}
           />
         );

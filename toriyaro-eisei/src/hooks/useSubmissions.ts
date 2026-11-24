@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { get, onValue, push, ref, set, update } from 'firebase/database';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  ref as storageRef,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+} from 'firebase/storage';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { db, storage } from '../lib/firebase';
 import { targetForType } from '../data/checkItems';
@@ -129,33 +134,6 @@ export const prepareBlob = async (file: File): Promise<{ blob: Blob; type: strin
   }
 };
 
-export interface SubmitArgs {
-  storeKey: StoreKey;
-  storeName: string;
-  type: ReportType;
-  dateOrWeekKey: string;
-  files: File[];
-  onProgress?: (uploaded: number, total: number) => void;
-}
-
-/** @deprecated use targetForType(type, storeKey) from data/checkItems */
-export const TARGET_PHOTOS = 7;
-
-const normalisePhotosArray = (raw: unknown): string[] => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) {
-    return raw.filter((x): x is string => typeof x === 'string' && x.length > 0);
-  }
-  if (typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>;
-    return Object.keys(obj)
-      .sort((a, b) => Number(a) - Number(b))
-      .map((k) => obj[k])
-      .filter((x): x is string => typeof x === 'string' && x.length > 0);
-  }
-  return [];
-};
-
 const normalisePhotosObj = (raw: unknown): Record<string, string> => {
   const out: Record<string, string> = {};
   if (!raw) return out;
@@ -173,64 +151,38 @@ const normalisePhotosObj = (raw: unknown): Record<string, string> => {
   return out;
 };
 
-export const submitPhotos = async ({
-  storeKey,
-  storeName,
-  type,
-  dateOrWeekKey,
-  files,
-  onProgress,
-}: SubmitArgs): Promise<string[]> => {
-  const total = files.length;
-  if (total === 0) throw new Error('no photos selected');
-
-  await ensureAuth();
-  const path = `submissions/${storeKey}/${type}/${dateOrWeekKey}`;
-
-  const existingSnap = await get(ref(db, path));
-  const existingPhotos = normalisePhotosArray(
-    (existingSnap.val() as { photos?: unknown } | null)?.photos,
-  );
-
-  const newUrls: string[] = [];
-  for (let i = 0; i < files.length; i += 1) {
-    const original = files[i];
-    if (!original) throw new Error(`photo ${i + 1} is missing`);
-    const { blob, type: contentType } = await prepareBlob(original);
-    const slot = existingPhotos.length + i;
-    const objectPath = `photos/${storeKey}/${type}/${dateOrWeekKey}/${slot}_${Date.now()}.jpg`;
-    const ref0 = storageRef(storage, objectPath);
-    await withRetry(() => uploadBytes(ref0, blob, { contentType }));
-    const url = await withRetry(() => getDownloadURL(ref0));
-    if (typeof url !== 'string' || url.length === 0) {
-      throw new Error(`download URL missing for photo ${i + 1}`);
-    }
-    newUrls.push(url);
-    onProgress?.(i + 1, total);
-  }
-  const target = targetForType(type, storeKey);
-  const merged = [...existingPhotos, ...newUrls].slice(0, target);
-
-  const photosObj: Record<string, string> = {};
-  merged.forEach((u, i) => {
-    photosObj[String(i)] = u;
-  });
-
-  const submission = {
-    count: merged.length,
-    submittedAt: new Date().toISOString(),
-    photos: photosObj,
-    storeName,
-  };
-
-  await withRetry(() => set(ref(db, path), submission));
-  return merged;
-};
-
 export type SubmitSlot =
   | { kind: 'existing'; url: string }
   | { kind: 'new'; file: File }
   | { kind: 'empty' };
+
+/** 動画1本の上限（storage.rules の videos/ と合わせる） */
+export const VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+export const VIDEO_MAX_LABEL = '500MB';
+
+const isVideoFile = (file: File): boolean => file.type.startsWith('video/');
+
+/**
+ * 動画は大きいので、途中で切れても続きから送れる再開可能アップロードを使う。
+ * onBytes で送信済みバイト数を通知する（進み具合の表示用）。
+ */
+const uploadVideoResumable = (
+  path: string,
+  file: File,
+  onBytes?: (loaded: number, total: number) => void,
+): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const r = storageRef(storage, path);
+    const task = uploadBytesResumable(r, file, { contentType: file.type });
+    task.on(
+      'state_changed',
+      (snap) => onBytes?.(snap.bytesTransferred, snap.totalBytes),
+      (err) => reject(err),
+      () => {
+        getDownloadURL(task.snapshot.ref).then(resolve, reject);
+      },
+    );
+  });
 
 export interface SubmitSlotsArgs {
   storeKey: StoreKey;
@@ -239,6 +191,8 @@ export interface SubmitSlotsArgs {
   dateOrWeekKey: string;
   slots: SubmitSlot[];
   onProgress?: (uploaded: number, totalNew: number) => void;
+  /** 動画など大きいファイルの送信中に、そのファイルの送信済みバイト数を通知する */
+  onBytes?: (loaded: number, total: number) => void;
 }
 
 export const submitSlots = async ({
@@ -248,6 +202,7 @@ export const submitSlots = async ({
   dateOrWeekKey,
   slots,
   onProgress,
+  onBytes,
 }: SubmitSlotsArgs): Promise<Record<string, string>> => {
   await ensureAuth();
 
@@ -255,9 +210,19 @@ export const submitSlots = async ({
 
   const existingSnap = await withRetry(() => get(ref(db, path)));
   const existing = existingSnap.val() as
-    | { photoMeta?: Record<string, { uploadedAt: string }> }
+    | {
+        photoMeta?: Record<string, { uploadedAt: string }>;
+        viaLine?: boolean;
+        count?: number;
+      }
     | null;
   const existingMeta = existing?.photoMeta || {};
+
+  // 管理者が「LINE報告」にした日は viaLine と count（規定枚数）が入っている。
+  // 店舗側の再提出で count を下げない（moveSubmission の viaLine 保持と同じ考え方）。
+  const viaLine = !!existing?.viaLine;
+  const baseCount = Number(existing?.count) || 0;
+  const countFor = (n: number): number => (viaLine ? Math.max(baseCount, n) : n);
 
   const totalNew = slots.filter((s) => s.kind === 'new').length;
   let uploadedCount = 0;
@@ -277,11 +242,22 @@ export const submitSlots = async ({
     } else if (slot.kind === 'new') {
       let url = '';
       try {
-        const { blob, type: contentType } = await prepareBlob(slot.file);
-        const objectPath = `photos/${storeKey}/${type}/${dateOrWeekKey}/${i}_${Date.now()}.jpg`;
-        const ref0 = storageRef(storage, objectPath);
-        await withRetry(() => uploadBytes(ref0, blob, { contentType }));
-        url = await withRetry(() => getDownloadURL(ref0));
+        if (isVideoFile(slot.file)) {
+          // 動画は圧縮せずそのまま videos/ に送る（年間スケジュールの動画項目だけが使う）
+          if (slot.file.size >= VIDEO_MAX_BYTES) {
+            throw new Error(`動画が大きすぎます（${VIDEO_MAX_LABEL}まで）。短く撮り直してください`);
+          }
+          const ext = slot.file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+          const objectPath = `videos/${storeKey}/${type}/${dateOrWeekKey}/${i}_${Date.now()}.${ext}`;
+          const file = slot.file;
+          url = await withRetry(() => uploadVideoResumable(objectPath, file, onBytes), 2);
+        } else {
+          const { blob, type: contentType } = await prepareBlob(slot.file);
+          const objectPath = `photos/${storeKey}/${type}/${dateOrWeekKey}/${i}_${Date.now()}.jpg`;
+          const ref0 = storageRef(storage, objectPath);
+          await withRetry(() => uploadBytes(ref0, blob, { contentType }));
+          url = await withRetry(() => getDownloadURL(ref0));
+        }
       } catch (err) {
         const done = uploadedCount;
         const msg = err instanceof Error ? err.message : String(err);
@@ -310,7 +286,7 @@ export const submitSlots = async ({
       // 1枚成功するごとに途中保存（失敗してもここまでの分は残る）
       try {
         await update(ref(db, path), {
-          count: savedCount,
+          count: countFor(savedCount),
           submittedAt: meta.uploadedAt,
           storeName,
           [`photos/${key}`]: url,
@@ -324,15 +300,18 @@ export const submitSlots = async ({
     }
   }
 
+  // set ではなく update にして、viaLine など他のキーを消さない。
+  // photos / photoMeta はキー単位ではなくオブジェクトごと置き換える（外したスロットは消える）。
+  // 値に undefined を入れると SDK がエラーになるので入れない。
   const submission = {
-    count: savedCount,
+    count: countFor(savedCount),
     submittedAt: new Date().toISOString(),
     photos: photosObj,
     storeName,
     photoMeta,
   };
 
-  await withRetry(() => set(ref(db, path), submission));
+  await withRetry(() => update(ref(db, path), submission));
   return photosObj;
 };
 

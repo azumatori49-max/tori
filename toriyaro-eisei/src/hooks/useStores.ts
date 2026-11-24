@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { onValue, ref, remove, set, update } from 'firebase/database';
+import { onValue, ref, remove, update } from 'firebase/database';
 import { db } from '../lib/firebase';
 import { hashPassword } from '../lib/crypto';
-import { INITIAL_STORES } from '../data/stores';
 import type { Store, StoreKey } from '../types';
 
 const generateStoreKey = (): StoreKey => {
@@ -13,6 +12,10 @@ const generateStoreKey = (): StoreKey => {
 export const useStores = () => {
   const [stores, setStores] = useState<Record<StoreKey, Store>>({});
   const [loading, setLoading] = useState(true);
+  // 店舗一覧を一度でも正常に受信できたら true。
+  // タイムアウトやエラーでは false のまま（「取得できていない」と「店舗が無い」を区別するため）。
+  // この名前は他の作業からも参照されるので変えないこと。
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,6 +32,7 @@ export const useStores = () => {
         setStores(value ?? {});
         setError(null);
         setLoading(false);
+        setLoaded(true);
       },
       (err) => {
         window.clearTimeout(timeout);
@@ -42,21 +46,14 @@ export const useStores = () => {
     };
   }, []);
 
-  const seedInitialStores = useCallback(async () => {
-    const entries = await Promise.all(
-      Object.entries(INITIAL_STORES).map(async ([key, { name, password }]) => {
-        const passwordHash = await hashPassword(password, key);
-        return [key, { name, passwordHash }] as const;
-      }),
-    );
-    const payload: Record<StoreKey, Store> = Object.fromEntries(entries);
-    await set(ref(db, 'stores'), payload);
-  }, []);
-
   const addStore = useCallback(async (name: string, password: string) => {
     const key = generateStoreKey();
     const passwordHash = await hashPassword(password, key);
-    await update(ref(db, `stores/${key}`), { name, passwordHash });
+    await update(ref(db, `stores/${key}`), {
+      name,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+    });
     return key;
   }, []);
 
@@ -93,8 +90,8 @@ export const useStores = () => {
   return {
     stores,
     loading,
+    loaded,
     error,
-    seedInitialStores,
     addStore,
     addStoresBulk,
     updateStoreName,

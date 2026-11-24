@@ -41,6 +41,24 @@ textarea {
   font-family: inherit;
 }
 
+/* iOS Safari は文字サイズ 16px 未満の入力欄にフォーカスすると画面を自動拡大する。
+   以前は viewport の maximum-scale=1 で抑えていたが、ピンチ拡大を許可するために外したので、
+   iOS だけ入力欄の文字を 16px にして自動拡大を防ぐ（-webkit-touch-callout は iOS のみが解釈する）。 */
+@supports (-webkit-touch-callout: none) {
+  /* Tailwind の .text-sm / .text-xs（クラス指定）より優先させるため、要素+クラスの組み合わせも並べる */
+  input,
+  select,
+  textarea,
+  input.text-xs,
+  input.text-sm,
+  select.text-xs,
+  select.text-sm,
+  textarea.text-xs,
+  textarea.text-sm {
+    font-size: 16px;
+  }
+}
+
 /* Hide scrollbars on horizontal photo strips */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

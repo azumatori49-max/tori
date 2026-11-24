@@ -9,6 +9,13 @@
  * ツール本体は tools.js に集約しているので、HTTP 版 (server-http.js) と共通。
  */
 
+// タイムゾーンを日本時間に固定する。
+// Cloud Run は UTC で動くため、日本時間 9:00-17:59 に「今日」が前日扱いになる。
+// 確実なのは起動前の環境変数 TZ だが、保険としてここでも設定する。
+// ESM の import は先に評価されるので、tools.js / domain.js がトップレベルで
+// Date を使っていないこと（関数内のみ）を前提にしている。
+process.env.TZ = 'Asia/Tokyo';
+
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { AppHeader } from '../layout/AppHeader';
+import { storeSurveyUrl } from '../../lib/storeSurvey';
 import { ReportCard } from './ReportCard';
+import { ScheduleSection } from './ScheduleCard';
 import {
   dateKeyToDate,
   formatDateJa,
@@ -31,7 +33,10 @@ interface Props {
   onLogout: () => void;
   onOpenReport: (type: ReportType) => void;
   onOpenHistory: () => void;
+  onOpenSurvey: () => void;
+  surveyNotice?: string;
   onOpenReferral: (initial?: ReferralRequest | null) => void;
+  onOpenSchedule: (scheduleId: string) => void;
 }
 
 /** 未提出カウントの集計開始日（この日より前は数えない） */
@@ -67,7 +72,10 @@ export const StoreTopScreen: FC<Props> = ({
   onLogout,
   onOpenReport,
   onOpenHistory,
+  onOpenSurvey,
+  surveyNotice,
   onOpenReferral,
+  onOpenSchedule,
 }) => {
   const referrals = useStoreReferrals(storeKey);
   const todayKey = getDateKey();
@@ -201,6 +209,9 @@ export const StoreTopScreen: FC<Props> = ({
           )}
         </div>
 
+        {/* 年間スケジュール（期間つきの撮影依頼）。未提出カウントや月次集計には含めない */}
+        <ScheduleSection storeKey={storeKey} onOpen={onOpenSchedule} />
+
         {prevMonthlyMissing && (
           <div className="mb-4 rounded-xl bg-ng-bg px-3 py-2 text-[11px] font-bold text-ng">
             先月（{formatMonthKeyJa(getMonthKey(-1))}）のモップ交換が提出されていません。今月分は忘れずに提出してください。
@@ -248,6 +259,24 @@ export const StoreTopScreen: FC<Props> = ({
         >
           過去の提出をみる
         </button>
+
+        {storeSurveyUrl(storeKey) ? (
+          <button
+            type="button"
+            onClick={onOpenSurvey}
+            className="mt-3 block w-full rounded-2xl border-2 border-accent/60 bg-surface px-4 py-3.5 text-center text-sm font-bold text-accent shadow-sm transition active:scale-[0.99]"
+          >
+            アンケート
+            <span className="mt-1 block text-[11px] font-normal text-text-muted">お客様の回答を見る</span>
+          </button>
+        ) : (
+          <div className="mt-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-center text-text-muted">
+            <p className="text-sm font-bold">アンケート</p>
+            <p className="mt-1 text-[11px]">この店舗のアンケートは準備中です</p>
+          </div>
+        )}
+
+        {surveyNotice && <p role="status" className="mt-2 rounded-xl bg-warn-bg p-3 text-xs text-warn">{surveyNotice}</p>}
 
         <button
           type="button"

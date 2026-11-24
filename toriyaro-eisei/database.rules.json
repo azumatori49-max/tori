@@ -53,6 +53,56 @@
     "referralDrafts": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "schedules": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$scheduleId": {
+        ".validate": "newData.hasChildren(['title', 'from', 'to', 'items', 'createdAt'])",
+        "title": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60" },
+        "description": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "from": { ".validate": "newData.isString() && newData.val().length === 10" },
+        "to": { ".validate": "newData.isString() && newData.val().length === 10" },
+        "stores": {
+          "$storeKey": { ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/) && newData.isBoolean()" }
+        },
+        "video": {
+          ".validate": "newData.hasChildren(['type', 'url'])",
+          "type": { ".validate": "newData.isString() && (newData.val() === 'youtube' || newData.val() === 'vimeo' || newData.val() === 'upload')" },
+          "url": { ".validate": "newData.isString() && newData.val().length < 1024" },
+          "path": { ".validate": "newData.isString() && newData.val().length < 300" },
+          "title": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "size": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        },
+        "items": {
+          "$idx": {
+            ".validate": "newData.hasChildren(['label', 'required', 'max', 'source'])",
+            "label": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+            "required": { ".validate": "newData.isNumber() && newData.val() >= 1" },
+            "max": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 20" },
+            "source": { ".validate": "newData.isString() && (newData.val() === 'camera' || newData.val() === 'library' || newData.val() === 'video')" },
+            "note": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "helpImage": { ".validate": "newData.isString() && newData.val().length < 1024" },
+            "stores": {
+              "$storeKey": { ".validate": "$storeKey.matches(/^store_[a-z0-9]{8}$/) && newData.isBoolean()" }
+            },
+            "video": {
+              ".validate": "newData.hasChildren(['type', 'url'])",
+              "type": { ".validate": "newData.isString() && (newData.val() === 'youtube' || newData.val() === 'vimeo' || newData.val() === 'upload')" },
+              "url": { ".validate": "newData.isString() && newData.val().length < 1024" },
+              "path": { ".validate": "newData.isString() && newData.val().length < 300" },
+              "title": { ".validate": "newData.isString() && newData.val().length <= 40" },
+              "size": { ".validate": "newData.isNumber()" },
+              "$other": { ".validate": false }
+            },
+            "$other": { ".validate": false }
+          }
+        },
+        "archived": { ".validate": "newData.isBoolean()" },
+        "createdAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "$other": { ".validate": false }
+      }
     }
   }
 }

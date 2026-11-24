@@ -11,13 +11,28 @@ import {
   weekKeyToDate,
 } from '../../lib/dateUtils';
 import { itemsForType, targetForType } from '../../data/checkItems';
+import { MISS_TRACK_START } from '../../lib/missTrack';
 import type { ReportType, StoreKey, Submission } from '../../types';
 
 interface Props {
   storeKey: StoreKey;
   storeName: string;
+  /** 店舗の登録日時（ISO文字列）。無い店舗は登録日による除外をしない */
+  createdAt?: string;
   onBack: () => void;
 }
+
+/**
+ * 「未提出」表示の比較に使う日付キー。
+ * デイリーはそのまま、ウィークリーはその週の日曜日（月曜+6日）。
+ * base を渡すので 9時切替の補正は掛からない。
+ */
+const compareDateKey = (tab: ReportType, k: string): string => {
+  if (tab !== 'weekly') return k;
+  const sun = weekKeyToDate(k);
+  sun.setDate(sun.getDate() + 6);
+  return getDateKey(0, sun);
+};
 
 const sparsePhotos = (raw: unknown): Map<number, string> => {
   const map = new Map<number, string>();
@@ -46,7 +61,7 @@ const weekLabel = (weekKey: string): string => {
   return `${mon.getMonth() + 1}/${mon.getDate()} 〜 ${sun.getMonth() + 1}/${sun.getDate()} の週`;
 };
 
-export const HistoryScreen: FC<Props> = ({ storeKey, storeName, onBack }) => {
+export const HistoryScreen: FC<Props> = ({ storeKey, storeName, createdAt, onBack }) => {
   const [tab, setTab] = useState<ReportType>('daily');
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -112,6 +127,16 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, onBack }) => {
     year < now.getFullYear() ||
     (year === now.getFullYear() && month < now.getMonth());
 
+  // 記録が無く、かつ店舗の登録日より前の日（週）は一覧から除外する。
+  // createdAt は UTC 日付で持っており、JST の 9時切替と一致する。
+  // 「記録が有るか」は取得後の data でしか分からないので、keys ではなく描画側で絞る。
+  const createdDate = createdAt ? createdAt.slice(0, 10) : null;
+  const visibleKeys = keys.filter((k) => {
+    if (data[k]) return true;
+    if (createdDate && compareDateKey(tab, k) < createdDate) return false;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-bg pb-10">
       <AppHeader
@@ -172,14 +197,16 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, onBack }) => {
 
         {loading ? (
           <p className="py-8 text-center text-sm text-text-muted">読み込み中…</p>
-        ) : keys.length === 0 ? (
+        ) : visibleKeys.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
             この月の対象データはありません
           </p>
         ) : (
           <div className="space-y-3">
-            {keys.map((k) => {
+            {visibleKeys.map((k) => {
               const sub = data[k];
+              // 記録が無く集計開始前の日（週）は「未提出」ではなく「記録なし」扱い
+              const beforeTrack = !sub && compareDateKey(tab, k) < MISS_TRACK_START;
               const photos = sparsePhotos(sub?.photos);
               const isLine = !!sub?.viaLine;
               const target = targetForType(tab, storeKey, k);
@@ -214,6 +241,10 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, onBack }) => {
                             ? '提出済み'
                             : `一部提出 ${photos.size}/${target}`}
                       </span>
+                    ) : beforeTrack ? (
+                      <span className="rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-bold text-text-muted">
+                        記録なし（集計開始前）
+                      </span>
                     ) : (
                       <span className="rounded-full bg-ng-bg px-2 py-0.5 text-[10px] font-bold text-ng">
                         未提出
@@ -226,7 +257,7 @@ export const HistoryScreen: FC<Props> = ({ storeKey, storeName, onBack }) => {
                       {missing.map(({ it, i }) => `${i + 1}. ${it.label}`).join('・')}
                     </p>
                   )}
-                  {!sub && (
+                  {!sub && !beforeTrack && (
                     <p className="mt-2 text-[11px] text-ng">
                       全{fixedItems.length}項目が未提出です
                     </p>

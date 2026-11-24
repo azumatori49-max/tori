@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthState, StoreKey } from '../types';
+import { clearStoreSurveySessions } from '../lib/storeSurvey';
 
 const STORAGE_KEY = 'toriyaro-eisei.auth';
 
@@ -126,6 +127,7 @@ export const useAuth = () => {
   }, []);
 
   const logout = useCallback(() => {
+    clearStoreSurveySessions();
     setAuth({ storeKey: null, isAdmin: false });
   }, []);
 

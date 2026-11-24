@@ -1,19 +1,32 @@
 import { useState, type FC } from 'react';
 import { useStores } from '../../hooks/useStores';
-import { INITIAL_STORES } from '../../data/stores';
 import type { Store, StoreKey } from '../../types';
 
 interface Props {
   stores: Record<StoreKey, Store>;
 }
 
+/** 読み間違えやすい文字（0/O/1/l/I）を除いた英数字 */
+const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const PASSWORD_LENGTH = 10;
+
+/** crypto.getRandomValues で生成する（Math.random は使わない） */
+const generatePassword = (): string => {
+  const bytes = new Uint32Array(PASSWORD_LENGTH);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < PASSWORD_LENGTH; i += 1) {
+    out += PASSWORD_CHARS[bytes[i] % PASSWORD_CHARS.length];
+  }
+  return out;
+};
+
 export const StoreManageTab: FC<Props> = ({ stores }) => {
-  const { addStore, addStoresBulk, updateStoreName, deleteStore, seedInitialStores } =
-    useStores();
+  const { addStore, addStoresBulk, updateStoreName, deleteStore } = useStores();
 
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newPassword, setNewPassword] = useState('Toriyaro1');
+  const [newPassword, setNewPassword] = useState('');
   const [csv, setCsv] = useState('');
   const [showCsv, setShowCsv] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,6 +45,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
     try {
       await addStore(newName.trim(), newPassword.trim());
       setNewName('');
+      setNewPassword('');
       setShowAdd(false);
       setMessage('店舗を追加しました');
     } catch {
@@ -65,19 +79,6 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
       setMessage(`${rows.length}店舗を追加しました`);
     } catch {
       setMessage('CSV追加に失敗しました');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleSeed = async () => {
-    if (!confirm(`Firebaseに${Object.keys(INITIAL_STORES).length}店舗を一括登録しますか？`)) return;
-    setBusy(true);
-    try {
-      await seedInitialStores();
-      setMessage('初期店舗を登録しました');
-    } catch {
-      setMessage('初期登録に失敗しました');
     } finally {
       setBusy(false);
     }
@@ -151,13 +152,25 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
           />
-          <input
-            type="text"
-            placeholder="パスワード"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="パスワード"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-border bg-surface2 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setNewPassword(generatePassword())}
+              className="shrink-0 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold text-text-muted"
+            >
+              ランダム生成
+            </button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            登録後はパスワードを確認できないので控えてください。
+          </p>
           <button
             type="submit"
             disabled={busy}
@@ -176,16 +189,6 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
         >
           CSVで追加インポート
         </button>
-        {sortedKeys.length === 0 && (
-          <button
-            type="button"
-            onClick={handleSeed}
-            disabled={busy}
-            className="flex-1 rounded-lg bg-accent px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-          >
-            🔥 Firebaseに{Object.keys(INITIAL_STORES).length}店舗を一括登録
-          </button>
-        )}
       </div>
 
       {showCsv && (
@@ -198,7 +201,7 @@ export const StoreManageTab: FC<Props> = ({ stores }) => {
             onChange={(e) => setCsv(e.target.value)}
             rows={6}
             className="w-full rounded-lg border border-border bg-surface2 px-3 py-2 text-sm font-mono"
-            placeholder="店舗名,パスワード&#10;新宿西口店,Toriyaro1"
+            placeholder="店舗名,パスワード&#10;サンプル1号店,パスワード例"
           />
           <button
             type="button"

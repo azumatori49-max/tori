@@ -47,13 +47,11 @@ firebase deploy
 このURLを店舗スタッフ・管理者だけに配布してください。
 （旧 `toriyaro-eisei-faf2e.web.app` は放置しても問題ありません）
 
-### 3. 初回のみ：50店舗を一括登録
+### 4. 店舗の登録
 
-1. デプロイ済み URL を開く
-2. 「＊ 管理者」を選択しパスワード `admin2024` でログイン
-3. 「店舗管理」タブを開く
-4. 「🔥 Firebaseに50店舗を一括登録」ボタンをクリック
-5. 各店舗にURLとパスワード（既定: `Toriyaro1`）を配布
+新規店舗は管理者でログインし、「店舗管理」タブの「＋ 追加」（1店舗ずつ。「ランダム生成」でパスワードを作れる）か
+「CSVで追加インポート」（`店舗名,パスワード` 形式）で登録する。
+登録後はパスワードを画面で確認できないので、登録時に控えて各店舗に配布する。
 
 ## 「リンク知っている人だけに」のセキュリティ設計
 
@@ -81,8 +79,11 @@ npm install -g netlify-cli
 netlify deploy --prod --dir=dist
 ```
 
-## ロゴ差し替え
+## ロゴ・アイコン
 
-`public/logo.svg` がアプリ内ロゴ／ファビコンとして使われます。
-公式の鶏ヤロー丸ロゴ PNG がある場合は `public/logo.png` として置き、
-`index.html`・`AppHeader.tsx`・`LoginScreen.tsx` の参照を `/logo.png` に変えてください。
+- アプリ内ロゴ: `public/rakuraku.png`（`AppHeader.tsx` などが参照）
+- ファビコン / ホーム画面アイコン: `public/favicon-32-v2.png` / `public/apple-touch-icon-180-v2.png`
+  （`rakuraku.png` から切り出して縮小したもの。`index.html` が参照）
+
+Hosting は png を1年キャッシュするため、アイコンを差し替えるときは同じ名前で上書きせず、
+新しいファイル名にして `index.html` の参照を変えること。

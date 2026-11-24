@@ -31,6 +31,36 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null;
     }
+    // 年間スケジュールの動画提出: videos/{storeKey}/{type}/{key}/{filename}（1本 500MB まで）
+    // 自動クリーンアップ（cleanup.ts）はこのパスを対象にしていない
+    match /videos/{storeKey}/{type}/{key}/{filename} {
+      allow read: if request.auth != null;
+      allow create, update:
+        if request.auth != null
+        && storeKey.matches('^store_[a-z0-9]{8}$')
+        && (type == 'daily' || type == 'weekly' || type == 'monthly')
+        && request.resource.size < 500 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow delete: if request.auth != null;
+    }
+    // 年間スケジュールの参考動画（管理画面からアップロード。1本 100MB 未満、動画のみ）
+    match /schedule-media/{scheduleId}/{filename} {
+      allow read: if request.auth != null;
+      allow create, update:
+        if request.auth != null
+        && request.resource.size < 100 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+      allow delete: if request.auth != null;
+    }
+    // 年間スケジュールの項目に付ける参考画像（管理画面からアップロード）
+    match /schedule-refs/{scheduleId}/{filename} {
+      allow read: if request.auth != null;
+      allow create, update:
+        if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -25,8 +25,68 @@ export type Screen =
   | 'admin'
   | 'history'
   | 'viewer'
-  | 'referral-form';
-export type AdminTab = 'dashboard' | 'stores' | 'feedback' | 'referrals';
+  | 'referral-form'
+  | 'schedule-upload';
+export type AdminTab = 'dashboard' | 'stores' | 'feedback' | 'referrals' | 'schedules';
+
+// ============================================================
+// 年間スケジュール（本部が作る期間つきの撮影依頼）
+// ============================================================
+
+/**
+ * 参考動画。youtube / vimeo は埋め込み用URL（動画IDから組み立て）、
+ * upload は Storage の schedule-media/{scheduleId}/ にあるファイル。
+ * 写真の枠番号とは無関係なので、提出済みでも自由に変更できる。
+ */
+export interface ScheduleVideo {
+  type: 'youtube' | 'vimeo' | 'upload';
+  url: string;
+  /** upload のときの Storage パス（差し替え・削除時に消すため） */
+  path?: string;
+  /** 表示名（40字まで） */
+  title?: string;
+  /** upload のときのバイト数 */
+  size?: number;
+}
+
+export interface ScheduleItem {
+  /** 項目名（1〜40字） */
+  label: string;
+  /** 提出済みとみなす最低枚数（1以上） */
+  required: number;
+  /** 送れる上限枚数（required 以上） */
+  max: number;
+  /** 'camera' = 撮影のみ, 'library' = 写真フォルダも可, 'video' = 動画（撮影・フォルダ可、1枠1本） */
+  source: 'camera' | 'library' | 'video';
+  /** 注意書き（200字まで） */
+  note?: string;
+  /** 参考画像のURL（Storage の schedule-refs/{scheduleId}/ にアップロードしたもの） */
+  helpImage?: string;
+  /** この項目の参考動画 */
+  video?: ScheduleVideo;
+  /**
+   * この項目を表示する店舗。無ければスケジュールの対象店舗すべて。
+   * 写真の番号は全項目で通しなので、店舗ごとに項目を絞っても番号はずれない。
+   */
+  stores?: Record<StoreKey, true>;
+}
+
+/** DB の schedules/{id}。id は 'W' + 開始日 + '-' + 英数6文字 */
+export interface Schedule {
+  title: string;
+  description?: string;
+  /** 業務日 YYYY-MM-DD（両端を含む） */
+  from: string;
+  to: string;
+  /** 対象店舗。無ければ全店 */
+  stores?: Record<StoreKey, true>;
+  /** 項目。"0","1",… のキー（Firebase の都合で配列で返ることもある） */
+  items: Record<string, ScheduleItem> | ScheduleItem[];
+  /** スケジュール全体の参考動画 */
+  video?: ScheduleVideo;
+  archived?: boolean;
+  createdAt: string;
+}
 export type ReportTab = 'daily' | 'weekly' | 'monthly';
 export type FilterMode = 'all' | 'ng';
 

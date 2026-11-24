@@ -12,6 +12,13 @@
  *   MCP_ACCESS_TOKEN: サービス作成時に env で設定
  */
 
+// タイムゾーンを日本時間に固定する。
+// Cloud Run は UTC で動くため、日本時間 9:00-17:59 に「今日」が前日扱いになる。
+// 確実なのは起動前の環境変数 TZ（Cloud Run の環境変数 TZ=Asia/Tokyo）だが、保険としてここでも設定する。
+// ESM の import は先に評価されるので、tools.js / domain.js がトップレベルで
+// Date を使っていないこと（関数内のみ）を前提にしている。
+process.env.TZ = 'Asia/Tokyo';
+
 import express from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';

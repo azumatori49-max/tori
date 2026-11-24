@@ -197,7 +197,7 @@ export const StoreDetailModal: FC<Props> = ({
           {!loading && (
             <>
               <Section
-                label="毎日"
+                label="デイリー"
                 type="daily"
                 storeKey={storeKey}
                 storeName={storeName}
@@ -210,7 +210,7 @@ export const StoreDetailModal: FC<Props> = ({
                 readOnly={readOnly}
               />
               <Section
-                label="毎週"
+                label="ウィークリー"
                 type="weekly"
                 storeKey={storeKey}
                 storeName={storeName}
@@ -223,7 +223,7 @@ export const StoreDetailModal: FC<Props> = ({
                 readOnly={readOnly}
               />
               <Section
-                label="毎月"
+                label="マンスリー"
                 type="monthly"
                 storeKey={storeKey}
                 storeName={storeName}

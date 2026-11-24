@@ -17,17 +17,17 @@ interface Props {
 
 const VARIANT: Record<ReportType, { label: string; border: string; chip: string }> = {
   daily: {
-    label: '毎日',
+    label: 'デイリー',
     border: 'border-l-accent',
     chip: 'bg-accent/10 text-accent',
   },
   weekly: {
-    label: '毎週',
+    label: 'ウィークリー',
     border: 'border-l-blue-500',
     chip: 'bg-blue-50 text-blue-600',
   },
   monthly: {
-    label: '毎月',
+    label: 'マンスリー',
     border: 'border-l-violet-500',
     chip: 'bg-violet-50 text-violet-600',
   },

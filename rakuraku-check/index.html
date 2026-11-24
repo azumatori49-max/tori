@@ -374,6 +374,29 @@ input,select,textarea{background:rgba(255,255,255,.6);border-color:rgba(255,255,
 .msg.ai{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.75)}
 .upd-bar{background:rgba(24,155,139,.85);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
 .home-hero h1{letter-spacing:.01em}
+/* 入力欄・未選択のボタンは、背景と見分けがつく濃さの枠にする（白地に白で見えない問題の対策） */
+:root{--ctl:#84919C}
+input,select,textarea,.chip,.scale button,.btn.ghost,.back-btn,.cat-chip,.photos .ph{border-color:var(--ctl)}
+.chip.on-good,.scale button.on-good{border-color:var(--good)}
+.chip.on-warn,.scale button.on-warn{border-color:var(--warn)}
+.chip.on-bad,.scale button.on-bad{border-color:var(--bad)}
+.cat-chip.on{border-color:var(--accent)}
+/* 指で押しやすい大きさにする */
+.save-btn{min-height:40px;padding:8px 16px}
+.back-btn{min-height:40px;padding:8px 12px}
+.cat-chip{min-height:40px;padding:9px 14px}
+.chip{min-height:42px;padding:10px 16px}
+.ai-hbtn,.mcp-hbtn{min-height:40px}
+.photos .ph .del{top:0;right:0;width:32px;height:32px;font-size:17px;line-height:32px;border-radius:0 0 0 12px}
+.rep-item .photos .ph .del{display:none}
+.hw-item:has(>.list-card){padding:0}
+.hw-item>.list-card{padding:12px 0;min-height:48px}
+.list-card>span:first-child{min-width:0}
+.list-card .sc{white-space:nowrap;flex:0 0 auto}
+/* 未入力の項目へ飛んだ時に、固定ヘッダーの下に隠れないようにする */
+.card[id^="card-"]{scroll-margin-top:calc(var(--hd-h,200px) + 10px)}
+.done-banner{border-color:var(--good)}
+.done-banner h3{color:var(--good)}
 /* すりガラス非対応の古いブラウザでは不透明に近づけて読みやすさを確保 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
   .card,.navbar .in{background:rgba(255,255,255,.94)}
@@ -956,6 +979,9 @@ function aiTotalScore(insp){
 function ymOf(d){return String(d||"").slice(0,7);}
 function ymAdd(ym,delta){const [y,m]=ym.split("-").map(Number);const t=y*12+(m-1)+delta;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,"0")}`;}
 function ymLabel(ym){const [y,m]=ym.split("-");return `${y}年${+m}月`;}
+// 「要臨店」の基準：総合点がこの点数以下、または3点以下が続くアラート項目がある店舗
+const VISIT_SCORE=60;
+function needsVisit(r){ return r.score<=VISIT_SCORE||r.alerts>0; }
 function storeRanking(month){
   const list=state.inspections.filter(i=>i.completedAt&&!i.provisional&&(!month||ymOf(i.date)===month));
   const by={};
@@ -1448,6 +1474,12 @@ function appBrandFor(store,brand){
   return metricsBrandFill.map.get(store+"|"+(brand||""))||{brand:brand||"",amb:false};
 }
 // 同じ店名が複数の屋号にある店（北千住・町田・志木など）は、最新の完了チェックの屋号を使う
+// 過去の記録から、その店舗名の屋号を引く（屋号の一覧に無いものは使わない）
+function knownBrandOf(store){
+  if(!store) return "";
+  const b=storeBrandOf(store);
+  return b&&BRANDS.includes(b)?b:"";
+}
 function storeBrandOf(store){
   let best=null;
   for(const i of state.inspections){
@@ -2088,7 +2120,7 @@ function buildAssistantContext(){
   const cur=ymOf(todayStr());
   for(const m of [cur,ymAdd(cur,-1)]){
     const rank=storeRanking(m);
-    if(rank.length) lines.push(`【${ymLabel(m)}のランキング（総合点が低い順）】`+rank.map((r,i)=>`${i+1}位 ${r.brand?r.brand+" ":""}${r.store} ${r.score}点`).join("、"));
+    if(rank.length) lines.push(`【${ymLabel(m)}のランキング（総合点が低い順）】`+rank.map((r,i)=>`${i+1}位 ${r.brand?r.brand+" ":""}${r.store} ${r.score}点${needsVisit(r)?"（要臨店）":""}`).join("、")+`　※「要臨店」＝総合点${VISIT_SCORE}点以下、またはアラート項目のある店舗`);
   }
   const stores=[...new Set(state.inspections.filter(i=>i.completedAt&&!i.provisional).map(i=>i.store))];
   const al=stores.map(s=>{const a=storeAlerts(s);return a.length?`${s}：${a.map(x=>`${x.it.name}（3点以下${x.c}回）`).join("、")}`:null;}).filter(Boolean);
@@ -2191,7 +2223,7 @@ function viewAssistant(){
   const sugg=["全店を分析して改善アクション（Do）を出して","今月の要臨店はどこ？","全店で一番改善が必要な項目は？","面談で気になる店舗は？","先月から悪化した店舗は？"];
   return `
   <header class="hd"><div class="bar" style="padding-bottom:10px;align-items:center">
-    <button class="back-btn" id="to-home">← 戻る</button>
+    <button class="back-btn" id="to-home">${state.assistantFrom==="check"&&state.draft?"← チェックに戻る":"← 戻る"}</button>
     <h1 style="flex:1">AIアシスタント <span class="meta" style="font-weight:600">${deviceClaudeKey?"Claude":"Gemini"}</span></h1>
     <button class="back-btn" id="chat-clear" style="font-size:12px" ${state.chat.length?"":"disabled"}>履歴クリア</button>
   </div></header>
@@ -2297,7 +2329,8 @@ const SHARED_APPCHECK_SITE_KEY=null;
 // Google AI Studio のAPIキー（https://aistudio.google.com/apikey で無料発行）。
 // セキュリティ上、公開ソースには書かず、管理画面から入力してこの端末内(IndexedDB)に保存する。
 const SHARED_GEMINI_KEY=null;
-let deviceGeminiKey=null;
+let deviceGeminiKey=null, geminiShared=false;   // geminiShared＝このキーがクラウド共有のもの（管理者が消したら他の端末でも消す）
+function markGeminiShared(v){ geminiShared=!!v; (v?kvSet("geminiKeyShared",true):kvDel("geminiKeyShared")).catch(()=>{}); }
 let deviceMcpUrl=null;   // MCP接続URL（この端末内にのみ保存）
 let deviceGptUrl=null;   // 分析用カスタムGPTのリンク（クラウドで全端末に共有）
 let deviceClaudeKey=null; // Claude APIキー（AIアシスタント強化・クラウドで全端末に共有）
@@ -2305,7 +2338,7 @@ const CLAUDE_MODEL=CC.claudeModel||"claude-sonnet-5";
 function geminiKey(){ return SHARED_GEMINI_KEY||deviceGeminiKey||null; }
 // 会社・店舗の識別子。全記録に付与される（Security Rulesでの分離に使用）
 const SHARED_TENANT_ID=CC.tenantId||"default";
-const APP_VERSION="v7.54.1";
+const APP_VERSION="v7.55.0";
 // 屋号（ブランド）。チェック開始時に選択し、報告書・CSVに記録される
 const BRANDS=CC.brands||["鶏ヤロー","イザカラ","すし鳥商店","まる助"];
 // 管理画面ボタンは通常は非表示。URLに ?admin=1 を付けて開いたときだけ表示する
@@ -2843,7 +2876,82 @@ function bindLock(){
   $("#lock-code")?.focus();
 }
 let rendering=false;
+/* ---------- 画面の行き来 ----------
+   ・ホームから報告書・推移・AI・管理画面を開く時に、ホームの位置と入力内容を覚え、戻った時に元へ戻す
+   ・ホーム以外の画面では履歴を1つ積み、端末の「戻る」でアプリの外に出ずに前の画面へ戻る */
+const HOME_INPUT_IDS=["f-store","f-inspector","f-date","search-store","past-q","past-ym","trend-q","trend-ym","csv-month"];
+let homeMemo=null, homePastOpen=false, lastView="home", histDeep=false, histSkip=0;
+function captureHome(){
+  const vals={};
+  for(const id of HOME_INPUT_IDS){ const el=document.getElementById(id); if(el) vals[id]=el.value; }
+  const ae=document.activeElement, fold=document.getElementById("fold-noal");
+  return {y:window.scrollY, vals, pastOpen:homePastOpen, foldOpen:!!(fold&&fold.open),
+    focus:ae&&HOME_INPUT_IDS.includes(ae.id)?{id:ae.id,s:ae.selectionStart,e:ae.selectionEnd}:null};
+}
+function restoreHome(m,withScroll){
+  if(!m||state.view!=="home") return;
+  for(const id of HOME_INPUT_IDS){
+    const el=document.getElementById(id); if(!el||m.vals[id]==null) continue;
+    if(el.tagName==="SELECT"&&![...el.options].some(o=>o.value===m.vals[id])) continue;
+    el.value=m.vals[id];
+  }
+  if(m.pastOpen) document.getElementById("past-more")?.click();
+  const fold=document.getElementById("fold-noal"); if(fold&&m.foldOpen) fold.open=true;
+  document.getElementById("f-store")?.dispatchEvent(new Event("input"));       // 前回の宿題の表示を戻す
+  document.getElementById("search-store")?.dispatchEvent(new Event("input"));  // 絞り込みを戻す
+  if(m.focus){ const el=document.getElementById(m.focus.id); if(el){ el.focus({preventScroll:true}); try{ el.setSelectionRange(m.focus.s,m.focus.e); }catch(e){} } }
+  if(withScroll) scrollTo(0,m.y);
+}
+// ホームを描き直しても、入力中の文字・絞り込み・位置を保つ
+function renderKeep(){
+  if(state.view==="home"&&lastView==="home"&&!state.locked&&document.getElementById("start")){ const m=captureHome(); render(); restoreHome(m,true); }
+  else render();
+}
+// 前の画面へ戻る（画面の「戻る」ボタンと、端末の「戻る」操作の両方から呼ぶ）
+function goBack(){
+  const from=state.view;
+  if(from==="assistant"&&state.assistantFrom==="check"&&state.draft&&state.drafts.includes(state.draft)){
+    state.assistantFrom=null; state.view="check"; render(); scrollTo(0,state.checkY||0); return;
+  }
+  state.assistantFrom=null;
+  if(from==="check") flushDrafts().catch(()=>{});
+  state.view="home"; render();
+  const m=homeMemo; homeMemo=null;
+  if(m&&["report","trends","assistant","admin"].includes(from)) restoreHome(m,true);
+  else scrollTo(0,0);
+}
+window.addEventListener("popstate",()=>{
+  if(histSkip>0){ histSkip--; return; }
+  if(!histDeep) return;
+  histDeep=false;                                   // 積んでいた履歴が1つ戻された
+  const lb=document.getElementById("lightbox"), mcp=document.getElementById("mcp-x");
+  if(lb||mcp){                                      // 拡大写真・案内パネルが開いていれば、まずそれを閉じる
+    if(lb) lb.click(); else mcp.click();
+    try{ history.pushState({rk:1},""); histDeep=true; }catch(e){}
+    return;
+  }
+  goBack();
+});
+function syncHistory(){
+  const deep=state.view!=="home"&&!state.locked;
+  try{
+    if(deep&&!histDeep){ history.pushState({rk:1},""); histDeep=true; }
+    else if(!deep&&histDeep){ histDeep=false; if(history.state&&history.state.rk){ histSkip++; history.back(); } }
+  }catch(e){}
+}
+// チェック画面を描いた後：固定ヘッダーの高さを控え、今いるカテゴリのタブを見える位置へ寄せる
+function afterCheckRender(){
+  const hd=document.querySelector("#app .hd");
+  if(hd) document.documentElement.style.setProperty("--hd-h",Math.round(hd.getBoundingClientRect().height)+"px");
+  const nav=document.querySelector(".cats"), on=nav&&nav.querySelector(".cat-chip.on");
+  if(nav&&on) nav.scrollLeft=Math.max(0,on.offsetLeft-(nav.clientWidth-on.offsetWidth)/2);
+}
 function render(){
+  if(!state.locked){
+    if(lastView==="home"&&state.view!=="home") homeMemo=["report","trends","assistant","admin"].includes(state.view)&&document.getElementById("start")?captureHome():null;
+    if(state.view==="check") homeMemo=null;
+    if(state.view!=="report") state.justDone=null;
+  }
   let html="";
   if(state.locked){app.innerHTML=viewLock();bindLock();return;}
   if(state.view==="home") html=viewHome();
@@ -2855,8 +2963,10 @@ function render(){
   rendering=true; try{ app.innerHTML=html; } finally{ rendering=false; }   // 描き直しで外れた入力欄が発火する change は無視する
   app.insertAdjacentHTML("afterbegin",'<div id="sync-bar" class="sync-bar"></div>');
   updateSyncBar();
-  if(state.view==="home") bindHome();
+  if(state.view==="home"){ homePastOpen=false; bindHome(); }
   if(state.view==="admin") bindAdmin();
+  if(state.view==="check") afterCheckRender();
+  lastView=state.view; syncHistory();
   if(metricsOn()){ fetchMetrics(false); refreshMetricSlots(); ensureSlotMonths(); }   // 古ければ裏で取り直し、スロットだけを埋める（画面全体は描き直さない）
 }
 
@@ -2949,7 +3059,7 @@ function viewHome(){
       <div style="margin-left:auto;align-self:flex-start;display:flex;gap:8px">${mcpHeaderBtn()}${aiHeaderBtn()}</div>
     </div>
     <p>写真とワンタップの5段階評価で店舗巡回を記録。${AI_ENABLED?"写真はAIが補助的に判定を提案し、":""}宿題は次回来店時に自動表示します。</p>
-    <p class="hw-meta" style="margin-top:6px">データ共有：${cloudStatusLabel()}</p>
+    <p class="hw-meta" style="margin-top:6px">データ共有：<span id="cloud-label">${cloudStatusLabel()}</span></p>
   </div>
   ${dashboardHtml()}
   <div class="wrap">
@@ -2964,7 +3074,7 @@ function viewHome(){
         <datalist id="store-list">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
       </div>
       <div class="row2">
-        <div class="field"><label>確認者 <span class="req">必須</span></label><input id="f-inspector" placeholder="例：山田"></div>
+        <div class="field"><label>確認者 <span class="req">必須</span></label><input id="f-inspector" placeholder="例：山田" value="${esc(state.lastInspector||"")}" autocomplete="off"></div>
         <div class="field"><label>確認日</label><input id="f-date" type="date" value="${todayStr()}"></div>
       </div>
       <div id="prev-hw"></div>
@@ -2992,10 +3102,10 @@ function viewHome(){
         <b style="font-size:15px">${ymLabel(month)}</b>
         <button class="back-btn" id="rank-next" ${month>=cur?"disabled":""}>次の月 ▶</button>
       </div>
-      <p class="desc">${ymLabel(month)}に行ったチェックの総合点を低い順に並べています（同じ月に複数回ある店舗は最新分）。上位10店舗が臨店の優先候補です。タップで項目別の推移を確認できます。</p>
+      <p class="desc">${ymLabel(month)}に行ったチェックを、総合点の低い順（臨店の優先順）に並べています（同じ月に複数回ある店舗は最新分）。${VISIT_SCORE}点以下、またはアラートのある店舗に「要臨店」が付きます。タップで項目別の推移を確認できます。</p>
       ${rank.length?rank.map((r,i)=>`
         <div class="hw-item" data-sname="${esc(r.store)}"><button class="list-card" data-trend="${esc(r.store)}">
-          <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　${r.brand?`<span class="hw-meta">${esc(r.brand)}</span> `:""}<b>${esc(r.store)}</b>${i<10?` <span class="badge issue">要臨店</span>`:""}
+          <span><b style="font-variant-numeric:tabular-nums">${i+1}位</b>　${r.brand?`<span class="hw-meta">${esc(r.brand)}</span> `:""}<b>${esc(r.store)}</b>${needsVisit(r)?` <span class="badge issue">要臨店</span>`:""}
             <span class="hw-meta">　${fmtDate(r.date)}${r.alerts?`／<span style="color:var(--bad)">⚠ ${r.alerts}件</span>`:""}</span>
             ${metricsSlot("chips",r.store,r.brand,"span",month)}</span>
           <span class="sc" ${r.score<=50?'style="color:var(--bad)"':r.score<=75?'style="color:var(--warn)"':""}>${r.score}<small>点</small></span>
@@ -3245,12 +3355,14 @@ function bindAdmin(){
     if(!v){st.textContent="キーを貼り付けてください。";return;}
     deviceGeminiKey=v; aiModels={}; await kvSet("geminiKey",v).catch(()=>{});
     const shared=await cloudSaveGeminiKey(v);
+    markGeminiShared(shared);
     render();
     const s2=$("#gk-status");
     if(s2){s2.textContent=shared?"保存しました（全端末に自動共有されます）。「接続テスト」で確認できます。":"この端末に保存しました（クラウド未接続のため共有は保留）。";}
   });
   $("#gk-clear")?.addEventListener("click",async()=>{
-    deviceGeminiKey=null; aiModels={}; await kvDel("geminiKey").catch(()=>{});
+    if(!confirm("AIのキーを削除しますか？\n全端末で、写真のAI判定とAIアシスタントが使えなくなります。")) return;
+    deviceGeminiKey=null; aiModels={}; markGeminiShared(false); await kvDel("geminiKey").catch(()=>{});
     await cloudDeleteGeminiKey();
     render();
   });
@@ -3465,6 +3577,14 @@ function bindHome(){
         :`<p class="empty">前回の宿題はありません。</p>`}`:"";
   };
   storeIn?.addEventListener("input",renderPrev);
+  // 登録のある店舗名が入ったら、その店舗の屋号を自動で選ぶ（選び忘れで項目が減るのを防ぐ）
+  storeIn?.addEventListener("input",()=>{
+    const b=knownBrandOf(storeIn.value.trim());
+    if(b&&b!==state.startBrand){
+      state.startBrand=b;
+      document.querySelectorAll("[data-brandsel]").forEach(x=>x.classList.toggle("on-good",x.dataset.brandsel===b));
+    }
+  });
   $("#start")?.addEventListener("click",async()=>{
     if(startBusy) return; startBusy=true;
     try{
@@ -3475,12 +3595,13 @@ function bindHome(){
     if(same&&!confirm(`「${store}」はすでに進行中のチェックがあります。\n\nOK＝新しく別のチェックを開始（進行中のものも残ります）\nキャンセル＝やめて、進行中の一覧から続きを再開`)) return;
     const last=lastInspectionFor(store);
     const nd={
-      id:uuid(), store, inspector, date, brand:state.startBrand||"",
+      id:uuid(), store, inspector, date, brand:state.startBrand||knownBrandOf(store)||"",
       startedAt:new Date().toISOString(), answers:{},
       pdca:{ homework:[],interview:{} },
       prevDate:last?last.date:"",
       catIndex:0, updatedAt:Date.now(),
     };
+    state.lastInspector=inspector; kvSet("lastInspector",inspector).catch(()=>{});   // 確認者名は次回から最初に入れておく
     if(state.draft) await saveDraftNow(state.draft);
     state.drafts.push(nd); state.draft=nd; state.catIndex=0;
     await saveDraftNow(nd);
@@ -3505,7 +3626,7 @@ function bindHome(){
     const insp=state.inspections.find(i=>i.id===state.reportId);
     if(insp&&await hydratePhotos(insp)&&state.view==="report") render();
   }));
-  $("#past-more")?.addEventListener("click",e=>{document.querySelectorAll(".pl-x").forEach(el=>el.classList.remove("pl-x"));e.currentTarget.remove();});
+  $("#past-more")?.addEventListener("click",e=>{homePastOpen=true;document.querySelectorAll(".pl-x").forEach(el=>el.classList.remove("pl-x"));e.currentTarget.remove();});
   const applyHomeFilters=()=>{
     const gq=($("#search-store")?.value||"").trim().toLowerCase();
     const sec=(card,qSel,ymSel,attr)=>{
@@ -3606,12 +3727,14 @@ const TREND_N=8; // 推移一覧に表示する直近のチェック回数
    完了したチェックを全端末・全ユーザーで共有する。写真はドキュメント上限を
    避けるため photos コレクションに分けて保存。オフライン・未設定時は端末内
    （IndexedDB）のみで動作する。 */
-let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false;
+let fsDb=null, fsMods=null, cloudReady=false, cloudErr="", cloudMigrated=false, cloudIniting=false;
 async function initCloud(){
   // 会社別サイトで config.js（会社専用のFirebase設定）が無い場合は、
   // 誤って自社のデータベースに接続しないようクラウド保存を無効にする
   if(IS_COMPANY_SITE&&!CC.firebase){ cloudErr="この会社用のFirebase設定（config.js）が未設定のため、端末内保存のみで動作しています"; return; }
   if(!SHARED_FB_CONFIG||!SHARED_FB_CONFIG.config) return;
+  if(cloudIniting||fsDb) return;         // 接続中・接続済みなら重ねて始めない
+  cloudIniting=true; cloudErr="";
   try{
     const V=FB_SDK_VERSION;
     const [appMod,fsMod,authMod]=await Promise.all([
@@ -3666,13 +3789,15 @@ async function initCloud(){
         }
         syncOutbox();
       }
-      if(["home","trends","report"].includes(state.view)) render();
+      if(["home","trends","report"].includes(state.view)) renderKeep();
     },err=>{
       cloudErr=String(err&&err.message||err); cloudReady=false;
-      if(state.view==="home"||state.view==="admin") render();
+      if(state.view==="admin") render(); else refreshCloudLabel();
     });
-  }catch(e){ cloudErr=String(e&&e.message||e); }
+  }catch(e){ cloudErr=String(e&&e.message||e); refreshCloudLabel(); }
+  finally{ cloudIniting=false; }
 }
+function refreshCloudLabel(){ const el=document.getElementById("cloud-label"); if(el) el.innerHTML=cloudStatusLabel(); }
 function stripPhotos(insp){
   const slim=JSON.parse(JSON.stringify(insp));
   const photos=[];
@@ -3822,9 +3947,16 @@ async function cloudFetchGeminiKey(){
   try{
     const snap=await fsMods.getDoc(fsMods.doc(fsDb,"config","gemini"));
     const k=snap&&snap.exists&&snap.exists()?(snap.data()||{}).key:null;
-    if(k&&k!==deviceGeminiKey){
-      deviceGeminiKey=k; aiModels={};
-      kvSet("geminiKey",k).catch(()=>{});
+    if(k){
+      if(!geminiShared) markGeminiShared(true);
+      if(k!==deviceGeminiKey){
+        deviceGeminiKey=k; aiModels={};
+        kvSet("geminiKey",k).catch(()=>{});
+        if(state.view==="admin") render();
+      }
+    }else if(deviceGeminiKey&&geminiShared&&!(snap.metadata&&snap.metadata.fromCache)){
+      // 管理者が共有キーを削除した場合は、他の端末からも消す（この端末だけで入れたキーは消さない）
+      deviceGeminiKey=null; aiModels={}; markGeminiShared(false); kvDel("geminiKey").catch(()=>{});
       if(state.view==="admin") render();
     }
   }catch(e){}
@@ -3968,6 +4100,11 @@ function itemCard(item){
       </div>`}`).join("")}
     ${aiSection(item,a)}
     ${(item.extras||[]).filter(f=>shown(f,a)).map(f=>fieldHtml(item.id,f,a)).join("")}
+    ${(()=>{   // 低い点を付けたのに書く欄が無い項目には、理由を残せる1行メモを出す（報告書に載る）
+      const low=item.groups.some(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o&&o.issue;});
+      const hasText=(item.extras||[]).some(f=>shown(f,a)&&(f.type==="textarea"||f.type==="text"));
+      if(!(low&&!hasText)&&!filled(a.fields.memo)) return "";
+      return `<div class="field"><label>指摘メモ <span style="font-weight:600">任意</span></label><input type="text" value="${esc(a.fields.memo||"")}" data-field="${item.id}:memo" placeholder="何が・どこが悪かったか（報告書に載ります）" autocomplete="off"></div>`;})()}
     ${item.note?`<p class="note">${esc(item.note)}</p>`:""}
   </section>`;
 }
@@ -4074,9 +4211,18 @@ function viewReport(){
   if(!insp) return `<div class="wrap"><p class="empty">報告書が見つかりません。</p><button class="btn" id="to-home">ホームへ</button></div>`;
   return `
   <header class="hd no-print"><div class="bar" style="padding-bottom:10px;align-items:center">
-    <h1>報告書</h1><span class="meta" style="flex:1;text-align:right;margin-right:8px">${esc(insp.store)}／${fmtDate(insp.date)}</span>${aiHeaderBtn()}
+    <button class="back-btn" id="to-home" aria-label="戻る">← 戻る</button>
+    <h1>報告書</h1><span class="meta" style="flex:1;text-align:right;margin-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(insp.store)}／${fmtDate(insp.date)}</span>${aiHeaderBtn()}
   </div></header>
   <div class="wrap">
+    ${state.justDone&&state.justDone.id===insp.id?`<div class="card done-banner no-print" id="done-banner">
+      <h3>✓ ${state.justDone.partial?"一時保存として提出しました":"チェックを完了しました"}</h3>
+      <p class="desc">${state.justDone.partial?"続きは下の「続きを入力する」からいつでも再開できます。":"報告書を保存しました。この下に内容が表示されています。"}${state.justDone.note?esc(state.justDone.note):""}</p>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn" id="to-home2">ホームへ戻る</button>
+        ${state.justDone.partial?"":`<button class="btn sub" id="rep-print2">印刷・PDF保存</button>`}
+      </div>
+    </div>`:""}
     ${insp.provisional?`<div class="miss no-print" style="margin-top:0">
       <div class="ttl">一時保存（入力途中）の報告書です。完了するまでランキング・推移には集計されません。</div>
       <button class="btn sub no-print" id="rep-resume" style="margin-top:8px">続きを入力する</button>
@@ -4126,10 +4272,12 @@ function reportBody(insp,isPreview){
     <h3>${esc(cat.name)}</h3>
     ${cat.items.filter(it=>itemVisibleFor(it,insp.store,insp.brand)).map(it=>{
       const a=byId(it.id); const sc=itemScoreOf(it,a); const aiSc=aiScoreOf(it,a);
-      const extras=(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
-        .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`).join("／");
+      const to5=v=>v==null?null:Math.round(v/25)+1;      // 項目の点数は、入力・推移と同じ5点満点で表示する
+      const extras=[...(it.extras||[]).filter(f=>shown(f,a)&&filled(a.fields[f.key]))
+        .map(f=>`<b>${esc(f.label)}：</b>${esc(a.fields[f.key])}${f.unit?esc(f.unit):""}`),
+        ...(filled(a.fields&&a.fields.memo)?[`<b>指摘メモ：</b>${esc(a.fields.memo)}`]:[])].join("／");
       return `<div class="rep-item">
-        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums">${sc!=null?sc+"点":"—"}${it.noScore?`<span class="hw-meta">（総合点対象外）</span>`:""}${aiSc!=null?`<span class="hw-meta">（AI：${aiSc}点）</span>`:""}</span></div>
+        <div class="nm"><span>${esc(it.name)}</span><span style="font-variant-numeric:tabular-nums;white-space:nowrap">${sc!=null?`${to5(sc)}<small style="font-weight:600;color:var(--sub)">／5点</small>`:"—"}${it.noScore?`<span class="hw-meta">（総合点対象外）</span>`:""}${aiSc!=null?`<span class="hw-meta">（AI：${to5(aiSc)}／5）</span>`:""}</span></div>
         <div class="ev">${it.groups.map(g=>{const o=g.options.find(o=>o.v===a.evals[g.key]);return o?evalBadge(o):`<span class="badge todo">未選択</span>`;}).join("")}</div>
         ${extras?`<div class="fx">${extras}</div>`:""}
         ${AI_ENABLED&&a.ai&&a.ai.reason?`<div class="fx"><b>AI判定：</b>${esc(a.ai.reason)}${a.ai.conf?`（信頼度：${esc(a.ai.conf)}）`:""}</div>`:""}
@@ -4197,8 +4345,10 @@ document.addEventListener("click",async e=>{
   }
   const t=e.target.closest("button,label");
   if(!t) return;
-  if(t.id==="to-home"||t.id==="to-home2"){state.view="home";render();scrollTo(0,0);return;}
-  if(t.id==="to-assistant"||t.classList.contains("ai-hbtn")){state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
+  if(t.id==="to-home"||t.id==="to-home2"){goBack();return;}
+  if(t.id==="to-assistant"||t.classList.contains("ai-hbtn")){
+    state.assistantFrom=state.view==="check"?"check":null; state.checkY=window.scrollY;   // チェック中に開いたら、戻る先はチェック画面
+    state.view="assistant";render();scrollTo(0,0);const log=$("#chat-log");if(log)log.scrollTop=log.scrollHeight;return;}
   if(t.classList.contains("mcp-hbtn")){openMcpPanel();return;}
   if(t.id==="chat-clear"){
     if(state.chat.length&&!confirm("AIアシスタントの会話履歴を消しますか？"))return;
@@ -4223,13 +4373,13 @@ document.addEventListener("click",async e=>{
     const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
     let m=ymAdd(state.rankMonth||cur,t.id==="rank-prev"?-1:1);
     if(m<oldest) m=oldest; if(m>cur) m=cur;
-    state.rankMonth=m; render(); return;
+    state.rankMonth=m; renderKeep(); return;
   }
   if(t.id==="risk-prev"||t.id==="risk-next"){
     const cur=ymOf(todayStr()), oldest=ymAdd(cur,-11);
     let m=ymAdd(state.riskMonth||cur,t.id==="risk-prev"?-1:1);
     if(m<oldest) m=oldest; if(m>cur) m=cur;
-    state.riskMonth=m; render(); return;
+    state.riskMonth=m; renderKeep(); return;
   }
   if(t.id==="gpt-copy"){
     if(!state.inspections.some(i=>i.completedAt)){showToast("チェックの記録がまだありません");return;}
@@ -4298,8 +4448,22 @@ document.addEventListener("click",async e=>{
   if(t.id==="iv-ai"){judgeInterview();return;}
   if(t.dataset.repivai){repInterviewAI(t.dataset.repivai);return;}
   if(t.id==="ai-batch"){judgeAllItems();return;}
-  if(t.id==="sync-now"){syncOutbox();return;}
-  if(t.id==="rep-print"){
+  if(t.id==="sync-now"){
+    if(!fsDb){                                         // クラウドにつながっていなければ、まずつなぎ直す
+      await updateSyncBar("クラウドに接続しています…");
+      await initCloud();
+      if(!fsDb){
+        await updateSyncBar("クラウドに接続できません");
+        showToast("クラウドに接続できませんでした。記録は端末に保存されています。電波のよい場所でもう一度お試しください");
+        return;
+      }
+    }
+    await syncOutbox();
+    await refreshPendingIds();
+    if(pendingIds.size&&!syncRunning) showToast("まだ送信できていない記録があります。少し待ってからもう一度お試しください");
+    return;
+  }
+  if(t.id==="rep-print"||t.id==="rep-print2"){
     const insp=state.inspections.find(i=>i.id===state.reportId);
     if(insp){
       const pm=photoMissingItems(insp);
@@ -4374,9 +4538,10 @@ document.addEventListener("click",async e=>{
     }
     await removeDraft(fd);            // この店舗の下書きだけを消す（ほかの店舗の下書きは残る）
     state.inspections=state.inspections.filter(i=>i.id!==insp.id).concat(insp);
-    state.draft=null; state.reportId=insp.id; state.view="report";
+    const sendNote=noDb?"":(navigator.onLine&&fsDb?"クラウドへ送信しています。":"いまはクラウドにつながっていないため、端末に保存しました。通信が回復したら自動で送信します。");
+    state.draft=null; state.reportId=insp.id; state.view="report"; state.justDone={id:insp.id,partial,note:sendNote};
     render(); scrollTo(0,0);
-    showToast(partial?"一時保存として提出しました。続きは報告書から再開できます":"記録を受け付けました。端末に保存し、通信回復後に送信します");
+    showToast(partial?"一時保存として提出しました":"チェックを完了し、報告書を保存しました");
     syncOutbox();
     if(!partial) autoIvEnqueue([insp.id]);
     }finally{ finalizeBusy=false; }
@@ -4464,6 +4629,8 @@ document.addEventListener("input",e=>{
     }
     state.inspections=(await allInspections())||[];
     state.drafts=await loadDrafts();          // 店舗ごとの進行中チェック（旧版の1件だけの下書きも引き継ぐ）
+    state.lastInspector=String((await kvGet("lastInspector").catch(()=>""))||"");
+    geminiShared=!!(await kvGet("geminiKeyShared").catch(()=>false));
     await dropFinishedDrafts();
     state.chat=(await kvGet("chat").catch(()=>null))||[]; // AIアシスタントの会話履歴
     deviceGeminiKey=(await kvGet("geminiKey"))||null;
@@ -4503,7 +4670,7 @@ document.addEventListener("input",e=>{
   render();
   initCloud();
   // 通信復帰・画面再表示のたびに自動再送
-  window.addEventListener("online",()=>{updateSyncBar("オンラインに戻りました");syncOutbox();});
+  window.addEventListener("online",async()=>{updateSyncBar("オンラインに戻りました"); if(!fsDb) await initCloud(); syncOutbox();});
   window.addEventListener("offline",()=>updateSyncBar("オフラインです（記録は端末に保存されます）"));
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"){ syncOutbox(); checkForUpdate(); reconcileDrafts(); } else flushDrafts(); });
   window.addEventListener("pagehide",()=>{ flushDrafts(); });
